@@ -27,8 +27,8 @@
             "dependencies": [
               "1.1"
             ],
-            "details": "This involves selecting appropriate data structures (e.g., nested hash maps, arrays, custom structures) to hold the triples, considering memory footprint and access patterns.",
-            "status": "pending",
+            "details": "This involves selecting appropriate data structures (e.g., nested hash maps, arrays, custom structures) to hold the triples, considering memory footprint and access patterns.\n<info added on 2025-08-29T02:26:34.861Z>\nThe in-memory TripleStore has been implemented using a class-based approach, incorporating SPO, POS, and OSP indexes to facilitate efficient querying. It supports adding, removing, and querying triples, including those with partial patterns.\n</info added on 2025-08-29T02:26:34.861Z>",
+            "status": "done",
             "testStrategy": "Document the in-memory structure design. Create mock data structures to validate memory efficiency and basic access patterns. Conduct design reviews."
           },
           {
@@ -38,8 +38,8 @@
             "dependencies": [
               "1.2"
             ],
-            "details": "This includes designing specific index structures (e.g., SPO, POS, OSP permutations) to support various query patterns and ensure rapid lookup times.",
-            "status": "pending",
+            "details": "This includes designing specific index structures (e.g., SPO, POS, OSP permutations) to support various query patterns and ensure rapid lookup times.\n<info added on 2025-08-29T02:26:45.480Z>\nImplemented SPO, POS, and OSP indexing within the TripleStore class to allow for efficient querying of triples by any combination of subject, predicate, and object.\n</info added on 2025-08-29T02:26:45.480Z>",
+            "status": "done",
             "testStrategy": "Document the indexing strategy. Simulate common query patterns against proposed index structures to estimate performance. Conduct design reviews."
           },
           {
@@ -47,7 +47,7 @@
             "title": "Define Hybrid Logical Clock (HLC) Timestamp Format",
             "description": "Specify the exact structure and components of the HLC timestamp, including logical time, wall clock time, and node identifier.",
             "dependencies": [],
-            "details": "This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).\n<info added on 2025-08-29T02:19:21.933Z>\nImplemented HLC creation, parsing, incrementing, and comparison functions in `index.ts`. Added a full test suite in `index.test.ts` using `bun:test` and all tests are passing.\n</info added on 2025-08-29T02:19:21.933Z>",
+            "details": "This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).\n<info added on 2025-08-29T02:19:21.933Z>\nImplemented HLC creation, parsing, incrementing, and comparison functions in `index.ts`. Added a full test suite in `index.test.ts` using `bun:test` and all tests are passing.\n</info added on 2025-08-29T02:19:21.933Z>\n<info added on 2025-08-29T02:25:10.622Z>\n<info added on 2024-07-30T12:00:00.000Z>\nRefactored the HLC implementation from a string-based approach to a class-based, object-oriented design. The HLC class now encapsulates all related logic, improving maintainability and type safety.\n</info added on 2024-07-30T12:00:00.000Z>\n</info added on 2025-08-29T02:25:10.622Z>",
             "status": "done",
             "testStrategy": "Document the HLC timestamp format specification. Conduct design reviews to ensure compatibility and uniqueness requirements are met."
           },
@@ -59,7 +59,7 @@
               "1.4"
             ],
             "details": "This includes specifying rules for incrementing the logical time component, updating the wall clock time component, and handling potential clock skew during generation and merge operations.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Document the HLC generation algorithm. Create pseudocode or flowcharts to illustrate the logic. Conduct design reviews."
           },
           {
@@ -70,7 +70,7 @@
               "1.4"
             ],
             "details": "This involves specifying how the logical time, wall clock time, and node ID components are used in the comparison process to establish a total or partial order.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Document the HLC comparison algorithm. Define edge cases for comparison and verify logic. Conduct design reviews."
           },
           {
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:19:25.031Z",
+      "updated": "2025-08-29T02:26:49.891Z",
       "description": "Tasks for master context"
     }
   }
