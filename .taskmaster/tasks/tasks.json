@@ -221,8 +221,8 @@
             "dependencies": [
               "3.1"
             ],
-            "details": "Implement the `client.create()` method. Integrate with the schema definition utility (from Task 2) to validate incoming data against the defined schema. Apply fallback values for missing fields as per schema. Generate HLC timestamps for all new triples using the integrated HLC utility.",
-            "status": "pending",
+            "details": "Implement the `client.create()` method. Integrate with the schema definition utility (from Task 2) to validate incoming data against the defined schema. Apply fallback values for missing fields as per schema. Generate HLC timestamps for all new triples using the integrated HLC utility.\n<info added on 2025-08-29T03:32:27.880Z>\nThe `create` operation will be exposed via `client.database.<entityName>.create(fields)`. Validation must specifically enforce that all required fields are present. For each field in the final entity, a triple of the form `(<new_entity_id>`, `<entityName>/<fieldName>`, `<value>)` must be generated and stored. The operation should return the complete created entity, including auto-generated fields like `id`, `createdAt`, and `updatedAt`.\n</info added on 2025-08-29T03:32:27.880Z>",
+            "status": "in-progress",
             "testStrategy": "Unit tests for successful creation, schema validation errors, fallback application, and correct HLC timestamping."
           },
           {
@@ -232,7 +232,7 @@
             "dependencies": [
               "3.1"
             ],
-            "details": "Implement `client.read()` to fetch entities by ID or query for specific fields. Ensure efficient retrieval from the in-memory store. Consider supporting basic filtering or projection if implied by `client-api.md`.",
+            "details": "Implement `client.read()` to fetch entities by ID or query for specific fields. Ensure efficient retrieval from the in-memory store. Consider supporting basic filtering or projection if implied by `client-api.md`.\n<info added on 2025-08-29T03:32:34.558Z>\nThe `read` functionality will be exposed through `query` and `queryOne` methods on the entity-specific API (e.g., `client.database.users.query(...)`). This will involve implementing a Datalog-style query engine that operates on the in-memory triple store as described in `design.md`. The query engine must support filtering (`where`), field selection (`fields`), sorting (`orderBy`), and limiting results (`limit`). The implementation should gather all triples for matching subjects and reconstruct entity objects based on the `fields` selection.\n</info added on 2025-08-29T03:32:34.558Z>",
             "status": "pending",
             "testStrategy": "Unit tests for retrieving existing entities, non-existent entities, specific fields, and handling various query parameters."
           },
@@ -244,7 +244,7 @@
               "3.1",
               "3.3"
             ],
-            "details": "Implement `client.update()` and `client.replace()`. Support passing functions to update fields (e.g., `count: c => c + 1`). Generate new HLC timestamps for updated fields using the integrated HLC utility. Apply last-write-wins logic based on HLC timestamps for concurrent updates to the same field.",
+            "details": "Implement `client.update()` and `client.replace()`. Support passing functions to update fields (e.g., `count: c => c + 1`). Generate new HLC timestamps for updated fields using the integrated HLC utility. Apply last-write-wins logic based on HLC timestamps for concurrent updates to the same field.\n<info added on 2025-08-29T03:32:39.323Z>\nThe methods should be accessed via `client.database.<entityName>.update({ id, fields })` and `client.database.<entityName>.replace({ id, fields })`. For `update`, only provided fields are modified. For `replace`, all required fields must be provided, and unspecified optional fields are cleared. Both methods must support a functional `fields` argument of the form `(prev) => ({...})` for atomic updates. The last-write-wins conflict resolution strategy must be applied at the field level as specified in `design.md`.\n</info added on 2025-08-29T03:32:39.323Z>",
             "status": "pending",
             "testStrategy": "Unit tests for direct updates, functional updates, `replace` behavior, and conflict resolution scenarios (last-write-wins verification)."
           },
@@ -255,7 +255,7 @@
             "dependencies": [
               "3.1"
             ],
-            "details": "Implement `client.delete()` to remove entire entities by ID or specific predicates for an entity. Ensure immediate removal from the in-memory store.",
+            "details": "Implement `client.delete()` to remove entire entities by ID or specific predicates for an entity. Ensure immediate removal from the in-memory store.\n<info added on 2025-08-29T03:32:44.328Z>\nFor `client.database.<entityName>.delete(id)`, instead of immediate removal, a 'tombstone' triple `(<entityId>, \"_deleted\", true)` with an HLC timestamp must be created. The query engine must be updated to filter out entities with this tombstone, ensuring deletions are replicated and win over concurrent updates.\n</info added on 2025-08-29T03:32:44.328Z>",
             "status": "pending",
             "testStrategy": "Unit tests for deleting existing entities, non-existent entities, specific fields, and verifying removal."
           },
@@ -266,7 +266,7 @@
             "dependencies": [
               "3.4"
             ],
-            "details": "Implement `client.updateMany()` and `client.replaceMany()`. These methods should iterate over the provided entities/updates and call the respective single `update` or `replace` logic internally, ensuring HLC and conflict resolution are applied per entity/field. Optimize for batch processing where possible.",
+            "details": "Implement `client.updateMany()` and `client.replaceMany()`. These methods should iterate over the provided entities/updates and call the respective single `update` or `replace` logic internally, ensuring HLC and conflict resolution are applied per entity/field. Optimize for batch processing where possible.\n<info added on 2025-08-29T03:32:48.983Z>\nImplement `client.database.<entityName>.updateMany({ where, fields })` and `client.database.<entityName>.replaceMany({ where, fields })`. These methods should first query the triple store to find all entities matching the `where` clause. For each matching entity, they should then apply the logic from the single `update` or `replace` operation internally, ensuring HLC and conflict resolution are applied per entity/field. Both `updateMany` and `replaceMany` should support functional `fields` arguments. The operations should be performed as a batch, and the return value should indicate the count of affected documents, as shown in `client-api.md`.\n</info added on 2025-08-29T03:32:48.983Z>",
             "status": "pending",
             "testStrategy": "Unit tests for bulk updates/replaces on multiple entities, including mixed success/failure scenarios and performance considerations for large batches."
           },
@@ -277,7 +277,7 @@
             "dependencies": [
               "3.5"
             ],
-            "details": "Implement `client.deleteMany()`. This method should iterate over the provided entity IDs/field paths and call the single `delete` logic internally. Optimize for batch processing.",
+            "details": "Implement `client.deleteMany()`. This method should iterate over the provided entity IDs/field paths and call the single `delete` logic internally. Optimize for batch processing.\n<info added on 2025-08-29T03:32:58.082Z>\nThe method signature will be `client.database.<entityName>.deleteMany({ where })`. It will identify entities by querying the triple store using the `where` clause. Deletion will involve creating a 'tombstone' triple for each identified entity, consistent with the single `delete` operation. The method should return the total count of documents marked for deletion.\n</info added on 2025-08-29T03:32:58.082Z>",
             "status": "pending",
             "testStrategy": "Unit tests for bulk deletes on multiple entities/fields, including partial success and performance."
           },
@@ -293,7 +293,7 @@
               "3.6",
               "3.7"
             ],
-            "details": "Write extensive unit tests covering edge cases for each CRUD method. Develop integration tests to verify end-to-end data flow and consistency across multiple operations. Implement concurrency tests to simulate local concurrent writes to the same field and verify HLC-based last-write-wins behavior. Conduct performance benchmarks for basic operations on varying dataset sizes to ensure 'instant' feedback.",
+            "details": "Write extensive unit tests covering edge cases for each CRUD method. Develop integration tests to verify end-to-end data flow and consistency across multiple operations. Implement concurrency tests to simulate local concurrent writes to the same field and verify HLC-based last-write-wins behavior. Conduct performance benchmarks for basic operations on varying dataset sizes to ensure 'instant' feedback.\n<info added on 2025-08-29T03:33:06.169Z>\nThe test suite will be expanded to explicitly cover all CRUD operations (`create`, `query`, `update`, `replace`, `delete`, and their `many` variants). Tests will verify: correct triple manipulation in the in-memory store; schema validation and fallback application; functional updates executing correctly; HLC timestamp generation and last-write-wins conflict resolution for concurrent local updates; correct handling of delete tombstones in queries; and bulk operations affecting the correct set of documents. Performance benchmarks will specifically cover each CRUD operation on a reasonably sized in-memory dataset to ensure 'instant' feedback.\n</info added on 2025-08-29T03:33:06.169Z>",
             "status": "pending",
             "testStrategy": "As described in the details. Focus on robustness, correctness, and performance."
           }
@@ -532,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:25:40.828Z",
+      "updated": "2025-08-29T03:37:48.418Z",
       "description": "Tasks for master context"
     }
   }
