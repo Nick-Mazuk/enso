@@ -132,7 +132,7 @@
         "dependencies": [
           1
         ],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -162,7 +162,7 @@
               "2.1"
             ],
             "details": "Define how schema versions will be managed and associated with data. Implement logic to store schema version metadata alongside data or within the schema definition itself. Consider strategies for migrating data between schema versions if necessary.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for schema version assignment and retrieval. Integration tests to verify that data can be associated with specific schema versions."
           },
           {
@@ -173,7 +173,7 @@
               "2.1"
             ],
             "details": "Extend the schema definition to allow specifying fallback values or functions for individual fields. Implement the runtime logic to apply these fallbacks during data retrieval or validation if a field's value is not present or does not conform.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for various fallback scenarios (missing fields, invalid types triggering fallback). Integration tests to ensure fallbacks are correctly applied when querying data."
           },
           {
@@ -187,7 +187,7 @@
               "2.4"
             ],
             "details": "Write API reference documentation for `createSchema` and its associated type helpers (`t.string`, `t.ref`, etc.). Include examples demonstrating schema definition, validation implications, and how to leverage versioning and fallbacks.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Review documentation for clarity, completeness, and accuracy, ensuring all features are adequately explained with practical examples."
           }
         ]
@@ -204,7 +204,100 @@
           2
         ],
         "status": "todo",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Initialize Client Factory & In-memory Triple Store",
+            "description": "Set up the client factory, initialize the in-memory triple store, and integrate the HLC mechanism for timestamp generation and local conflict resolution. This forms the foundational layer for all subsequent CRUD operations.",
+            "dependencies": [],
+            "details": "Implement the `createClient` factory function. Establish the internal data structure for the in-memory triple store (e.g., `Map<subject, Map<predicate, {value, hlc_timestamp}>>`). Integrate the HLC utility (from Task 1) for generating timestamps for new/updated triples. Define the last-write-wins conflict resolution logic for same-field concurrent updates.",
+            "status": "pending",
+            "testStrategy": "Unit tests for client factory instantiation, in-memory store initialization, and basic HLC timestamp generation and application during initial data insertion."
+          },
+          {
+            "id": 2,
+            "title": "Implement `create` Operation with Schema Validation & Fallbacks",
+            "description": "Develop the `create` method for adding new entities to the in-memory store, ensuring schema validation and applying fallback values as defined in the schema.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement the `client.create()` method. Integrate with the schema definition utility (from Task 2) to validate incoming data against the defined schema. Apply fallback values for missing fields as per schema. Generate HLC timestamps for all new triples using the integrated HLC utility.",
+            "status": "pending",
+            "testStrategy": "Unit tests for successful creation, schema validation errors, fallback application, and correct HLC timestamping."
+          },
+          {
+            "id": 3,
+            "title": "Implement `read` Operation for Entity Retrieval",
+            "description": "Develop the `read` method to efficiently retrieve entities or specific fields from the client's in-memory triple store.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement `client.read()` to fetch entities by ID or query for specific fields. Ensure efficient retrieval from the in-memory store. Consider supporting basic filtering or projection if implied by `client-api.md`.",
+            "status": "pending",
+            "testStrategy": "Unit tests for retrieving existing entities, non-existent entities, specific fields, and handling various query parameters."
+          },
+          {
+            "id": 4,
+            "title": "Implement `update` & `replace` Operations with Functional Updates",
+            "description": "Develop the `update` and `replace` methods to modify existing entities, supporting functional updates and applying HLC-based last-write-wins conflict resolution.",
+            "dependencies": [
+              "3.1",
+              "3.3"
+            ],
+            "details": "Implement `client.update()` and `client.replace()`. Support passing functions to update fields (e.g., `count: c => c + 1`). Generate new HLC timestamps for updated fields using the integrated HLC utility. Apply last-write-wins logic based on HLC timestamps for concurrent updates to the same field.",
+            "status": "pending",
+            "testStrategy": "Unit tests for direct updates, functional updates, `replace` behavior, and conflict resolution scenarios (last-write-wins verification)."
+          },
+          {
+            "id": 5,
+            "title": "Implement `delete` Operation for Entities/Fields",
+            "description": "Develop the `delete` method to remove entities or specific fields from the in-memory triple store.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Implement `client.delete()` to remove entire entities by ID or specific predicates for an entity. Ensure immediate removal from the in-memory store.",
+            "status": "pending",
+            "testStrategy": "Unit tests for deleting existing entities, non-existent entities, specific fields, and verifying removal."
+          },
+          {
+            "id": 6,
+            "title": "Implement Bulk `updateMany` & `replaceMany` Operations",
+            "description": "Develop bulk `updateMany` and `replaceMany` methods for efficient modification of multiple entities, leveraging the single update/replace logic.",
+            "dependencies": [
+              "3.4"
+            ],
+            "details": "Implement `client.updateMany()` and `client.replaceMany()`. These methods should iterate over the provided entities/updates and call the respective single `update` or `replace` logic internally, ensuring HLC and conflict resolution are applied per entity/field. Optimize for batch processing where possible.",
+            "status": "pending",
+            "testStrategy": "Unit tests for bulk updates/replaces on multiple entities, including mixed success/failure scenarios and performance considerations for large batches."
+          },
+          {
+            "id": 7,
+            "title": "Implement Bulk `deleteMany` Operation",
+            "description": "Develop the bulk `deleteMany` method for efficient removal of multiple entities or fields from the in-memory store.",
+            "dependencies": [
+              "3.5"
+            ],
+            "details": "Implement `client.deleteMany()`. This method should iterate over the provided entity IDs/field paths and call the single `delete` logic internally. Optimize for batch processing.",
+            "status": "pending",
+            "testStrategy": "Unit tests for bulk deletes on multiple entities/fields, including partial success and performance."
+          },
+          {
+            "id": 8,
+            "title": "Comprehensive CRUD Testing & Performance Benchmarking",
+            "description": "Conduct comprehensive unit, integration, and performance tests for all implemented in-memory CRUD operations, including HLC-based conflict resolution.",
+            "dependencies": [
+              "3.2",
+              "3.3",
+              "3.4",
+              "3.5",
+              "3.6",
+              "3.7"
+            ],
+            "details": "Write extensive unit tests covering edge cases for each CRUD method. Develop integration tests to verify end-to-end data flow and consistency across multiple operations. Implement concurrency tests to simulate local concurrent writes to the same field and verify HLC-based last-write-wins behavior. Conduct performance benchmarks for basic operations on varying dataset sizes to ensure 'instant' feedback.",
+            "status": "pending",
+            "testStrategy": "As described in the details. Focus on robustness, correctness, and performance."
+          }
+        ]
       },
       {
         "id": 4,
@@ -439,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:15:45.355Z",
+      "updated": "2025-08-29T03:22:45.181Z",
       "description": "Tasks for master context"
     }
   }
