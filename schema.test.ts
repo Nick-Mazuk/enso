@@ -1,7 +1,13 @@
-import { expect, test } from "bun:test";
-import { Schema, createSchema, t } from "./schema";
+import { expect, expectTypeOf, test } from "bun:test";
+import {
+  type RefField,
+  Schema,
+  type StringField,
+  createSchema,
+  t,
+} from "./schema";
 
-test("createSchema creates a valid schema from the client-api.md definition", () => {
+test("createSchema returns an instance of Schema", () => {
   const schemaDefinition = {
     entities: {
       $users: {
@@ -42,4 +48,32 @@ test("createSchema creates a valid schema from the client-api.md definition", ()
   const schema = createSchema(schemaDefinition);
   expect(schema).toBeInstanceOf(Schema);
   expect(schema.definition).toEqual(schemaDefinition);
+});
+
+test("createSchema produces correct types", () => {
+  const schemaDefinition = {
+    entities: {
+      $users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+      },
+      posts: {
+        authorId: t.ref("$users"),
+      },
+    },
+    rooms: {},
+  };
+
+  const schema = createSchema(schemaDefinition);
+
+  expectTypeOf(schema.definition).toEqualTypeOf(schemaDefinition);
+  expectTypeOf(
+    schema.definition.entities.$users.name
+  ).toEqualTypeOf<StringField>();
+  expectTypeOf(schema.definition.entities.posts.authorId).toEqualTypeOf<
+    RefField<"$users">
+  >();
+  expectTypeOf(
+    schema.definition.entities.posts.authorId.refType
+  ).toEqualTypeOf<"$users">();
 });
