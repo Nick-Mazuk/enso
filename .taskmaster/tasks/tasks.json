@@ -203,15 +203,15 @@
           1,
           2
         ],
-        "status": "todo",
+        "status": "in-progress",
         "subtasks": [
           {
             "id": 1,
             "title": "Initialize Client Factory & In-memory Triple Store",
             "description": "Set up the client factory, initialize the in-memory triple store, and integrate the HLC mechanism for timestamp generation and local conflict resolution. This forms the foundational layer for all subsequent CRUD operations.",
             "dependencies": [],
-            "details": "Implement the `createClient` factory function. Establish the internal data structure for the in-memory triple store (e.g., `Map<subject, Map<predicate, {value, hlc_timestamp}>>`). Integrate the HLC utility (from Task 1) for generating timestamps for new/updated triples. Define the last-write-wins conflict resolution logic for same-field concurrent updates.",
-            "status": "pending",
+            "details": "Implement the `createClient` factory function. Establish the internal data structure for the in-memory triple store (e.g., `Map<subject, Map<predicate, {value, hlc_timestamp}>>`). Integrate the HLC utility (from Task 1) for generating timestamps for new/updated triples. Define the last-write-wins conflict resolution logic for same-field concurrent updates.\n<info added on 2025-08-29T03:25:31.257Z>\nThe `create` operation will be exposed via the dynamic `database` API, which is generated using a Proxy based on the provided schema. This API will be the entry point for creating new entities, ensuring schema validation and applying fallback logic as defined.\n</info added on 2025-08-29T03:25:31.257Z>",
+            "status": "done",
             "testStrategy": "Unit tests for client factory instantiation, in-memory store initialization, and basic HLC timestamp generation and application during initial data insertion."
           },
           {
@@ -532,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:22:45.181Z",
+      "updated": "2025-08-29T03:25:40.828Z",
       "description": "Tasks for master context"
     }
   }
