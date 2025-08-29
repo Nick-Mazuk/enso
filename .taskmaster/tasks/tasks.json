@@ -233,7 +233,7 @@
               "3.1"
             ],
             "details": "Implement `client.read()` to fetch entities by ID or query for specific fields. Ensure efficient retrieval from the in-memory store. Consider supporting basic filtering or projection if implied by `client-api.md`.\n<info added on 2025-08-29T03:32:34.558Z>\nThe `read` functionality will be exposed through `query` and `queryOne` methods on the entity-specific API (e.g., `client.database.users.query(...)`). This will involve implementing a Datalog-style query engine that operates on the in-memory triple store as described in `design.md`. The query engine must support filtering (`where`), field selection (`fields`), sorting (`orderBy`), and limiting results (`limit`). The implementation should gather all triples for matching subjects and reconstruct entity objects based on the `fields` selection.\n</info added on 2025-08-29T03:32:34.558Z>",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for retrieving existing entities, non-existent entities, specific fields, and handling various query parameters."
           },
           {
@@ -532,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:45:46.657Z",
+      "updated": "2025-08-29T03:52:33.003Z",
       "description": "Tasks for master context"
     }
   }

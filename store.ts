@@ -52,8 +52,13 @@ export class TripleStore {
     this.removeFromIndex(this.osp, object, subject, predicate);
   }
 
-  query(triple: Partial<Triple>): Triple[] {
-    const [s, p, o] = triple;
+  querySubjects(query: { predicate: Predicate; object: Object }): Subject[] {
+    const subjectMap = this.pos.get(query.predicate)?.get(query.object);
+    return subjectMap ? [...subjectMap.keys()] : [];
+  }
+
+  query(q: Partial<Triple>): Triple[] {
+    const [s, p, o] = [q[0], q[1], q[2]];
     if (s !== undefined) {
       if (p !== undefined) {
         return o !== undefined ? this._querySPO(s, p, o) : this._querySP(s, p);
