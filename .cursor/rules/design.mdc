@@ -1,0 +1,13 @@
+---
+description: Design by contract
+globs:
+alwaysApply: true
+---
+
+To design by contract, define formal, verifiable conditions for software components.
+
+- **Preconditions:** What must be true **before** a function is called (client's responsibility).
+- **Postconditions:** What the function guarantees will be true **after** it completes (supplier's responsibility).
+- **Invariants:** What must remain true for an object **throughout** its lifecycle.
+
+If a precondition fails, it's a bug in the calling code. This approach makes responsibilities explicit and simplifies debugging.
