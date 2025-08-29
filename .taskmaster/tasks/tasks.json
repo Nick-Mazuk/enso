@@ -16,8 +16,8 @@
             "title": "Define Core Triple Data Model Structure",
             "description": "Specify the fundamental structure of a triple (subject, predicate, object) and the allowed internal data types for each component.",
             "dependencies": [],
-            "details": "This involves defining the internal representation of subjects, predicates, and objects, considering potential UUIDs, strings, or other identifiers for efficient storage and retrieval. It also covers the conceptual schema for a triple.",
-            "status": "in-progress",
+            "details": "This involves defining the internal representation of subjects, predicates, and objects, considering potential UUIDs, strings, or other identifiers for efficient storage and retrieval. It also covers the conceptual schema for a triple.\n<info added on 2025-08-29T02:16:10.669Z>\nInitial core data model types (`Triple`, `Subject`, `Predicate`, `Object`, `Value`, `Ref`, `RefMany`, and a placeholder for `HLC` as a string) have been defined in `index.ts`.\n</info added on 2025-08-29T02:16:10.669Z>",
+            "status": "done",
             "testStrategy": "Document the data model specification. Conduct design reviews with data architects and system designers."
           },
           {
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:10:47.083Z",
+      "updated": "2025-08-29T02:16:18.599Z",
       "description": "Tasks for master context"
     }
   }
