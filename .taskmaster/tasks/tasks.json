@@ -222,7 +222,7 @@
               "3.1"
             ],
             "details": "Implement the `client.create()` method. Integrate with the schema definition utility (from Task 2) to validate incoming data against the defined schema. Apply fallback values for missing fields as per schema. Generate HLC timestamps for all new triples using the integrated HLC utility.\n<info added on 2025-08-29T03:32:27.880Z>\nThe `create` operation will be exposed via `client.database.<entityName>.create(fields)`. Validation must specifically enforce that all required fields are present. For each field in the final entity, a triple of the form `(<new_entity_id>`, `<entityName>/<fieldName>`, `<value>)` must be generated and stored. The operation should return the complete created entity, including auto-generated fields like `id`, `createdAt`, and `updatedAt`.\n</info added on 2025-08-29T03:32:27.880Z>",
-            "status": "in-progress",
+            "status": "done",
             "testStrategy": "Unit tests for successful creation, schema validation errors, fallback application, and correct HLC timestamping."
           },
           {
@@ -532,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:37:48.418Z",
+      "updated": "2025-08-29T03:45:46.657Z",
       "description": "Tasks for master context"
     }
   }
