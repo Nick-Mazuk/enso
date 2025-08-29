@@ -17,6 +17,11 @@ export class TripleStore {
   add(triple: Triple) {
     const [subject, predicate, object, hlc] = triple;
 
+    const existingHlc = this.spo.get(subject)?.get(predicate)?.get(object);
+    if (existingHlc && hlc.compare(existingHlc) <= 0) {
+      return;
+    }
+
     this.addToIndex(this.spo, subject, predicate, object, hlc);
     this.addToIndex(this.pos, predicate, object, subject, hlc);
     this.addToIndex(this.osp, object, subject, predicate, hlc);

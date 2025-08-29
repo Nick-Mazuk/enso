@@ -93,8 +93,8 @@
               "1.6",
               "1.7"
             ],
-            "details": "This involves outlining the precise logic for selecting the 'winning' triple based on HLC comparison when concurrent updates to the same field occur, ensuring deterministic outcomes.",
-            "status": "pending",
+            "details": "This involves outlining the precise logic for selecting the 'winning' triple based on HLC comparison when concurrent updates to the same field occur, ensuring deterministic outcomes.\n<info added on 2025-08-29T02:48:19.440Z>\nWhen adding a triple, if a triple with the same subject, predicate, and object already exists, the HLCs are compared, and only the triple with the highest HLC is retained. This ensures data consistency in the face of concurrent updates.\n</info added on 2025-08-29T02:48:19.440Z>",
+            "status": "done",
             "testStrategy": "Document the conflict resolution algorithm. Define various conflict scenarios and demonstrate how the HLC-based strategy resolves them. Conduct design reviews."
           },
           {
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:44:49.984Z",
+      "updated": "2025-08-29T02:48:25.258Z",
       "description": "Tasks for master context"
     }
   }
