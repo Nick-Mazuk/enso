@@ -1,4 +1,4 @@
-export type HLC = string;
+import { HLC } from "./hlc";
 
 export type Subject = string;
 export type Predicate = string;

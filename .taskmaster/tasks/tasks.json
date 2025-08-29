@@ -9,7 +9,7 @@
         "testStrategy": "Document design specifications. Conduct design reviews with relevant stakeholders. Create mock data structures to validate the model's flexibility and efficiency for HLC integration.",
         "priority": "high",
         "dependencies": [],
-        "status": "todo",
+        "status": "in-progress",
         "subtasks": [
           {
             "id": 1,
@@ -47,8 +47,8 @@
             "title": "Define Hybrid Logical Clock (HLC) Timestamp Format",
             "description": "Specify the exact structure and components of the HLC timestamp, including logical time, wall clock time, and node identifier.",
             "dependencies": [],
-            "details": "This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).",
-            "status": "pending",
+            "details": "This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).\n<info added on 2025-08-29T02:19:21.933Z>\nImplemented HLC creation, parsing, incrementing, and comparison functions in `index.ts`. Added a full test suite in `index.test.ts` using `bun:test` and all tests are passing.\n</info added on 2025-08-29T02:19:21.933Z>",
+            "status": "done",
             "testStrategy": "Document the HLC timestamp format specification. Conduct design reviews to ensure compatibility and uniqueness requirements are met."
           },
           {
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:16:18.599Z",
+      "updated": "2025-08-29T02:19:25.031Z",
       "description": "Tasks for master context"
     }
   }
