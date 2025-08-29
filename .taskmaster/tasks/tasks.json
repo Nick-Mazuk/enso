@@ -81,8 +81,8 @@
               "1.1",
               "1.4"
             ],
-            "details": "This involves deciding whether the HLC is embedded within the object value, stored as a separate metadata field alongside each triple, or managed through a versioning layer.",
-            "status": "pending",
+            "details": "This involves deciding whether the HLC is embedded within the object value, stored as a separate metadata field alongside each triple, or managed through a versioning layer.\n<info added on 2025-08-29T02:44:45.628Z>\nIt has been decided that the HLC will be stored as a fourth element within each triple, forming `[Subject, Predicate, Object, HLC]`. This structure inherently supports field-level HLC application, where each triple's HLC timestamps the specific field (predicate) for a given subject. This design satisfies the requirement for fine-grained versioning and conflict resolution at the field level, and no further dedicated implementation is required for this aspect.\n</info added on 2025-08-29T02:44:45.628Z>",
+            "status": "done",
             "testStrategy": "Document the HLC application strategy. Create mock data structures to illustrate HLC placement and association. Conduct design reviews."
           },
           {
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:44:06.032Z",
+      "updated": "2025-08-29T02:44:49.984Z",
       "description": "Tasks for master context"
     }
   }
