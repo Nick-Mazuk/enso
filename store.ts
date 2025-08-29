@@ -17,9 +17,26 @@ export class TripleStore {
   add(triple: Triple) {
     const [subject, predicate, object, hlc] = triple;
 
-    const existingHlc = this.spo.get(subject)?.get(predicate)?.get(object);
-    if (existingHlc && hlc.compare(existingHlc) <= 0) {
-      return;
+    const predMap = this.spo.get(subject);
+    const objMap = predMap?.get(predicate);
+
+    if (objMap) {
+      let latestHlc: HLC | undefined = undefined;
+      for (const existingHlc of objMap.values()) {
+        if (!latestHlc || existingHlc.compare(latestHlc) > 0) {
+          latestHlc = existingHlc;
+        }
+      }
+
+      if (latestHlc && hlc.compare(latestHlc) <= 0) {
+        return;
+      }
+
+      const objectsToRemove = [...objMap.keys()];
+      for (const obj of objectsToRemove) {
+        const oldHlc = objMap.get(obj)!;
+        this.remove([subject, predicate, obj, oldHlc]);
+      }
     }
 
     this.addToIndex(this.spo, subject, predicate, object, hlc);

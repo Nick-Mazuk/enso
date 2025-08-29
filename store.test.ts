@@ -29,20 +29,6 @@ test("TripleStore can remove a triple", () => {
   expect(store.query(["a", "b", "c"])).toEqual([]);
 });
 
-test("TripleStore can handle multiple triples", () => {
-  const store = new TripleStore();
-  const hlc1 = new HLC(new Date(), 0);
-  const hlc2 = new HLC(new Date(), 1);
-  const triple1: Triple = ["a", "b", "c", hlc1];
-  const triple2: Triple = ["a", "b", "d", hlc2];
-  store.add(triple1);
-  store.add(triple2);
-
-  expect(store.query(["a", "b", "c"])).toEqual([triple1]);
-  expect(store.query(["a", "b", "d"])).toEqual([triple2]);
-  expect(store.query(["a", "b"])).toEqual([triple1, triple2]);
-});
-
 test("TripleStore conflicts - later timestamp wins", () => {
   const store = new TripleStore();
   const date = new Date();

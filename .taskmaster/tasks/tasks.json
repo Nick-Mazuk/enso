@@ -9,7 +9,7 @@
         "testStrategy": "Document design specifications. Conduct design reviews with relevant stakeholders. Create mock data structures to validate the model's flexibility and efficiency for HLC integration.",
         "priority": "high",
         "dependencies": [],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -105,8 +105,8 @@
               "1.2",
               "1.7"
             ],
-            "details": "This impacts how historical versions might be retained or discarded based on HLCs and the overall data lifecycle within the in-memory store.",
-            "status": "pending",
+            "details": "This impacts how historical versions might be retained or discarded based on HLCs and the overall data lifecycle within the in-memory store.\n<info added on 2025-08-29T02:54:39.255Z>\nThe store is designed as an immutable, versioned TripleStore. For any given subject and predicate, only the triple with the highest HLC timestamp is retained, implementing a 'last-write-wins' strategy to ensure the store always reflects the latest version of a fact.\n</info added on 2025-08-29T02:54:39.255Z>",
+            "status": "done",
             "testStrategy": "Document the mutability/versioning model. Illustrate update flows with HLCs. Conduct design reviews."
           },
           {
@@ -117,7 +117,7 @@
               "1.1"
             ],
             "details": "This includes considerations for serialization/deserialization, efficient storage, and type integrity for different data types when they form the object component of a triple.\n<info added on 2025-08-29T02:38:57.090Z>\nA prefix-based encoding system has been designed and implemented in `crdt.ts` to represent various data types (strings, numbers, booleans, dates, and null values) for the object component of triples. This system is fully tested.\n</info added on 2025-08-29T02:38:57.090Z>\n<info added on 2025-08-29T02:44:01.399Z>\n<info added on 2025-08-29T02:38:57.090Z>\nPer user feedback, the decision has been made to store primitive data types directly in memory without an encoding layer. The previously designed and implemented prefix-based encoding system in `crdt.ts` is being removed.\n</info added on 2025-08-29T02:38:57.090Z>\n</info added on 2025-08-29T02:44:01.399Z>",
-            "status": "cancelled",
+            "status": "done",
             "testStrategy": "Document the data type representation mapping. Create examples of how different types are stored. Conduct design reviews."
           }
         ]
@@ -382,7 +382,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T02:48:25.258Z",
+      "updated": "2025-08-29T02:54:53.406Z",
       "description": "Tasks for master context"
     }
   }
