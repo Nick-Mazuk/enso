@@ -150,8 +150,8 @@
             "dependencies": [
               "2.1"
             ],
-            "details": "Design and implement validation functions that can be invoked when data is written or updated. These functions should check field types, required fields, and reference integrity based on the parsed schema.",
-            "status": "in-progress",
+            "details": "Design and implement validation functions that can be invoked when data is written or updated. These functions should check field types, required fields, and reference integrity based on the parsed schema.\n<info added on 2025-08-29T03:15:38.278Z>\nImplemented the `Schema.validate` method for robust runtime validation of objects against the schema. This includes checks for correct field types, required fields, and the proper structure of `ref` and `refMany` reference types, ensuring data integrity. The functionality is fully tested.\n</info added on 2025-08-29T03:15:38.278Z>",
+            "status": "done",
             "testStrategy": "Unit tests for validation rules against various data inputs (valid, invalid types, missing required fields, incorrect references). Integration tests to confirm validation errors are correctly reported during mock data operations."
           },
           {
@@ -439,7 +439,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:02:20.341Z",
+      "updated": "2025-08-29T03:15:45.355Z",
       "description": "Tasks for master context"
     }
   }

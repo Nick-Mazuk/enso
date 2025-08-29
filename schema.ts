@@ -30,10 +30,12 @@ export type RefManyField<T extends string> = {
 export type ObjectField<T extends { [key: string]: FieldDefinition }> = {
   type: "object";
   fields: T;
+  optional?: true;
 };
 export type ArrayField<T extends FieldDefinition> = {
   type: "array";
   itemType: T;
+  optional?: true;
 };
 
 // Main FieldDefinition union type (recursive)
@@ -65,14 +67,20 @@ export const t = {
     ...options,
   }),
   object: <T extends { [key: string]: FieldDefinition }>(
-    fields: T
+    fields: T,
+    options?: { optional: true }
   ): ObjectField<T> => ({
     type: "object",
     fields,
+    ...options,
   }),
-  array: <T extends FieldDefinition>(itemType: T): ArrayField<T> => ({
+  array: <T extends FieldDefinition>(
+    itemType: T,
+    options?: { optional: true }
+  ): ArrayField<T> => ({
     type: "array",
     itemType,
+    ...options,
   }),
   ref: <T extends string>(refType: T): RefField<T> => ({
     type: "ref",
@@ -121,6 +129,56 @@ export class Schema<T extends SchemaDefinition> {
       parsed.set(entityName, fields);
     }
     return parsed;
+  }
+
+  validate(entityType: string, object: unknown): boolean {
+    const entityDef = this.parsedSchema.get(entityType);
+    if (!entityDef) {
+      return false;
+    }
+
+    if (typeof object !== "object" || object === null) {
+      return false;
+    }
+
+    for (const [fieldName, fieldDef] of entityDef.entries()) {
+      const value = (object as Record<string, unknown>)[fieldName];
+
+      if (value === undefined) {
+        if ("optional" in fieldDef && fieldDef.optional) {
+          continue;
+        }
+        return false;
+      }
+
+      switch (fieldDef.type) {
+        case "string":
+          if (typeof value !== "string") return false;
+          break;
+        case "number":
+          if (typeof value !== "number") return false;
+          break;
+        case "boolean":
+          if (typeof value !== "boolean") return false;
+          break;
+        case "date":
+          if (!(value instanceof Date)) return false;
+          break;
+        case "ref":
+          if (typeof value !== "string") return false;
+          break;
+        case "refMany":
+          if (
+            !Array.isArray(value) ||
+            !value.every((v) => typeof v === "string")
+          ) {
+            return false;
+          }
+          break;
+      }
+    }
+
+    return true;
   }
 }
 

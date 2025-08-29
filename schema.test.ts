@@ -77,3 +77,25 @@ test("createSchema produces correct types", () => {
     schema.definition.entities.posts.authorId.refType
   ).toEqualTypeOf<"$users">();
 });
+
+test("Schema.validate correctly validates an object", () => {
+  const schema = createSchema({
+    entities: {
+      user: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+        posts: t.refMany("post"),
+      },
+    },
+    rooms: {},
+  });
+
+  const validUser = { name: "test", age: 10 };
+  const invalidUser = { name: "test", age: "10" };
+  const missingRequired = { age: 10 };
+
+  expect(schema.validate("user", validUser)).toBe(true);
+  expect(schema.validate("user", invalidUser)).toBe(false);
+  expect(schema.validate("user", missingRequired)).toBe(false);
+  expect(schema.validate("nonexistent", validUser)).toBe(false);
+});
