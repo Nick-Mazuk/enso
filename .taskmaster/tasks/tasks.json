@@ -1,0 +1,389 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Design Core Triple Store & HLC Mechanism",
+        "description": "Define the fundamental data model for the triple store (subject, predicate, object) and the structure/logic for Hybrid Logical Clocks (HLC) at the field level.",
+        "details": "This task involves designing the in-memory representation of the triple store, including indexing strategies (e.g., by subject, predicate, object), and the HLC timestamp format (e.g., (logical_time, wall_clock_time, node_id)). It also covers the basic principles of HLC generation and comparison for conflict resolution.",
+        "testStrategy": "Document design specifications. Conduct design reviews with relevant stakeholders. Create mock data structures to validate the model's flexibility and efficiency for HLC integration.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "todo",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define Core Triple Data Model Structure",
+            "description": "Specify the fundamental structure of a triple (subject, predicate, object) and the allowed internal data types for each component.",
+            "dependencies": [],
+            "details": "This involves defining the internal representation of subjects, predicates, and objects, considering potential UUIDs, strings, or other identifiers for efficient storage and retrieval. It also covers the conceptual schema for a triple.",
+            "status": "in-progress",
+            "testStrategy": "Document the data model specification. Conduct design reviews with data architects and system designers."
+          },
+          {
+            "id": 2,
+            "title": "Design In-Memory Triple Store Representation",
+            "description": "Design the optimal in-memory data structures for storing triples efficiently, prioritizing fast read and write operations.",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "This involves selecting appropriate data structures (e.g., nested hash maps, arrays, custom structures) to hold the triples, considering memory footprint and access patterns.",
+            "status": "pending",
+            "testStrategy": "Document the in-memory structure design. Create mock data structures to validate memory efficiency and basic access patterns. Conduct design reviews."
+          },
+          {
+            "id": 3,
+            "title": "Design Subject-Predicate-Object Indexing Strategy",
+            "description": "Define the indexing strategies for efficient retrieval of triples based on subject, predicate, and object components.",
+            "dependencies": [
+              "1.2"
+            ],
+            "details": "This includes designing specific index structures (e.g., SPO, POS, OSP permutations) to support various query patterns and ensure rapid lookup times.",
+            "status": "pending",
+            "testStrategy": "Document the indexing strategy. Simulate common query patterns against proposed index structures to estimate performance. Conduct design reviews."
+          },
+          {
+            "id": 4,
+            "title": "Define Hybrid Logical Clock (HLC) Timestamp Format",
+            "description": "Specify the exact structure and components of the HLC timestamp, including logical time, wall clock time, and node identifier.",
+            "dependencies": [],
+            "details": "This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).",
+            "status": "pending",
+            "testStrategy": "Document the HLC timestamp format specification. Conduct design reviews to ensure compatibility and uniqueness requirements are met."
+          },
+          {
+            "id": 5,
+            "title": "Design HLC Generation Logic",
+            "description": "Define the algorithm for generating new HLC timestamps for local operations and when merging with remote timestamps.",
+            "dependencies": [
+              "1.4"
+            ],
+            "details": "This includes specifying rules for incrementing the logical time component, updating the wall clock time component, and handling potential clock skew during generation and merge operations.",
+            "status": "pending",
+            "testStrategy": "Document the HLC generation algorithm. Create pseudocode or flowcharts to illustrate the logic. Conduct design reviews."
+          },
+          {
+            "id": 6,
+            "title": "Design HLC Comparison Logic",
+            "description": "Define the rules and algorithm for comparing two HLC timestamps to determine causality or precedence.",
+            "dependencies": [
+              "1.4"
+            ],
+            "details": "This involves specifying how the logical time, wall clock time, and node ID components are used in the comparison process to establish a total or partial order.",
+            "status": "pending",
+            "testStrategy": "Document the HLC comparison algorithm. Define edge cases for comparison and verify logic. Conduct design reviews."
+          },
+          {
+            "id": 7,
+            "title": "Design Field-Level HLC Application within Triples",
+            "description": "Specify precisely how HLC timestamps are associated with individual fields (objects) within the triple store for fine-grained versioning and conflict resolution.",
+            "dependencies": [
+              "1.1",
+              "1.4"
+            ],
+            "details": "This involves deciding whether the HLC is embedded within the object value, stored as a separate metadata field alongside each triple, or managed through a versioning layer.",
+            "status": "pending",
+            "testStrategy": "Document the HLC application strategy. Create mock data structures to illustrate HLC placement and association. Conduct design reviews."
+          },
+          {
+            "id": 8,
+            "title": "Design HLC-based Conflict Resolution Strategy",
+            "description": "Define the primary conflict resolution strategy using HLCs, specifically focusing on 'last-write-wins' at the field level.",
+            "dependencies": [
+              "1.6",
+              "1.7"
+            ],
+            "details": "This involves outlining the precise logic for selecting the 'winning' triple based on HLC comparison when concurrent updates to the same field occur, ensuring deterministic outcomes.",
+            "status": "pending",
+            "testStrategy": "Document the conflict resolution algorithm. Define various conflict scenarios and demonstrate how the HLC-based strategy resolves them. Conduct design reviews."
+          },
+          {
+            "id": 9,
+            "title": "Design for Triple Store Mutability and Versioning",
+            "description": "Determine how updates to triples are handled, considering whether triples are immutable (new version created) or mutable (in-place update), and how HLCs integrate with this.",
+            "dependencies": [
+              "1.2",
+              "1.7"
+            ],
+            "details": "This impacts how historical versions might be retained or discarded based on HLCs and the overall data lifecycle within the in-memory store.",
+            "status": "pending",
+            "testStrategy": "Document the mutability/versioning model. Illustrate update flows with HLCs. Conduct design reviews."
+          },
+          {
+            "id": 10,
+            "title": "Design for Data Type Representation within Triples",
+            "description": "Define how various client-side data types (string, number, boolean, date, ref, refMany) are represented and stored as objects within the triple store.",
+            "dependencies": [
+              "1.1"
+            ],
+            "details": "This includes considerations for serialization/deserialization, efficient storage, and type integrity for different data types when they form the object component of a triple.",
+            "status": "pending",
+            "testStrategy": "Document the data type representation mapping. Create examples of how different types are stored. Conduct design reviews."
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Implement Client-side Schema Definition (`createSchema`)",
+        "description": "Develop the `createSchema` utility for client-only schema definition, enabling type safety and schema evolution through field-level storage and fallbacks.",
+        "details": "The utility should support defining entities and rooms with specific field types (t.string, t.number, t.boolean, t.date, t.ref, t.refMany). It needs to parse the schema, generate internal type definitions, and provide mechanisms for schema validation during local operations.",
+        "testStrategy": "Unit tests for `createSchema` parsing and validation logic. Integration tests to ensure defined schemas correctly influence data type handling and error reporting for invalid data.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Develop Low-level Client-side In-memory CRUD Operations",
+        "description": "Implement the core create, read, update, and delete operations directly on the client's in-memory triple store, incorporating HLC for local conflict resolution.",
+        "details": "This involves the internal logic for manipulating triples, generating HLC timestamps for new or updated fields, and applying last-write-wins conflict resolution for same-field concurrent updates locally. Operations should be instant and provide immediate feedback.",
+        "testStrategy": "Unit tests for each CRUD operation (create, update, delete, read). Concurrency tests to simulate local concurrent writes to the same field and verify HLC-based last-write-wins behavior. Performance tests for basic operations on a small dataset.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Implement Client-side In-memory Query Engine (Basic)",
+        "description": "Develop the client-side query engine to support fundamental query capabilities on the in-memory triple store, including `fields`, `where`, `orderBy`, and `limit` operators.",
+        "details": "The query engine should efficiently retrieve data based on specified criteria. It needs to handle filtering by field values, selecting specific fields, ordering results, and limiting the number of returned documents. This is the internal query mechanism.",
+        "testStrategy": "Unit tests for each query operator (`where`, `orderBy`, `limit`, `fields`). Integration tests to verify complex queries combining multiple operators return correct results from the in-memory store. Performance tests for queries on medium-sized datasets.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          3
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Establish Client-side WebSocket & HTTP Connection Management",
+        "description": "Set up robust client-side connection management for WebSocket (real-time updates) and HTTP (bulk operations, initial data loading) for replication.",
+        "details": "This includes establishing and maintaining connections, handling disconnections, basic reconnection logic, and managing data flow over these protocols. It's the foundation for client-server communication.",
+        "testStrategy": "Unit tests for connection establishment, disconnection, and basic reconnection. Integration tests to simulate network interruptions and verify the client's ability to re-establish connections and resume communication.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Build Public Client API Wrappers for CRUD & Basic Queries",
+        "description": "Create the user-facing, strongly-typed Client API for interacting with the database, supporting CRUD operations and basic queries (`query`, `queryOne`).",
+        "details": "This task involves exposing the low-level in-memory CRUD and query engine functionalities through a developer-friendly, type-safe API. It should provide methods like `client.database.create()`, `update()`, `replace()`, `delete()`, `query()`, and `queryOne()` as defined in the PRD.",
+        "testStrategy": "Integration tests covering all exposed API methods, ensuring they correctly interact with the underlying in-memory store and return expected results. Verify type safety with TypeScript compilation checks.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Implement Client-side Reactive Subscriptions",
+        "description": "Integrate reactive subscriptions (`subscribe`, `subscribeOne`) on the client, allowing applications to react to local data changes in real-time.",
+        "details": "This feature leverages the internal change tracking mechanism of the triple store to notify subscribers when relevant data changes. It should support subscribing to query results and single documents.",
+        "testStrategy": "Unit tests for subscription setup and teardown. Integration tests to verify that subscribers receive correct updates when data is created, updated, or deleted locally. Test for filtering and query-specific subscriptions.",
+        "priority": "high",
+        "dependencies": [
+          6
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Implement Basic Client-side Real-time Rooms Functionality",
+        "description": "Develop the client-side API and logic for basic Real-time Room features: `join`, `emit` events, `setUserStatus`, `on` event listeners, `onUserStatus`, and `onRoomStatus`.",
+        "details": "This task focuses on the client's ability to interact with the room system, send and receive ephemeral events, and manage user presence/status within a room. It assumes a server-side counterpart will handle the actual room state.",
+        "testStrategy": "Unit tests for client-side API methods. Integration tests with a mock server to verify event emission, status updates, and listener callbacks function correctly.",
+        "priority": "high",
+        "dependencies": [
+          5
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Develop Server-side Triple Store & Query Engine (SQLite/Turso)",
+        "description": "Implement the server-side triple store, designed to be schema-agnostic, and its query engine, utilizing SQLite/Turso for persistence.",
+        "details": "This involves setting up the database schema for storing triples (subject, predicate, object, HLC timestamp) and developing the server-side query capabilities. It should be optimized for multi-tenant access and efficient data retrieval.",
+        "testStrategy": "Unit tests for database schema, data insertion, and basic query operations. Performance tests for data retrieval on large datasets. Integration tests to ensure data consistency and integrity.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Implement Server Sync Protocol Handler & HLC Conflict Resolution",
+        "description": "Develop the server-side Sync Engine, including the sync protocol handler, multi-tenant coordination, HLC conflict resolution, and change broadcasting.",
+        "details": "This is the core server component for real-time data synchronization. It needs to receive client changes, apply HLC-based conflict resolution (field-level, last-write-wins), persist changes, and broadcast updates to other connected clients. It must handle multi-tenancy securely.",
+        "testStrategy": "Integration tests simulating multiple clients syncing concurrently, verifying conflict resolution and data consistency. Performance tests for sync throughput. Security tests for tenant isolation.",
+        "priority": "high",
+        "dependencies": [
+          5,
+          9
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Implement Server-side Real-time Rooms (In-memory)",
+        "description": "Develop the in-memory server-side component for Real-time Rooms, managing ephemeral pub/sub, per-user session status, and room-wide shared status.",
+        "details": "This component will handle the logic for joining/leaving rooms, broadcasting events to room members, maintaining user presence, and managing shared room state. It's designed for ephemeral data like cursors or typing indicators.",
+        "testStrategy": "Unit tests for room management logic (join, leave, emit). Integration tests with multiple client connections to verify real-time event broadcasting and status updates within rooms. Load tests for concurrent room activity.",
+        "priority": "high",
+        "dependencies": [
+          5
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Implement Client-side Batch Operations (`batch.execute`)",
+        "description": "Develop the `client.database.batch.execute()` method for performing non-atomic bulk write operations (e.g., `updateMany`, `replaceMany`, `deleteMany`).",
+        "details": "This API should allow developers to group multiple write operations into a single request, improving efficiency for scenarios involving many changes. It should handle the internal processing and replication of these bulk changes.",
+        "testStrategy": "Unit tests for batch execution logic. Integration tests to verify that bulk operations correctly modify data and are replicated. Performance tests for large batch sizes.",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Develop Client-side Pagination (`paginated`, `preloadPaginated`)",
+        "description": "Implement efficient pagination capabilities for large datasets on the client, including `.paginated()` and `.preloadPaginated()` methods.",
+        "details": "This feature allows fetching and displaying data in chunks, optimizing performance and user experience for large result sets. `preloadPaginated` should enable pre-fetching subsequent pages.",
+        "testStrategy": "Unit tests for pagination logic (offset, limit, next/previous page). Integration tests to verify correct data retrieval and display across multiple pages. Performance tests for paginated queries.",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "Implement Client-side Preloading (`preload`, `preloadOne`)",
+        "description": "Extend the client API with `preload` and `preloadOne` methods for server-side data fetching, aiming to eliminate loading states in UI frameworks.",
+        "details": "These methods should allow applications to proactively fetch data from the server before it's needed by the UI, enabling seamless transitions and server-side rendering scenarios. This requires coordination with the server-side query engine.",
+        "testStrategy": "Integration tests to verify data is preloaded correctly and available instantly upon UI rendering. Performance tests to measure the impact on initial load times.",
+        "priority": "medium",
+        "dependencies": [
+          6,
+          10
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "Add Advanced Query Features (Aggregations, `groupBy`)",
+        "description": "Implement advanced query capabilities such as aggregations (`sum`, `avg`, `count`, `min`, `max`) and `groupBy` clauses within the client-side query engine.",
+        "details": "This enhances the analytical power of the query engine, allowing developers to perform more complex data analysis directly on the client's local data. It will require extending the internal query processing logic.",
+        "testStrategy": "Unit tests for each aggregation function and `groupBy` logic. Integration tests to verify complex queries combining aggregations and grouping return accurate results. Performance tests for these advanced queries.",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          6
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Integrate Client-side IndexedDB Persistence",
+        "description": "Implement the IndexedDB Adapter for the client-side persistence layer, enabling full offline capability and faster local startup times.",
+        "details": "This involves replacing or augmenting the in-memory triple store with a persistent IndexedDB backend. Changes should be written to IndexedDB, and data should be loaded from it on startup. This is crucial for robust offline functionality.",
+        "testStrategy": "Integration tests to verify data persistence across browser sessions. Offline tests to ensure full application functionality without network connectivity. Performance tests for IndexedDB read/write operations.",
+        "priority": "medium",
+        "dependencies": [
+          3
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 17,
+        "title": "Enhance Network Resilience",
+        "description": "Improve the sync engine's network resilience by implementing advanced connection recovery, partition handling, and automatic reconnection with timestamp-based gap recovery.",
+        "details": "This task focuses on making the system robust against flaky networks. It includes sophisticated retry mechanisms, detecting and resolving data inconsistencies after network partitions, and ensuring seamless re-synchronization upon reconnection using HLC timestamps.",
+        "testStrategy": "Stress tests simulating network drops, high latency, and intermittent connectivity. Integration tests to verify automatic reconnection and data consistency after network failures. Concurrency tests during network partitions.",
+        "priority": "medium",
+        "dependencies": [
+          5,
+          10
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 18,
+        "title": "Implement Authentication & Authorization",
+        "description": "Develop robust client authentication (e.g., JWT-based) and server-side row-level security, potentially including a management dashboard for App ID generation.",
+        "details": "This involves securing client-server communication, verifying user identities, and enforcing fine-grained access control to data based on user roles and permissions. The management dashboard would facilitate app and user management.",
+        "testStrategy": "Security tests for authentication flows (login, token refresh). Integration tests to verify row-level security rules are correctly enforced. Penetration testing for common vulnerabilities.",
+        "priority": "medium",
+        "dependencies": [
+          10
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "Implement Storage Optimization (Pruning, Compaction, Caching)",
+        "description": "Develop strategies for data pruning, compaction, and advanced caching for both client and server triple stores to optimize storage and performance.",
+        "details": "This includes mechanisms to remove old or irrelevant data (pruning), consolidate storage (compaction), and implement multi-level caching strategies to reduce database load and improve query response times.",
+        "testStrategy": "Performance tests measuring storage footprint and query times before/after optimization. Stress tests to verify caching effectiveness under high load. Data integrity tests after pruning/compaction.",
+        "priority": "low",
+        "dependencies": [
+          9,
+          16
+        ],
+        "status": "todo",
+        "subtasks": []
+      },
+      {
+        "id": 20,
+        "title": "Develop Framework Integrations (Hooks/Wrappers)",
+        "description": "Provide official hooks and wrappers for popular UI frameworks beyond React and Svelte (e.g., Vue, Angular) to simplify integration.",
+        "details": "This involves creating framework-specific libraries that abstract away the direct Client API calls, providing idiomatic ways to interact with the system (e.g., custom hooks for data fetching, components for real-time updates).",
+        "testStrategy": "Integration tests for each framework-specific wrapper, ensuring correct data flow and reactivity. Develop example applications for each integrated framework. Gather developer feedback.",
+        "priority": "low",
+        "dependencies": [
+          6,
+          7
+        ],
+        "status": "todo",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-29T02:04:22.495Z",
+      "updated": "2025-08-29T02:10:47.083Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
