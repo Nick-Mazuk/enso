@@ -16,15 +16,21 @@ type UnwrapField<F extends FieldDefinition> = F extends { type: "string" }
   ? boolean
   : F extends { type: "date" }
   ? Date
+  : F extends { type: "ref" }
+  ? string
+  : F extends { type: "refMany" }
+  ? string[]
   : never;
 
 type BaseEntity = { id: string; createdAt: Date; updatedAt: Date };
 
-type Entity<Def extends EntityDefinition> = {
-  [K in keyof Def]: Def[K] extends FieldDefinition
-    ? UnwrapField<Def[K]>
-    : never;
-} & BaseEntity;
+type Entity<Def extends EntityDefinition> = Prettify<
+  {
+    [K in RequiredKeys<Def>]: UnwrapField<Def[K]>;
+  } & {
+    [K in OptionalKeys<Def>]?: UnwrapField<Def[K]>;
+  } & BaseEntity
+>;
 
 type Prettify<T> = {
   [K in keyof T]: T[K];

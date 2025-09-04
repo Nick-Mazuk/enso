@@ -35,8 +35,7 @@ export type ArrayField<T> = {
 
 // Main FieldDefinition union type (recursive)
 export type FieldDefinition<
-  Obj extends Record<string, unknown> = Record<string, unknown>,
-  Arr extends ArrayField<unknown> = ArrayField<unknown>
+  Obj extends Record<string, unknown> = Record<string, unknown>
 > =
   | StringField
   | NumberField
@@ -45,7 +44,7 @@ export type FieldDefinition<
   | RefField<string>
   | RefManyField<string>
   | ObjectField<Obj>
-  | ArrayField<Arr>;
+  | ArrayField<any>;
 
 export const t = {
   string: <O extends StringOptions>(options: O): { type: "string" } & O => ({

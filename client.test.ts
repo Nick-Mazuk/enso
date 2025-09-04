@@ -123,6 +123,7 @@ test("client.database.users.query() projects fields correctly", async () => {
     },
   });
 
+  expectTypeOf(users).toEqualTypeOf<{ name: string }[] | undefined>();
   expect(error).toBeUndefined();
   expect(users).toBeDefined();
   expect(users?.[0]).toEqual({ name: "Alice" });
@@ -135,6 +136,9 @@ test("client.database.users.query() projects fields correctly", async () => {
       },
     });
 
+  expectTypeOf(usersWithId).toEqualTypeOf<
+    { id: string; name: string }[] | undefined
+  >();
   expect(idError).toBeUndefined();
   expect(usersWithId?.[0]).toEqual({
     id: expect.any(String),

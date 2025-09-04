@@ -115,3 +115,54 @@ test("Can create an empty schema", () => {
 
   expect(schema.validate("user", { name: "test", age: 10 })).toBe(false);
 });
+
+test("createSchema produces correct types for various fields", () => {
+  const schemaDefinition = {
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+        isAdmin: t.boolean({ fallback: false }),
+        lastLogin: t.date({ fallback: "now" }),
+        metadata: t.object({
+          logins: t.number({ fallback: 0 }),
+        }),
+        tags: t.array(t.string({ fallback: "" })),
+      },
+    },
+    rooms: {},
+  };
+
+  const schema = createSchema(schemaDefinition);
+
+  const users = schema.definition.entities?.users;
+  expect(users).toBeDefined();
+  if (!users) return;
+
+  expectTypeOf(users.isAdmin).toMatchTypeOf<
+    { type: "boolean" } & { fallback: boolean }
+  >();
+  expectTypeOf(users.lastLogin).toMatchTypeOf<
+    { type: "date" } & { fallback: "now" | Date }
+  >();
+  expectTypeOf(users.metadata).toMatchTypeOf<{
+    type: "object";
+    fields: {
+      logins: {
+        type: "number";
+      } & {
+        fallback: number;
+      };
+    };
+    optional?: true | undefined;
+  }>();
+  expectTypeOf(users.tags).toMatchTypeOf<{
+    type: "array";
+    itemType: {
+      type: "string";
+    } & {
+      fallback: string;
+    };
+    optional?: true | undefined;
+  }>();
+});
