@@ -264,10 +264,11 @@
             "title": "Implement Bulk `updateMany` & `replaceMany` Operations",
             "description": "Develop bulk `updateMany` and `replaceMany` methods for efficient modification of multiple entities, leveraging the single update/replace logic.",
             "dependencies": [
-              "3.4"
+              "3.4",
+              "21"
             ],
             "details": "Implement `client.updateMany()` and `client.replaceMany()`. These methods should iterate over the provided entities/updates and call the respective single `update` or `replace` logic internally, ensuring HLC and conflict resolution are applied per entity/field. Optimize for batch processing where possible.\n<info added on 2025-08-29T03:32:48.983Z>\nImplement `client.database.<entityName>.updateMany({ where, fields })` and `client.database.<entityName>.replaceMany({ where, fields })`. These methods should first query the triple store to find all entities matching the `where` clause. For each matching entity, they should then apply the logic from the single `update` or `replace` operation internally, ensuring HLC and conflict resolution are applied per entity/field. Both `updateMany` and `replaceMany` should support functional `fields` arguments. The operations should be performed as a batch, and the return value should indicate the count of affected documents, as shown in `client-api.md`.\n</info added on 2025-08-29T03:32:48.983Z>",
-            "status": "pending",
+            "status": "deferred",
             "testStrategy": "Unit tests for bulk updates/replaces on multiple entities, including mixed success/failure scenarios and performance considerations for large batches."
           },
           {
@@ -275,10 +276,11 @@
             "title": "Implement Bulk `deleteMany` Operation",
             "description": "Develop the bulk `deleteMany` method for efficient removal of multiple entities or fields from the in-memory store.",
             "dependencies": [
-              "3.5"
+              "3.5",
+              "21"
             ],
             "details": "Implement `client.deleteMany()`. This method should iterate over the provided entity IDs/field paths and call the single `delete` logic internally. Optimize for batch processing.\n<info added on 2025-08-29T03:32:58.082Z>\nThe method signature will be `client.database.<entityName>.deleteMany({ where })`. It will identify entities by querying the triple store using the `where` clause. Deletion will involve creating a 'tombstone' triple for each identified entity, consistent with the single `delete` operation. The method should return the total count of documents marked for deletion.\n</info added on 2025-08-29T03:32:58.082Z>",
-            "status": "pending",
+            "status": "deferred",
             "testStrategy": "Unit tests for bulk deletes on multiple entities/fields, including partial success and performance."
           },
           {
@@ -528,11 +530,22 @@
         ],
         "status": "todo",
         "subtasks": []
+      },
+      {
+        "id": 21,
+        "title": "Implement Advanced Filtering/Query Engine",
+        "description": "Implement an advanced filtering/query engine that supports complex `where` clauses with multiple operators (e.g., `equals`, `greaterThan`, `lessThan`, etc.) for use in `query`, `updateMany`, `replaceMany`, and `deleteMany` methods.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T18:07:41.022Z",
+      "updated": "2025-09-04T18:24:52.897Z",
       "description": "Tasks for master context"
     }
   }
