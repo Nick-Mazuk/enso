@@ -1,11 +1,5 @@
 import { expect, expectTypeOf, test } from "bun:test";
-import {
-  type RefField,
-  Schema,
-  type StringField,
-  createSchema,
-  t,
-} from "./schema";
+import { type RefField, Schema, createSchema, t } from "./schema";
 
 test("createSchema returns an instance of Schema", () => {
   const schemaDefinition = {
@@ -67,9 +61,9 @@ test("createSchema produces correct types", () => {
   const schema = createSchema(schemaDefinition);
 
   expectTypeOf(schema.definition).toEqualTypeOf(schemaDefinition);
-  expectTypeOf(
-    schema.definition.entities.$users.name
-  ).toEqualTypeOf<StringField>();
+  expectTypeOf(schema.definition.entities.$users.name).toEqualTypeOf<
+    { type: "string" } & { fallback: string }
+  >();
   expectTypeOf(schema.definition.entities.posts.authorId).toEqualTypeOf<
     RefField<"$users">
   >();

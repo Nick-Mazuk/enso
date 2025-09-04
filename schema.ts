@@ -48,35 +48,35 @@ export type FieldDefinition<
   | ArrayField<Arr>;
 
 export const t = {
-  string: (options: StringOptions): StringField => ({
+  string: <O extends StringOptions>(options: O): { type: "string" } & O => ({
     type: "string",
     ...options,
   }),
-  number: (options: NumberOptions): NumberField => ({
+  number: <O extends NumberOptions>(options: O): { type: "number" } & O => ({
     type: "number",
     ...options,
   }),
-  boolean: (options: BooleanOptions): BooleanField => ({
+  boolean: <O extends BooleanOptions>(options: O): { type: "boolean" } & O => ({
     type: "boolean",
     ...options,
   }),
-  date: (options: DateOptions): DateField => ({
+  date: <O extends DateOptions>(options: O): { type: "date" } & O => ({
     type: "date",
     ...options,
   }),
   object: <T extends { [key: string]: FieldDefinition }>(
     fields: T,
     options?: { optional: true }
-  ): ObjectField<T> => ({
-    type: "object",
+  ) => ({
+    type: "object" as const,
     fields,
     ...options,
   }),
   array: <T extends FieldDefinition>(
     itemType: T,
     options?: { optional: true }
-  ): ArrayField<T> => ({
-    type: "array",
+  ) => ({
+    type: "array" as const,
     itemType,
     ...options,
   }),

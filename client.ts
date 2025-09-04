@@ -26,15 +26,21 @@ type Entity<Def extends EntityDefinition> = {
     : never;
 } & BaseEntity;
 
-type CreateFields<Def extends EntityDefinition> = {
-  [K in keyof Def as Def[K] extends { optional: true }
-    ? never
-    : K]: UnwrapField<Def[K]>;
-} & {
-  [K in keyof Def as Def[K] extends { optional: true }
-    ? K
-    : never]?: UnwrapField<Def[K]>;
-};
+type Prettify<T> = {
+  [K in keyof T]: T[K];
+} & {};
+
+type OptionalKeys<T> = {
+  [K in keyof T]: T[K] extends { optional: true } ? K : never;
+}[keyof T];
+type RequiredKeys<T> = Exclude<keyof T, OptionalKeys<T>>;
+type CreateFields<Def extends EntityDefinition> = Prettify<
+  {
+    [K in RequiredKeys<Def>]: UnwrapField<Def[K]>;
+  } & {
+    [K in OptionalKeys<Def>]?: UnwrapField<Def[K]>;
+  }
+>;
 
 type CreateResult<Def extends EntityDefinition> = Promise<
   { data: Entity<Def>; error: undefined } | { data: undefined; error: Error }

@@ -54,6 +54,7 @@ test("client.database.users.create() creates a new user", async () => {
   expect(result2.error).toBeUndefined();
   expect(result2.data?.age).toBe(10);
 
+  // @ts-expect-error
   const result3 = await client.database.users.create({
     age: 10,
   });
@@ -168,8 +169,8 @@ test("client.database correctly enforces optional and required fields", () => {
         // required
         name: t.string({ fallback: "" }),
 
+        // optional
         email: t.string({ optional: true }),
-
         verified: t.boolean({ optional: true, fallback: false }),
       },
     },
@@ -182,8 +183,8 @@ test("client.database correctly enforces optional and required fields", () => {
     [
       {
         name: string;
-        email?: string | undefined;
-        verified?: boolean | undefined;
+        email?: string;
+        verified?: boolean;
       }
     ]
   >();
