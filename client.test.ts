@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
-import { Client, createClient } from "./client";
-import { createSchema, t } from "./schema";
+import { expect, expectTypeOf, test } from "bun:test";
+import { Client, createClient, type DatabaseAPI } from "./client";
+import { createSchema, t, type StringField } from "./schema";
 
 test("createClient initializes a client with a dynamic database API", () => {
   const schema = createSchema({
@@ -139,4 +139,52 @@ test("client.database.users.query() projects fields correctly", async () => {
     id: expect.any(String),
     name: "Alice",
   });
+});
+
+test("Client database only has defined entities", () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  expectTypeOf(client.database).toEqualTypeOf<
+    DatabaseAPI<{
+      entities: {
+        users: {
+          name: StringField;
+        };
+      };
+    }>
+  >();
+});
+
+test("client.database correctly enforces optional and required fields", () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        // required
+        name: t.string({ fallback: "" }),
+
+        email: t.string({ optional: true }),
+
+        verified: t.boolean({ optional: true, fallback: false }),
+      },
+    },
+    rooms: {},
+  });
+
+  const client = createClient({ schema });
+
+  expectTypeOf(client.database.users.create).parameters.toEqualTypeOf<
+    [
+      {
+        name: string;
+        email?: string | undefined;
+        verified?: boolean | undefined;
+      }
+    ]
+  >();
 });

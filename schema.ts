@@ -1,16 +1,11 @@
 // Type options
-type StringOptions =
-  | { fallback: string; optional?: undefined }
-  | { fallback?: string; optional: true };
-type NumberOptions =
-  | { fallback: number; optional?: undefined }
-  | { fallback?: number; optional: true };
-type BooleanOptions =
-  | { fallback: boolean; optional?: undefined }
-  | { fallback?: boolean; optional: true };
-type DateOptions =
-  | { fallback: Date | "now"; optional?: undefined }
-  | { fallback?: Date | "now"; optional: true };
+type Options<T> =
+  | { fallback: T; optional?: undefined }
+  | { fallback?: T; optional: true };
+type StringOptions = Options<string>;
+type NumberOptions = Options<number>;
+type BooleanOptions = Options<boolean>;
+type DateOptions = Options<Date | "now">;
 
 // Structural field types
 export type StringField = { type: "string" } & StringOptions;
@@ -27,27 +22,30 @@ export type RefManyField<T extends string> = {
   refType: T;
   optional: true;
 };
-export type ObjectField<T extends { [key: string]: FieldDefinition }> = {
+export type ObjectField<T extends Record<string, unknown>> = {
   type: "object";
   fields: T;
   optional?: true;
 };
-export type ArrayField<T extends FieldDefinition> = {
+export type ArrayField<T> = {
   type: "array";
   itemType: T;
   optional?: true;
 };
 
 // Main FieldDefinition union type (recursive)
-export type FieldDefinition =
+export type FieldDefinition<
+  Obj extends Record<string, unknown> = Record<string, unknown>,
+  Arr extends ArrayField<unknown> = ArrayField<unknown>
+> =
   | StringField
   | NumberField
   | BooleanField
   | DateField
   | RefField<string>
   | RefManyField<string>
-  | ObjectField<{ [key: string]: any }>
-  | ArrayField<any>;
+  | ObjectField<Obj>
+  | ArrayField<Arr>;
 
 export const t = {
   string: (options: StringOptions): StringField => ({
@@ -105,8 +103,8 @@ export type RoomDefinition = {
 };
 
 export type SchemaDefinition = {
-  entities: { [key: string]: EntityDefinition };
-  rooms: { [key: string]: RoomDefinition };
+  entities?: { [key: string]: EntityDefinition };
+  rooms?: { [key: string]: RoomDefinition };
 };
 
 export class Schema<T extends SchemaDefinition> {

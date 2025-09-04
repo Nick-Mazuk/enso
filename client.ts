@@ -27,11 +27,11 @@ type Entity<Def extends EntityDefinition> = {
 } & BaseEntity;
 
 type CreateFields<Def extends EntityDefinition> = {
-  [K in keyof Def as Def[K] extends { optional: true } | { fallback: any }
+  [K in keyof Def as Def[K] extends { optional: true }
     ? never
     : K]: UnwrapField<Def[K]>;
 } & {
-  [K in keyof Def as Def[K] extends { optional: true } | { fallback: any }
+  [K in keyof Def as Def[K] extends { optional: true }
     ? K
     : never]?: UnwrapField<Def[K]>;
 };
@@ -39,10 +39,6 @@ type CreateFields<Def extends EntityDefinition> = {
 type CreateResult<Def extends EntityDefinition> = Promise<
   { data: Entity<Def>; error: undefined } | { data: undefined; error: Error }
 >;
-
-type QueryOptions<Def extends EntityDefinition> = {
-  fields: { [K in keyof Entity<Def>]?: true };
-};
 
 type QueryResult<
   Def extends EntityDefinition,
@@ -66,8 +62,8 @@ type EntityAPI<Def extends EntityDefinition> = {
   }) => QueryResult<Def, Fields>;
 };
 
-type DatabaseAPI<S extends SchemaDefinition> = {
-  [K in keyof S["entities"]]: EntityAPI<S["entities"][K]>;
+export type DatabaseAPI<S extends SchemaDefinition> = {
+  [K in keyof S["entities"]]: EntityAPI<NonNullable<S["entities"][K]>>;
 };
 
 export class Client<S extends Schema<any>> {

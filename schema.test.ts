@@ -99,3 +99,25 @@ test("Schema.validate correctly validates an object", () => {
   expect(schema.validate("user", missingRequired)).toBe(false);
   expect(schema.validate("nonexistent", validUser)).toBe(false);
 });
+
+test("Can create a schema without entities", () => {
+  const schema = createSchema({
+    rooms: {},
+  });
+
+  expect(schema.validate("user", { name: "test", age: 10 })).toBe(false);
+});
+
+test("Can create a schema without rooms", () => {
+  const schema = createSchema({
+    entities: {},
+  });
+
+  expect(schema.validate("user", { name: "test", age: 10 })).toBe(false);
+});
+
+test("Can create an empty schema", () => {
+  const schema = createSchema({});
+
+  expect(schema.validate("user", { name: "test", age: 10 })).toBe(false);
+});
