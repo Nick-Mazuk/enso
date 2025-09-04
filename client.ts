@@ -8,6 +8,12 @@ import {
 } from "./schema";
 import { TripleStore, type Object } from "./store";
 
+export type ErrorCode = "VALIDATION_FAILED";
+export type DatabaseError = {
+  code: ErrorCode;
+  message: string;
+};
+
 type UnwrapField<F extends FieldDefinition> = F extends { type: "string" }
   ? string
   : F extends { type: "number" }
@@ -49,7 +55,8 @@ type CreateFields<Def extends EntityDefinition> = Prettify<
 >;
 
 type CreateResult<Def extends EntityDefinition> = Promise<
-  { data: Entity<Def>; error: undefined } | { data: undefined; error: Error }
+  | { data: Entity<Def>; error: undefined }
+  | { data: undefined; error: DatabaseError }
 >;
 
 type QueryResult<
@@ -60,7 +67,7 @@ type QueryResult<
       data: Pick<Entity<Def>, keyof Fields & keyof Entity<Def>>[];
       error: undefined;
     }
-  | { data: undefined; error: Error }
+  | { data: undefined; error: DatabaseError }
 >;
 
 type UpdateFields<Def extends EntityDefinition> = Partial<CreateFields<Def>>;
@@ -70,12 +77,12 @@ type EntityAPI<Def extends EntityDefinition> = {
   update: (opts: {
     id: string;
     fields: UpdateFields<Def>;
-  }) => Promise<{ error?: Error }>;
+  }) => Promise<{ error?: DatabaseError }>;
   replace: (opts: {
     id: string;
     fields: CreateFields<Def>;
-  }) => Promise<{ error?: Error }>;
-  delete: (id: string) => Promise<{ error?: Error }>;
+  }) => Promise<{ error?: DatabaseError }>;
+  delete: (id: string) => Promise<{ error?: DatabaseError }>;
   query: <
     Fields extends {
       [K in keyof Entity<Def>]?: true;
@@ -117,7 +124,10 @@ export class Client<S extends Schema<any>> {
           if (!this.schema.validate(entityName, fields)) {
             return {
               data: undefined,
-              error: new Error("Validation failed"),
+              error: {
+                code: "VALIDATION_FAILED",
+                message: "Validation failed",
+              },
             };
           }
 

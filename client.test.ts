@@ -59,7 +59,10 @@ test("client.database.users.create() creates a new user", async () => {
     age: 10,
   });
 
-  expect(result3.error).toBeDefined();
+  expect(result3.error).toStrictEqual({
+    code: "VALIDATION_FAILED",
+    message: "Validation failed",
+  });
   expect(result3.data).toBeUndefined();
 });
 

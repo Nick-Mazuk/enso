@@ -304,7 +304,7 @@
             "title": "Create and Use Custom `DatabaseError` Type",
             "description": "Define a custom `DatabaseError` class and update all error-throwing paths in the client to use this type instead of the generic `Error` class, as specified in the documentation.",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentTaskId": 3
           },
@@ -585,7 +585,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T18:41:30.339Z",
+      "updated": "2025-09-04T18:51:27.733Z",
       "description": "Tasks for master context"
     }
   }
