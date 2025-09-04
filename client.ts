@@ -14,6 +14,10 @@ export type DatabaseError = {
   message: string;
 };
 
+type DatabaseResult<T> =
+  | { data: T; error: undefined }
+  | { data: undefined; error: DatabaseError };
+
 type UnwrapField<F extends FieldDefinition> = F extends { type: "string" }
   ? string
   : F extends { type: "number" }
@@ -54,21 +58,12 @@ type CreateFields<Def extends EntityDefinition> = Prettify<
   }
 >;
 
-type CreateResult<Def extends EntityDefinition> = Promise<
-  | { data: Entity<Def>; error: undefined }
-  | { data: undefined; error: DatabaseError }
->;
+type CreateResult<Def extends EntityDefinition> = DatabaseResult<Entity<Def>>;
 
 type QueryResult<
   Def extends EntityDefinition,
   Fields extends { [K in keyof any]?: boolean }
-> = Promise<
-  | {
-      data: Pick<Entity<Def>, keyof Fields & keyof Entity<Def>>[];
-      error: undefined;
-    }
-  | { data: undefined; error: DatabaseError }
->;
+> = DatabaseResult<Pick<Entity<Def>, keyof Fields & keyof Entity<Def>>[]>;
 
 type UpdateFields<Def extends EntityDefinition> = Partial<CreateFields<Def>>;
 
@@ -77,12 +72,12 @@ type EntityAPI<Def extends EntityDefinition> = {
   update: (opts: {
     id: string;
     fields: UpdateFields<Def>;
-  }) => Promise<{ error?: DatabaseError }>;
+  }) => DatabaseResult<void>;
   replace: (opts: {
     id: string;
     fields: CreateFields<Def>;
-  }) => Promise<{ error?: DatabaseError }>;
-  delete: (id: string) => Promise<{ error?: DatabaseError }>;
+  }) => DatabaseResult<void>;
+  delete: (id: string) => DatabaseResult<void>;
   query: <
     Fields extends {
       [K in keyof Entity<Def>]?: true;
@@ -118,9 +113,7 @@ export class Client<S extends Schema<any>> {
       if (!entityDef) continue;
 
       db[entityName] = {
-        create: async (
-          fields: CreateFields<any>
-        ): Promise<{ data: any; error: any }> => {
+        create: (fields: CreateFields<any>): CreateResult<any> => {
           if (!this.schema.validate(entityName, fields)) {
             return {
               data: undefined,
@@ -162,7 +155,7 @@ export class Client<S extends Schema<any>> {
 
           return { data, error: undefined };
         },
-        update: async (opts: { id: string; fields: UpdateFields<any> }) => {
+        update: (opts: { id: string; fields: UpdateFields<any> }) => {
           const { id, fields } = opts;
           const now = new Date();
           this.hlc = this.hlc.increment();
@@ -179,9 +172,9 @@ export class Client<S extends Schema<any>> {
             ]);
           }
 
-          return { error: undefined };
+          return { data: undefined, error: undefined };
         },
-        replace: async (opts: { id: string; fields: CreateFields<any> }) => {
+        replace: (opts: { id: string; fields: CreateFields<any> }) => {
           const { id, fields } = opts;
           const now = new Date();
           this.hlc = this.hlc.increment();
@@ -231,14 +224,14 @@ export class Client<S extends Schema<any>> {
             }
           }
 
-          return { error: undefined };
+          return { data: undefined, error: undefined };
         },
-        delete: async (id: string) => {
+        delete: (id: string) => {
           this.hlc = this.hlc.increment();
           this.store.add([id, "_deleted", true, this.hlc]);
-          return { error: undefined };
+          return { data: undefined, error: undefined };
         },
-        query: async (opts: any) => {
+        query: (opts: any) => {
           const subjects = this.store.querySubjects({
             predicate: "entityType",
             object: entityName,

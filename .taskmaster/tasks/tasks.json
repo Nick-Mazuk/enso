@@ -313,7 +313,7 @@
             "title": "Standardize CRUD Return Types to `DatabaseResult`",
             "description": "Refactor `update`, `replace`, and `delete` methods to return the `DatabaseResult<void>` type as specified in the client API documentation, instead of the current `Promise<{ error?: Error }>`. The `DatabaseResult` should not be a promise itself.",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.9"
             ],
@@ -585,7 +585,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T18:51:27.733Z",
+      "updated": "2025-09-04T18:57:52.342Z",
       "description": "Tasks for master context"
     }
   }

@@ -22,7 +22,7 @@ test("createClient initializes a client with a dynamic database API", () => {
   expect(client.database.posts).toBeDefined();
 });
 
-test("client.database.users.create() creates a new user", async () => {
+test("client.database.users.create() creates a new user", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -35,7 +35,7 @@ test("client.database.users.create() creates a new user", async () => {
 
   const client = createClient({ schema });
 
-  const result = await client.database.users.create({
+  const result = client.database.users.create({
     name: "test",
   });
 
@@ -46,7 +46,7 @@ test("client.database.users.create() creates a new user", async () => {
   expect(result.data?.updatedAt).toBeDate();
   expect(result.data?.name).toBe("test");
 
-  const result2 = await client.database.users.create({
+  const result2 = client.database.users.create({
     name: "test2",
     age: 10,
   });
@@ -55,7 +55,7 @@ test("client.database.users.create() creates a new user", async () => {
   expect(result2.data?.age).toBe(10);
 
   // @ts-expect-error
-  const result3 = await client.database.users.create({
+  const result3 = client.database.users.create({
     age: 10,
   });
 
@@ -66,7 +66,7 @@ test("client.database.users.create() creates a new user", async () => {
   expect(result3.data).toBeUndefined();
 });
 
-test("client.database.users.query() retrieves users", async () => {
+test("client.database.users.query() retrieves users", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -79,10 +79,10 @@ test("client.database.users.query() retrieves users", async () => {
 
   const client = createClient({ schema });
 
-  await client.database.users.create({ name: "Alice", age: 30 });
-  await client.database.users.create({ name: "Bob", age: 25 });
+  client.database.users.create({ name: "Alice", age: 30 });
+  client.database.users.create({ name: "Bob", age: 25 });
 
-  const { data: users, error } = await client.database.users.query({
+  const { data: users, error } = client.database.users.query({
     fields: {
       id: true,
       name: true,
@@ -105,7 +105,7 @@ test("client.database.users.query() retrieves users", async () => {
   });
 });
 
-test("client.database.users.query() projects fields correctly", async () => {
+test("client.database.users.query() projects fields correctly", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -118,9 +118,9 @@ test("client.database.users.query() projects fields correctly", async () => {
 
   const client = createClient({ schema });
 
-  await client.database.users.create({ name: "Alice", age: 30 });
+  client.database.users.create({ name: "Alice", age: 30 });
 
-  const { data: users, error } = await client.database.users.query({
+  const { data: users, error } = client.database.users.query({
     fields: {
       name: true,
     },
@@ -131,13 +131,12 @@ test("client.database.users.query() projects fields correctly", async () => {
   expect(users).toBeDefined();
   expect(users?.[0]).toEqual({ name: "Alice" });
 
-  const { data: usersWithId, error: idError } =
-    await client.database.users.query({
-      fields: {
-        id: true,
-        name: true,
-      },
-    });
+  const { data: usersWithId, error: idError } = client.database.users.query({
+    fields: {
+      id: true,
+      name: true,
+    },
+  });
 
   expectTypeOf(usersWithId).toEqualTypeOf<
     { id: string; name: string }[] | undefined
@@ -169,7 +168,7 @@ test("Client database only has defined entities", () => {
   >();
 });
 
-test("client.database.users.update() updates a user", async () => {
+test("client.database.users.update() updates a user", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -179,23 +178,23 @@ test("client.database.users.update() updates a user", async () => {
     },
   });
   const client = createClient({ schema });
-  const { data: user } = await client.database.users.create({ name: "test" });
+  const { data: user } = client.database.users.create({ name: "test" });
   expect(user).toBeDefined();
   if (!user) return;
 
-  const { error } = await client.database.users.update({
+  const { error } = client.database.users.update({
     id: user.id,
     fields: { name: "updated" },
   });
   expect(error).toBeUndefined();
 
-  const { data: users } = await client.database.users.query({
+  const { data: users } = client.database.users.query({
     fields: { name: true },
   });
   expect(users?.[0]?.name).toBe("updated");
 });
 
-test("client.database.users.replace() replaces a user", async () => {
+test("client.database.users.replace() replaces a user", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -205,27 +204,27 @@ test("client.database.users.replace() replaces a user", async () => {
     },
   });
   const client = createClient({ schema });
-  const { data: user } = await client.database.users.create({
+  const { data: user } = client.database.users.create({
     name: "test",
     age: 10,
   });
   expect(user).toBeDefined();
   if (!user) return;
 
-  const { error } = await client.database.users.replace({
+  const { error } = client.database.users.replace({
     id: user.id,
     fields: { name: "replaced" },
   });
   expect(error).toBeUndefined();
 
-  const { data: users } = await client.database.users.query({
+  const { data: users } = client.database.users.query({
     fields: { name: true, age: true },
   });
   expect(users?.[0]?.name).toBe("replaced");
   expect(users?.[0]?.age).toBeUndefined();
 });
 
-test("client.database.users.delete() deletes a user", async () => {
+test("client.database.users.delete() deletes a user", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -234,27 +233,27 @@ test("client.database.users.delete() deletes a user", async () => {
     },
   });
   const client = createClient({ schema });
-  const { data: user1 } = await client.database.users.create({
+  const { data: user1 } = client.database.users.create({
     name: "test1",
   });
-  const { data: user2 } = await client.database.users.create({
+  const { data: user2 } = client.database.users.create({
     name: "test2",
   });
   expect(user1).toBeDefined();
   expect(user2).toBeDefined();
   if (!user1 || !user2) return;
 
-  const { error } = await client.database.users.delete(user1.id);
+  const { error } = client.database.users.delete(user1.id);
   expect(error).toBeUndefined();
 
-  const { data: users } = await client.database.users.query({
+  const { data: users } = client.database.users.query({
     fields: { name: true },
   });
   expect(users?.length).toBe(1);
   expect(users?.[0]?.name).toBe("test2");
 });
 
-test("client.database.users.delete() with non-existent user", async () => {
+test("client.database.users.delete() with non-existent user", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -263,11 +262,11 @@ test("client.database.users.delete() with non-existent user", async () => {
     },
   });
   const client = createClient({ schema });
-  const { error } = await client.database.users.delete("non-existent-id");
+  const { error } = client.database.users.delete("non-existent-id");
   expect(error).toBeUndefined();
 });
 
-test("client.database.users.query() retrieves users", async () => {
+test("client.database.users.query() retrieves users", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -280,10 +279,10 @@ test("client.database.users.query() retrieves users", async () => {
 
   const client = createClient({ schema });
 
-  await client.database.users.create({ name: "Alice", age: 30 });
-  await client.database.users.create({ name: "Bob", age: 25 });
+  client.database.users.create({ name: "Alice", age: 30 });
+  client.database.users.create({ name: "Bob", age: 25 });
 
-  const { data: users, error } = await client.database.users.query({
+  const { data: users, error } = client.database.users.query({
     fields: {
       id: true,
       name: true,
@@ -306,7 +305,7 @@ test("client.database.users.query() retrieves users", async () => {
   });
 });
 
-test("client.database.users.query() projects fields correctly", async () => {
+test("client.database.users.query() projects fields correctly", () => {
   const schema = createSchema({
     entities: {
       users: {
@@ -319,9 +318,9 @@ test("client.database.users.query() projects fields correctly", async () => {
 
   const client = createClient({ schema });
 
-  await client.database.users.create({ name: "Alice", age: 30 });
+  client.database.users.create({ name: "Alice", age: 30 });
 
-  const { data: users, error } = await client.database.users.query({
+  const { data: users, error } = client.database.users.query({
     fields: {
       name: true,
     },
@@ -332,13 +331,12 @@ test("client.database.users.query() projects fields correctly", async () => {
   expect(users).toBeDefined();
   expect(users?.[0]).toEqual({ name: "Alice" });
 
-  const { data: usersWithId, error: idError } =
-    await client.database.users.query({
-      fields: {
-        id: true,
-        name: true,
-      },
-    });
+  const { data: usersWithId, error: idError } = client.database.users.query({
+    fields: {
+      id: true,
+      name: true,
+    },
+  });
 
   expectTypeOf(usersWithId).toEqualTypeOf<
     { id: string; name: string }[] | undefined
