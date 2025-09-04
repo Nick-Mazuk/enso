@@ -1,0 +1,11 @@
+# Task ID: 8
+# Title: Implement Basic Client-side Real-time Rooms Functionality
+# Status: todo
+# Dependencies: 5
+# Priority: high
+# Description: Develop the client-side API and logic for basic Real-time Room features: `join`, `emit` events, `setUserStatus`, `on` event listeners, `onUserStatus`, and `onRoomStatus`.
+# Details:
+This task focuses on the client's ability to interact with the room system, send and receive ephemeral events, and manage user presence/status within a room. It assumes a server-side counterpart will handle the actual room state.
+
+# Test Strategy:
+Unit tests for client-side API methods. Integration tests with a mock server to verify event emission, status updates, and listener callbacks function correctly.

@@ -1,0 +1,11 @@
+# Task ID: 15
+# Title: Add Advanced Query Features (Aggregations, `groupBy`)
+# Status: todo
+# Dependencies: 4, 6
+# Priority: medium
+# Description: Implement advanced query capabilities such as aggregations (`sum`, `avg`, `count`, `min`, `max`) and `groupBy` clauses within the client-side query engine.
+# Details:
+This enhances the analytical power of the query engine, allowing developers to perform more complex data analysis directly on the client's local data. It will require extending the internal query processing logic.
+
+# Test Strategy:
+Unit tests for each aggregation function and `groupBy` logic. Integration tests to verify complex queries combining aggregations and grouping return accurate results. Performance tests for these advanced queries.

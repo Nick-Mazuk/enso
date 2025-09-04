@@ -1,0 +1,11 @@
+# Task ID: 10
+# Title: Implement Server Sync Protocol Handler & HLC Conflict Resolution
+# Status: todo
+# Dependencies: 5, 9
+# Priority: high
+# Description: Develop the server-side Sync Engine, including the sync protocol handler, multi-tenant coordination, HLC conflict resolution, and change broadcasting.
+# Details:
+This is the core server component for real-time data synchronization. It needs to receive client changes, apply HLC-based conflict resolution (field-level, last-write-wins), persist changes, and broadcast updates to other connected clients. It must handle multi-tenancy securely.
+
+# Test Strategy:
+Integration tests simulating multiple clients syncing concurrently, verifying conflict resolution and data consistency. Performance tests for sync throughput. Security tests for tenant isolation.

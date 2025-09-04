@@ -1,0 +1,11 @@
+# Task ID: 6
+# Title: Build Public Client API Wrappers for CRUD & Basic Queries
+# Status: todo
+# Dependencies: 3, 4
+# Priority: high
+# Description: Create the user-facing, strongly-typed Client API for interacting with the database, supporting CRUD operations and basic queries (`query`, `queryOne`).
+# Details:
+This task involves exposing the low-level in-memory CRUD and query engine functionalities through a developer-friendly, type-safe API. It should provide methods like `client.database.create()`, `update()`, `replace()`, `delete()`, `query()`, and `queryOne()` as defined in the PRD.
+
+# Test Strategy:
+Integration tests covering all exposed API methods, ensuring they correctly interact with the underlying in-memory store and return expected results. Verify type safety with TypeScript compilation checks.

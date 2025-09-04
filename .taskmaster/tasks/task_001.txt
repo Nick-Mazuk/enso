@@ -1,0 +1,107 @@
+# Task ID: 1
+# Title: Design Core Triple Store & HLC Mechanism
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Define the fundamental data model for the triple store (subject, predicate, object) and the structure/logic for Hybrid Logical Clocks (HLC) at the field level.
+# Details:
+This task involves designing the in-memory representation of the triple store, including indexing strategies (e.g., by subject, predicate, object), and the HLC timestamp format (e.g., (logical_time, wall_clock_time, node_id)). It also covers the basic principles of HLC generation and comparison for conflict resolution.
+
+# Test Strategy:
+Document design specifications. Conduct design reviews with relevant stakeholders. Create mock data structures to validate the model's flexibility and efficiency for HLC integration.
+
+# Subtasks:
+## 1. Define Core Triple Data Model Structure [done]
+### Dependencies: None
+### Description: Specify the fundamental structure of a triple (subject, predicate, object) and the allowed internal data types for each component.
+### Details:
+This involves defining the internal representation of subjects, predicates, and objects, considering potential UUIDs, strings, or other identifiers for efficient storage and retrieval. It also covers the conceptual schema for a triple.
+<info added on 2025-08-29T02:16:10.669Z>
+Initial core data model types (`Triple`, `Subject`, `Predicate`, `Object`, `Value`, `Ref`, `RefMany`, and a placeholder for `HLC` as a string) have been defined in `index.ts`.
+</info added on 2025-08-29T02:16:10.669Z>
+
+## 2. Design In-Memory Triple Store Representation [done]
+### Dependencies: 1.1
+### Description: Design the optimal in-memory data structures for storing triples efficiently, prioritizing fast read and write operations.
+### Details:
+This involves selecting appropriate data structures (e.g., nested hash maps, arrays, custom structures) to hold the triples, considering memory footprint and access patterns.
+<info added on 2025-08-29T02:26:34.861Z>
+The in-memory TripleStore has been implemented using a class-based approach, incorporating SPO, POS, and OSP indexes to facilitate efficient querying. It supports adding, removing, and querying triples, including those with partial patterns.
+</info added on 2025-08-29T02:26:34.861Z>
+
+## 3. Design Subject-Predicate-Object Indexing Strategy [done]
+### Dependencies: 1.2
+### Description: Define the indexing strategies for efficient retrieval of triples based on subject, predicate, and object components.
+### Details:
+This includes designing specific index structures (e.g., SPO, POS, OSP permutations) to support various query patterns and ensure rapid lookup times.
+<info added on 2025-08-29T02:26:45.480Z>
+Implemented SPO, POS, and OSP indexing within the TripleStore class to allow for efficient querying of triples by any combination of subject, predicate, and object.
+</info added on 2025-08-29T02:26:45.480Z>
+
+## 4. Define Hybrid Logical Clock (HLC) Timestamp Format [pending]
+### Dependencies: None
+### Description: Specify the exact structure and components of the HLC timestamp, including logical time, wall clock time, and node identifier.
+### Details:
+This involves defining the data types, precision, and ranges for each component of the HLC timestamp (e.g., 64-bit integers for logical and wall clock time, a unique identifier for node ID).
+<info added on 2025-08-29T02:19:21.933Z>
+Implemented HLC creation, parsing, incrementing, and comparison functions in `index.ts`. Added a full test suite in `index.test.ts` using `bun:test` and all tests are passing.
+</info added on 2025-08-29T02:19:21.933Z>
+<info added on 2025-08-29T02:25:10.622Z>
+<info added on 2024-07-30T12:00:00.000Z>
+Refactored the HLC implementation from a string-based approach to a class-based, object-oriented design. The HLC class now encapsulates all related logic, improving maintainability and type safety.
+</info added on 2024-07-30T12:00:00.000Z>
+</info added on 2025-08-29T02:25:10.622Z>
+
+## 5. Design HLC Generation Logic [done]
+### Dependencies: 1.4
+### Description: Define the algorithm for generating new HLC timestamps for local operations and when merging with remote timestamps.
+### Details:
+This includes specifying rules for incrementing the logical time component, updating the wall clock time component, and handling potential clock skew during generation and merge operations.
+
+## 6. Design HLC Comparison Logic [done]
+### Dependencies: 1.4
+### Description: Define the rules and algorithm for comparing two HLC timestamps to determine causality or precedence.
+### Details:
+This involves specifying how the logical time, wall clock time, and node ID components are used in the comparison process to establish a total or partial order.
+
+## 7. Design Field-Level HLC Application within Triples [done]
+### Dependencies: 1.1, 1.4
+### Description: Specify precisely how HLC timestamps are associated with individual fields (objects) within the triple store for fine-grained versioning and conflict resolution.
+### Details:
+This involves deciding whether the HLC is embedded within the object value, stored as a separate metadata field alongside each triple, or managed through a versioning layer.
+<info added on 2025-08-29T02:44:45.628Z>
+It has been decided that the HLC will be stored as a fourth element within each triple, forming `[Subject, Predicate, Object, HLC]`. This structure inherently supports field-level HLC application, where each triple's HLC timestamps the specific field (predicate) for a given subject. This design satisfies the requirement for fine-grained versioning and conflict resolution at the field level, and no further dedicated implementation is required for this aspect.
+</info added on 2025-08-29T02:44:45.628Z>
+
+## 8. Design HLC-based Conflict Resolution Strategy [done]
+### Dependencies: 1.6, 1.7
+### Description: Define the primary conflict resolution strategy using HLCs, specifically focusing on 'last-write-wins' at the field level.
+### Details:
+This involves outlining the precise logic for selecting the 'winning' triple based on HLC comparison when concurrent updates to the same field occur, ensuring deterministic outcomes.
+<info added on 2025-08-29T02:48:19.440Z>
+When adding a triple, if a triple with the same subject, predicate, and object already exists, the HLCs are compared, and only the triple with the highest HLC is retained. This ensures data consistency in the face of concurrent updates.
+</info added on 2025-08-29T02:48:19.440Z>
+
+## 9. Design for Triple Store Mutability and Versioning [done]
+### Dependencies: 1.2, 1.7
+### Description: Determine how updates to triples are handled, considering whether triples are immutable (new version created) or mutable (in-place update), and how HLCs integrate with this.
+### Details:
+This impacts how historical versions might be retained or discarded based on HLCs and the overall data lifecycle within the in-memory store.
+<info added on 2025-08-29T02:54:39.255Z>
+The store is designed as an immutable, versioned TripleStore. For any given subject and predicate, only the triple with the highest HLC timestamp is retained, implementing a 'last-write-wins' strategy to ensure the store always reflects the latest version of a fact.
+</info added on 2025-08-29T02:54:39.255Z>
+
+## 10. Design for Data Type Representation within Triples [done]
+### Dependencies: 1.1
+### Description: Define how various client-side data types (string, number, boolean, date, ref, refMany) are represented and stored as objects within the triple store.
+### Details:
+This includes considerations for serialization/deserialization, efficient storage, and type integrity for different data types when they form the object component of a triple.
+<info added on 2025-08-29T02:38:57.090Z>
+A prefix-based encoding system has been designed and implemented in `crdt.ts` to represent various data types (strings, numbers, booleans, dates, and null values) for the object component of triples. This system is fully tested.
+</info added on 2025-08-29T02:38:57.090Z>
+<info added on 2025-08-29T02:44:01.399Z>
+<info added on 2025-08-29T02:38:57.090Z>
+Per user feedback, the decision has been made to store primitive data types directly in memory without an encoding layer. The previously designed and implemented prefix-based encoding system in `crdt.ts` is being removed.
+</info added on 2025-08-29T02:38:57.090Z>
+</info added on 2025-08-29T02:44:01.399Z>
+

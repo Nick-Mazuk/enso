@@ -1,0 +1,11 @@
+# Task ID: 13
+# Title: Develop Client-side Pagination (`paginated`, `preloadPaginated`)
+# Status: todo
+# Dependencies: 6
+# Priority: medium
+# Description: Implement efficient pagination capabilities for large datasets on the client, including `.paginated()` and `.preloadPaginated()` methods.
+# Details:
+This feature allows fetching and displaying data in chunks, optimizing performance and user experience for large result sets. `preloadPaginated` should enable pre-fetching subsequent pages.
+
+# Test Strategy:
+Unit tests for pagination logic (offset, limit, next/previous page). Integration tests to verify correct data retrieval and display across multiple pages. Performance tests for paginated queries.

@@ -1,0 +1,11 @@
+# Task ID: 21
+# Title: Implement Advanced Filtering/Query Engine
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Implement an advanced filtering/query engine that supports complex `where` clauses with multiple operators (e.g., `equals`, `greaterThan`, `lessThan`, etc.) for use in `query`, `updateMany`, `replaceMany`, and `deleteMany` methods.
+# Details:
+
+
+# Test Strategy:
+

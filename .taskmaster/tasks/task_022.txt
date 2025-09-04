@@ -1,0 +1,11 @@
+# Task ID: 22
+# Title: Implement `createdBy` field in entities
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Add logic to automatically include a `createdBy` field on document creation, storing the ID of the user who created it. This will be blocked by a future authentication implementation.
+# Details:
+
+
+# Test Strategy:
+

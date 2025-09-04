@@ -298,6 +298,35 @@
             "details": "Write extensive unit tests covering edge cases for each CRUD method. Develop integration tests to verify end-to-end data flow and consistency across multiple operations. Implement concurrency tests to simulate local concurrent writes to the same field and verify HLC-based last-write-wins behavior. Conduct performance benchmarks for basic operations on varying dataset sizes to ensure 'instant' feedback.\n<info added on 2025-08-29T03:33:06.169Z>\nThe test suite will be expanded to explicitly cover all CRUD operations (`create`, `query`, `update`, `replace`, `delete`, and their `many` variants). Tests will verify: correct triple manipulation in the in-memory store; schema validation and fallback application; functional updates executing correctly; HLC timestamp generation and last-write-wins conflict resolution for concurrent local updates; correct handling of delete tombstones in queries; and bulk operations affecting the correct set of documents. Performance benchmarks will specifically cover each CRUD operation on a reasonably sized in-memory dataset to ensure 'instant' feedback.\n</info added on 2025-08-29T03:33:06.169Z>",
             "status": "pending",
             "testStrategy": "As described in the details. Focus on robustness, correctness, and performance."
+          },
+          {
+            "id": 9,
+            "title": "Create and Use Custom `DatabaseError` Type",
+            "description": "Define a custom `DatabaseError` class and update all error-throwing paths in the client to use this type instead of the generic `Error` class, as specified in the documentation.",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 3
+          },
+          {
+            "id": 10,
+            "title": "Standardize CRUD Return Types to `DatabaseResult`",
+            "description": "Refactor `update`, `replace`, and `delete` methods to return the `DatabaseResult<void>` type as specified in the client API documentation, instead of the current `Promise<{ error?: Error }>`. The `DatabaseResult` should not be a promise itself.",
+            "details": "",
+            "status": "pending",
+            "dependencies": [
+              "3.9"
+            ],
+            "parentTaskId": 3
+          },
+          {
+            "id": 11,
+            "title": "Implement Functional Updates for `update` and `replace`",
+            "description": "Add support for functional updates to the `update` and `replace` methods, allowing a function `(prev) => ({...})` to be passed as the `fields` argument for atomic operations.",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 3
           }
         ]
       },
@@ -541,11 +570,22 @@
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": 22,
+        "title": "Implement `createdBy` field in entities",
+        "description": "Add logic to automatically include a `createdBy` field on document creation, storing the ID of the user who created it. This will be blocked by a future authentication implementation.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T18:24:52.897Z",
+      "updated": "2025-09-04T18:41:30.339Z",
       "description": "Tasks for master context"
     }
   }

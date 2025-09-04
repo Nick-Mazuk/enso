@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Implement Client-side In-memory Query Engine (Basic)
+# Status: todo
+# Dependencies: 1, 3
+# Priority: high
+# Description: Develop the client-side query engine to support fundamental query capabilities on the in-memory triple store, including `fields`, `where`, `orderBy`, and `limit` operators.
+# Details:
+The query engine should efficiently retrieve data based on specified criteria. It needs to handle filtering by field values, selecting specific fields, ordering results, and limiting the number of returned documents. This is the internal query mechanism.
+
+# Test Strategy:
+Unit tests for each query operator (`where`, `orderBy`, `limit`, `fields`). Integration tests to verify complex queries combining multiple operators return correct results from the in-memory store. Performance tests for queries on medium-sized datasets.
