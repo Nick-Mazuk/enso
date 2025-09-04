@@ -63,8 +63,19 @@ type QueryResult<
   | { data: undefined; error: Error }
 >;
 
+type UpdateFields<Def extends EntityDefinition> = Partial<CreateFields<Def>>;
+
 type EntityAPI<Def extends EntityDefinition> = {
   create: (fields: CreateFields<Def>) => CreateResult<Def>;
+  update: (opts: {
+    id: string;
+    fields: UpdateFields<Def>;
+  }) => Promise<{ error?: Error }>;
+  replace: (opts: {
+    id: string;
+    fields: CreateFields<Def>;
+  }) => Promise<{ error?: Error }>;
+  delete: (id: string) => Promise<{ error?: Error }>;
   query: <
     Fields extends {
       [K in keyof Entity<Def>]?: true;
@@ -138,13 +149,96 @@ export class Client<S extends Schema<any>> {
 
           return { data, error: undefined };
         },
+        update: async (opts: { id: string; fields: UpdateFields<any> }) => {
+          const { id, fields } = opts;
+          const now = new Date();
+          this.hlc = this.hlc.increment();
+          this.store.add([id, `${entityName}/updatedAt`, now, this.hlc]);
+
+          for (const [key, value] of Object.entries(fields)) {
+            if (value === undefined) continue;
+            this.hlc = this.hlc.increment();
+            this.store.add([
+              id,
+              `${entityName}/${key}`,
+              value as Object,
+              this.hlc,
+            ]);
+          }
+
+          return { error: undefined };
+        },
+        replace: async (opts: { id: string; fields: CreateFields<any> }) => {
+          const { id, fields } = opts;
+          const now = new Date();
+          this.hlc = this.hlc.increment();
+          this.store.add([id, `${entityName}/updatedAt`, now, this.hlc]);
+
+          const existingTriples = this.store.query([id]);
+          const existingFields = new Set(
+            existingTriples
+              .map(([, p]) => {
+                const parts = p.split("/");
+                if (parts.length > 1) {
+                  return parts[1];
+                }
+                return undefined;
+              })
+              .filter((f): f is string => {
+                return (
+                  f !== undefined &&
+                  !["id", "createdAt", "updatedAt", "entityType"].includes(f)
+                );
+              })
+          );
+
+          for (const [key, value] of Object.entries(fields)) {
+            this.hlc = this.hlc.increment();
+            this.store.add([
+              id,
+              `${entityName}/${key}`,
+              value as Object,
+              this.hlc,
+            ]);
+            existingFields.delete(key);
+          }
+
+          for (const field of existingFields) {
+            const entityDef = this.schema.definition.entities[entityName];
+            if (!entityDef) continue;
+            const definition = entityDef[field];
+            if (
+              definition &&
+              "optional" in definition &&
+              definition.optional === true
+            ) {
+              const triple = this.store.query([
+                id,
+                `${entityName}/${field}`,
+              ])[0];
+              if (triple) this.store.remove(triple);
+            }
+          }
+
+          return { error: undefined };
+        },
+        delete: async (id: string) => {
+          this.hlc = this.hlc.increment();
+          this.store.add([id, "_deleted", true, this.hlc]);
+          return { error: undefined };
+        },
         query: async (opts: any) => {
           const subjects = this.store.querySubjects({
             predicate: "entityType",
             object: entityName,
           });
 
-          const data = subjects
+          const activeSubjects = subjects.filter((subject) => {
+            const deletedTriple = this.store.query([subject, "_deleted"]);
+            return deletedTriple.length === 0 || deletedTriple[0][2] !== true;
+          });
+
+          const data = activeSubjects
             .map((subject) => {
               const triples = this.store.query([subject]);
               const entity: Record<string, unknown> = {};

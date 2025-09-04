@@ -245,7 +245,7 @@
               "3.3"
             ],
             "details": "Implement `client.update()` and `client.replace()`. Support passing functions to update fields (e.g., `count: c => c + 1`). Generate new HLC timestamps for updated fields using the integrated HLC utility. Apply last-write-wins logic based on HLC timestamps for concurrent updates to the same field.\n<info added on 2025-08-29T03:32:39.323Z>\nThe methods should be accessed via `client.database.<entityName>.update({ id, fields })` and `client.database.<entityName>.replace({ id, fields })`. For `update`, only provided fields are modified. For `replace`, all required fields must be provided, and unspecified optional fields are cleared. Both methods must support a functional `fields` argument of the form `(prev) => ({...})` for atomic updates. The last-write-wins conflict resolution strategy must be applied at the field level as specified in `design.md`.\n</info added on 2025-08-29T03:32:39.323Z>",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for direct updates, functional updates, `replace` behavior, and conflict resolution scenarios (last-write-wins verification)."
           },
           {
@@ -256,7 +256,7 @@
               "3.1"
             ],
             "details": "Implement `client.delete()` to remove entire entities by ID or specific predicates for an entity. Ensure immediate removal from the in-memory store.\n<info added on 2025-08-29T03:32:44.328Z>\nFor `client.database.<entityName>.delete(id)`, instead of immediate removal, a 'tombstone' triple `(<entityId>, \"_deleted\", true)` with an HLC timestamp must be created. The query engine must be updated to filter out entities with this tombstone, ensuring deletions are replicated and win over concurrent updates.\n</info added on 2025-08-29T03:32:44.328Z>",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for deleting existing entities, non-existent entities, specific fields, and verifying removal."
           },
           {
@@ -532,7 +532,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-08-29T03:52:33.003Z",
+      "updated": "2025-09-04T18:07:41.022Z",
       "description": "Tasks for master context"
     }
   }

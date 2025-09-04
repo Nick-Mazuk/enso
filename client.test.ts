@@ -166,6 +166,207 @@ test("Client database only has defined entities", () => {
   >();
 });
 
+test("client.database.users.update() updates a user", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  const { data: user } = await client.database.users.create({ name: "test" });
+  expect(user).toBeDefined();
+  if (!user) return;
+
+  const { error } = await client.database.users.update({
+    id: user.id,
+    fields: { name: "updated" },
+  });
+  expect(error).toBeUndefined();
+
+  const { data: users } = await client.database.users.query({
+    fields: { name: true },
+  });
+  expect(users?.[0]?.name).toBe("updated");
+});
+
+test("client.database.users.replace() replaces a user", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  const { data: user } = await client.database.users.create({
+    name: "test",
+    age: 10,
+  });
+  expect(user).toBeDefined();
+  if (!user) return;
+
+  const { error } = await client.database.users.replace({
+    id: user.id,
+    fields: { name: "replaced" },
+  });
+  expect(error).toBeUndefined();
+
+  const { data: users } = await client.database.users.query({
+    fields: { name: true, age: true },
+  });
+  expect(users?.[0]?.name).toBe("replaced");
+  expect(users?.[0]?.age).toBeUndefined();
+});
+
+test("client.database.users.delete() deletes a user", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  const { data: user1 } = await client.database.users.create({
+    name: "test1",
+  });
+  const { data: user2 } = await client.database.users.create({
+    name: "test2",
+  });
+  expect(user1).toBeDefined();
+  expect(user2).toBeDefined();
+  if (!user1 || !user2) return;
+
+  const { error } = await client.database.users.delete(user1.id);
+  expect(error).toBeUndefined();
+
+  const { data: users } = await client.database.users.query({
+    fields: { name: true },
+  });
+  expect(users?.length).toBe(1);
+  expect(users?.[0]?.name).toBe("test2");
+});
+
+test("client.database.users.delete() with non-existent user", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  const { error } = await client.database.users.delete("non-existent-id");
+  expect(error).toBeUndefined();
+});
+
+test("client.database.users.query() retrieves users", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+      },
+    },
+    rooms: {},
+  });
+
+  const client = createClient({ schema });
+
+  await client.database.users.create({ name: "Alice", age: 30 });
+  await client.database.users.create({ name: "Bob", age: 25 });
+
+  const { data: users, error } = await client.database.users.query({
+    fields: {
+      id: true,
+      name: true,
+      age: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  expect(error).toBeUndefined();
+  expect(users).toBeDefined();
+  expect(users?.length).toBe(2);
+  users?.sort((a, b) => a.name.localeCompare(b.name));
+  expect(users?.[0]).toEqual({
+    id: expect.any(String),
+    name: "Alice",
+    age: 30,
+    createdAt: expect.any(Date),
+    updatedAt: expect.any(Date),
+  });
+});
+
+test("client.database.users.query() projects fields correctly", async () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ optional: true }),
+      },
+    },
+    rooms: {},
+  });
+
+  const client = createClient({ schema });
+
+  await client.database.users.create({ name: "Alice", age: 30 });
+
+  const { data: users, error } = await client.database.users.query({
+    fields: {
+      name: true,
+    },
+  });
+
+  expectTypeOf(users).toEqualTypeOf<{ name: string }[] | undefined>();
+  expect(error).toBeUndefined();
+  expect(users).toBeDefined();
+  expect(users?.[0]).toEqual({ name: "Alice" });
+
+  const { data: usersWithId, error: idError } =
+    await client.database.users.query({
+      fields: {
+        id: true,
+        name: true,
+      },
+    });
+
+  expectTypeOf(usersWithId).toEqualTypeOf<
+    { id: string; name: string }[] | undefined
+  >();
+  expect(idError).toBeUndefined();
+  expect(usersWithId?.[0]).toEqual({
+    id: expect.any(String),
+    name: "Alice",
+  });
+});
+
+test("Client database only has defined entities", () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  expectTypeOf(client.database).toEqualTypeOf<
+    DatabaseAPI<{
+      entities: {
+        users: {
+          name: StringField;
+        };
+      };
+    }>
+  >();
+});
+
 test("client.database correctly enforces optional and required fields", () => {
   const schema = createSchema({
     entities: {
