@@ -339,10 +339,77 @@
         "priority": "high",
         "dependencies": [
           1,
-          3
+          3,
+          "23"
         ],
         "status": "todo",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define Query Language & AST for Basic Operators",
+            "description": "Formalize the structure of basic client-side queries including `where`, `fields`, `orderBy`, and `limit` clauses. Define the Abstract Syntax Tree (AST) representation for these query types to enable structured parsing and execution.",
+            "dependencies": [],
+            "details": "This involves designing the JSON-like query object structure that clients will use, and mapping it to an internal AST that the parser and executor will understand. Consider how `where` clauses will handle basic comparisons like equality and range.",
+            "status": "pending",
+            "testStrategy": "N/A (design phase)"
+          },
+          {
+            "id": 2,
+            "title": "Implement Query Parser for Basic Operators",
+            "description": "Develop a parser that takes a client-side query object (JSON) and transforms it into the defined Abstract Syntax Tree (AST). The parser should validate the query structure and parameters for `where`, `fields`, `orderBy`, and `limit`.",
+            "dependencies": [
+              "4.1"
+            ],
+            "details": "The parser will be responsible for converting the declarative query into an executable internal representation. It should include robust error handling for malformed queries or invalid parameters.",
+            "status": "pending",
+            "testStrategy": "Unit tests for parsing valid and invalid query structures for each operator and their combinations."
+          },
+          {
+            "id": 3,
+            "title": "Implement Core Query Execution Engine",
+            "description": "Build the foundational execution engine responsible for traversing the query AST and applying the query logic to the in-memory triple store. This subtask focuses on the execution flow and data iteration mechanism, not the specific operator logic.",
+            "dependencies": [
+              "4.1",
+              "4.2"
+            ],
+            "details": "The executor will receive the AST from the parser and orchestrate the application of `where`, `fields`, `orderBy`, and `limit` operations on the in-memory data. It should provide a flexible framework for integrating operator-specific logic.",
+            "status": "pending",
+            "testStrategy": "Unit tests for the executor's ability to process a simple AST, iterate over a dataset, and correctly pass data to placeholder operator functions."
+          },
+          {
+            "id": 4,
+            "title": "Implement `where`, `fields`, `orderBy`, and `limit` Operators",
+            "description": "Develop the specific logic for each fundamental query operator: `where` (for basic filtering like equality, comparison, inclusion), `fields` (for projection), `orderBy` (for sorting), and `limit` (for result truncation).",
+            "dependencies": [
+              "4.3"
+            ],
+            "details": "For `where`, implement basic comparison operators such as `equals`, `notEquals`, `greaterThan`, `lessThan`, `in`, and `notIn`. Ensure efficient application of these operators within the executor framework, considering data types and indexing if applicable.",
+            "status": "pending",
+            "testStrategy": "Unit tests for each operator individually (e.g., `where` with various conditions, `fields` with different projections, `orderBy` with ascending/descending sorts, `limit` with various values including zero and exceeding dataset size)."
+          },
+          {
+            "id": 5,
+            "title": "Integrate Query Engine with Client API Methods",
+            "description": "Connect the implemented query engine to the client-side API methods: `query`, `updateMany`, `replaceMany`, and `deleteMany`. Ensure these methods correctly utilize the query engine for data retrieval, filtering, and identification of target documents.",
+            "dependencies": [
+              "4.4"
+            ],
+            "details": "The `query` method will directly use the full query engine. `updateMany`, `replaceMany`, and `deleteMany` will primarily use the `where` clause functionality of the engine to select the documents to modify or delete.",
+            "status": "pending",
+            "testStrategy": "Integration tests to verify that `query`, `updateMany`, `replaceMany`, and `deleteMany` correctly use the query engine to perform their operations on the in-memory store."
+          },
+          {
+            "id": 6,
+            "title": "Add Comprehensive Query Engine Tests",
+            "description": "Write extensive unit, integration, and performance tests for the client-side in-memory query engine. Cover all operators, their combinations, edge cases, and verify correct behavior with the in-memory triple store.",
+            "dependencies": [
+              "4.5"
+            ],
+            "details": "Include tests for complex queries combining multiple operators (`where` + `orderBy` + `limit`), edge cases (empty results, no matching criteria, large limits), and performance tests on medium-sized datasets as per the parent task's test strategy.",
+            "status": "pending",
+            "testStrategy": "Unit tests for each query operator (`where`, `orderBy`, `limit`, `fields`). Integration tests to verify complex queries combining multiple operators return correct results from the in-memory store. Performance tests for queries on medium-sized datasets."
+          }
+        ]
       },
       {
         "id": 5,
@@ -566,7 +633,7 @@
         "description": "Implement an advanced filtering/query engine that supports complex `where` clauses with multiple operators (e.g., `equals`, `greaterThan`, `lessThan`, etc.) for use in `query`, `updateMany`, `replaceMany`, and `deleteMany` methods.",
         "details": "",
         "testStrategy": "",
-        "status": "pending",
+        "status": "cancelled",
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
@@ -581,11 +648,95 @@
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": 23,
+        "title": "Implement Datalog Query Engine for TripleStore",
+        "description": "Develop a Datalog-style query engine within the TripleStore to enable complex, declarative query capabilities directly on the server, offloading logic from the client.",
+        "details": "This task involves a significant enhancement to the server-side TripleStore. Key steps include:\n\n1.  **Datalog Language Definition**: Define a precise subset of Datalog (or a Datalog-like language) that aligns with the TripleStore's data model. This should include support for basic predicates, rules, recursion, and potentially stratified negation or aggregation.\n2.  **Parser Implementation**: Develop a robust parser to convert Datalog query strings and rule definitions into an internal Abstract Syntax Tree (AST) representation.\n3.  **Query Optimizer Design**: Implement a query optimizer responsible for transforming the AST into an efficient execution plan. This may involve techniques like goal reordering, join optimization, and index utilization strategies.\n4.  **Execution Engine Development**: Build the core Datalog evaluation engine. This will likely involve implementing algorithms such as semi-naive evaluation for recursive rules, or other established Datalog evaluation techniques. The engine must efficiently interact with the underlying TripleStore data structures to retrieve and process triples.\n5.  **TripleStore Integration Layer**: Create a dedicated API or module within the TripleStore that allows the Datalog engine to seamlessly access, query, and potentially update (if write capabilities are included) the stored triples.\n6.  **Client-Server Interface**: Define and implement a new server-side endpoint (e.g., via HTTP POST or WebSocket messages) specifically for receiving Datalog queries from clients and returning structured results. This will require careful consideration of serialization formats for queries and results.\n7.  **Error Handling and Debugging**: Implement comprehensive error reporting for syntax errors, logical inconsistencies in rules, and runtime execution failures. Provide logging and potential tracing mechanisms to aid in debugging complex Datalog programs.",
+        "testStrategy": "A multi-faceted testing approach is crucial for this complex component:\n\n*   **Unit Tests**: Develop extensive unit tests for each sub-component:\n    *   **Parser**: Test with a wide range of valid and invalid Datalog syntax, ensuring correct AST generation and error handling.\n    *   **Optimizer**: Test specific optimization rules (e.g., join reordering, predicate pushdown) with small, controlled query plans.\n    *   **Execution Engine**: Test core evaluation logic with small datasets and simple rules (non-recursive, recursive, with negation) to verify correct inference and query results.\n*   **Integration Tests**: \n    *   Set up a dedicated test TripleStore instance populated with diverse sample data.\n    *   Execute complex Datalog queries and rule sets against this instance, verifying the results against known expected outcomes.\n    *   Test the end-to-end client-server interface by sending Datalog queries from a mock client and asserting the correctness and format of the received responses.\n    *   Verify the engine's ability to handle various data types and edge cases present in the TripleStore.\n*   **Performance Tests**: \n    *   Conduct performance benchmarks with large datasets and increasingly complex/recursive queries to identify bottlenecks and ensure acceptable query execution times.\n    *   Evaluate the engine's scalability under concurrent query loads.\n*   **Regression Tests**: Ensure that the introduction of the Datalog engine does not negatively impact the performance or stability of existing TripleStore functionalities.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Datalog Query Structure",
+            "description": "Define the structure for Datalog-like queries that the `TripleStore` will accept, including clauses, variables, and rules.",
+            "dependencies": [],
+            "details": "Define a precise subset of Datalog (or a Datalog-like language) that aligns with the TripleStore's data model. This should include support for basic predicates, rules, recursion, and potentially stratified negation or aggregation. This forms the foundational specification for the Datalog language to be implemented.",
+            "status": "done",
+            "testStrategy": "The correctness and completeness of this design will be implicitly validated through the successful implementation and testing of subsequent parser and engine components."
+          },
+          {
+            "id": 2,
+            "title": "Implement Datalog Query Parser in TripleStore",
+            "description": "Add a method to `TripleStore` to parse these Datalog queries.",
+            "dependencies": [
+              "23.1"
+            ],
+            "details": "Develop a robust parser to convert Datalog query strings and rule definitions into an internal Abstract Syntax Tree (AST) representation, based on the Datalog structure defined in subtask 23.1. This parser must handle syntax validation and provide clear error reporting for malformed queries.",
+            "status": "done",
+            "testStrategy": "Develop extensive unit tests for the parser: Test with a wide range of valid and invalid Datalog syntax, ensuring correct AST generation and comprehensive error handling for various syntax errors."
+          },
+          {
+            "id": 3,
+            "title": "Implement Datalog Query Engine in TripleStore",
+            "description": "Build the core logic to execute parsed Datalog queries against the stored triples, including unification and finding variable bindings.",
+            "dependencies": [
+              "23.1",
+              "23.2"
+            ],
+            "details": "Build the core Datalog evaluation engine. This will likely involve implementing algorithms such as semi-naive evaluation for recursive rules, or other established Datalog evaluation techniques. It must efficiently interact with the underlying TripleStore data structures to retrieve and process triples, including unification and finding variable bindings. This subtask also encompasses the design and implementation of a query optimizer responsible for transforming the AST into an efficient execution plan, potentially involving techniques like goal reordering, join optimization, and index utilization strategies.\n<info added on 2025-09-04T19:22:55.268Z>\nSpecifically, multiple attempts to implement the Datalog join algorithm have failed due to persistent issues in correctly handling the unification of clauses with existing variable bindings. This indicates a fundamental misunderstanding of the required logic for variable binding propagation and unification during joins. A complete re-evaluation and redesign of the Datalog join algorithm, focusing on robust and correct unification, is required before proceeding.\n</info added on 2025-09-04T19:22:55.268Z>",
+            "status": "done",
+            "testStrategy": "Develop extensive unit tests for the core evaluation algorithms and query optimizer. Integration tests to verify correct execution of complex Datalog queries, including recursive rules, against the TripleStore, ensuring performance, correctness, and proper handling of variable bindings and joins."
+          },
+          {
+            "id": 4,
+            "title": "Expose Datalog Query Method from TripleStore",
+            "description": "Create a public `datalogQuery` method on `TripleStore`.",
+            "dependencies": [
+              "23.3"
+            ],
+            "details": "Create a dedicated API or module within the TripleStore that allows the Datalog engine to seamlessly access, query, and potentially update (if write capabilities are included) the stored triples. Define and implement a new server-side endpoint (e.g., via HTTP POST or WebSocket messages) specifically for receiving Datalog queries from clients and returning structured results. This will require careful consideration of serialization formats for queries and results.",
+            "status": "done",
+            "testStrategy": "Integration tests to verify the server-side endpoint correctly receives Datalog queries, invokes the Datalog engine, and returns structured results in the defined format. Test error handling for invalid requests and malformed Datalog queries received via the endpoint."
+          },
+          {
+            "id": 5,
+            "title": "Refactor client.ts to use new TripleStore query method",
+            "description": "Update the `query` implementation in `client.ts` to use the new, more powerful query capabilities of the `TripleStore`, simplifying the client-side logic.",
+            "dependencies": [
+              "23.4"
+            ],
+            "details": "This is a client-side task. It involves modifying the existing client-side `query` logic to leverage the new server-side Datalog engine. This will likely involve sending Datalog query strings to the server and processing the structured results received back, thereby offloading complex query logic from the client and simplifying its implementation.",
+            "status": "done",
+            "testStrategy": "End-to-end integration tests to ensure the client-side `query` method correctly interacts with the new server-side Datalog engine, retrieves expected data, and that the client-side logic is indeed simplified as intended. Test various query scenarios from the client perspective."
+          },
+          {
+            "id": 6,
+            "title": "Implement Optional Clauses in Datalog Engine",
+            "description": "Implement support for optional clauses in the Datalog engine. This will allow queries to match entities that may not have a specific triple, such as the `_deleted` flag.",
+            "details": "",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 23
+          },
+          {
+            "id": 7,
+            "title": "Implement LWW in Datalog Engine",
+            "description": "Modify the Datalog engine to handle last-write-wins (LWW) semantics by incorporating HLC timestamps into the query logic. This will ensure that only the latest value for each field is returned.",
+            "details": "",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 23
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T19:00:20.484Z",
+      "updated": "2025-09-04T20:32:58.248Z",
       "description": "Tasks for master context"
     }
   }

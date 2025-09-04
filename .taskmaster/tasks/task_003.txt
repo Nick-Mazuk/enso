@@ -83,19 +83,19 @@ Write extensive unit tests covering edge cases for each CRUD method. Develop int
 The test suite will be expanded to explicitly cover all CRUD operations (`create`, `query`, `update`, `replace`, `delete`, and their `many` variants). Tests will verify: correct triple manipulation in the in-memory store; schema validation and fallback application; functional updates executing correctly; HLC timestamp generation and last-write-wins conflict resolution for concurrent local updates; correct handling of delete tombstones in queries; and bulk operations affecting the correct set of documents. Performance benchmarks will specifically cover each CRUD operation on a reasonably sized in-memory dataset to ensure 'instant' feedback.
 </info added on 2025-08-29T03:33:06.169Z>
 
-## 9. Create and Use Custom `DatabaseError` Type [pending]
+## 9. Create and Use Custom `DatabaseError` Type [done]
 ### Dependencies: None
 ### Description: Define a custom `DatabaseError` class and update all error-throwing paths in the client to use this type instead of the generic `Error` class, as specified in the documentation.
 ### Details:
 
 
-## 10. Standardize CRUD Return Types to `DatabaseResult` [pending]
-### Dependencies: None
+## 10. Standardize CRUD Return Types to `DatabaseResult` [done]
+### Dependencies: 3.9
 ### Description: Refactor `update`, `replace`, and `delete` methods to return the `DatabaseResult<void>` type as specified in the client API documentation, instead of the current `Promise<{ error?: Error }>`. The `DatabaseResult` should not be a promise itself.
 ### Details:
 
 
-## 11. Implement Functional Updates for `update` and `replace` [pending]
+## 11. Implement Functional Updates for `update` and `replace` [done]
 ### Dependencies: None
 ### Description: Add support for functional updates to the `update` and `replace` methods, allowing a function `(prev) => ({...})` to be passed as the `fields` argument for atomic operations.
 ### Details:

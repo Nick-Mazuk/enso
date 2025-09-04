@@ -1,7 +1,7 @@
 # Task ID: 4
 # Title: Implement Client-side In-memory Query Engine (Basic)
 # Status: todo
-# Dependencies: 1, 3
+# Dependencies: 1, 3, 23
 # Priority: high
 # Description: Develop the client-side query engine to support fundamental query capabilities on the in-memory triple store, including `fields`, `where`, `orderBy`, and `limit` operators.
 # Details:
@@ -9,3 +9,41 @@ The query engine should efficiently retrieve data based on specified criteria. I
 
 # Test Strategy:
 Unit tests for each query operator (`where`, `orderBy`, `limit`, `fields`). Integration tests to verify complex queries combining multiple operators return correct results from the in-memory store. Performance tests for queries on medium-sized datasets.
+
+# Subtasks:
+## 1. Define Query Language & AST for Basic Operators [pending]
+### Dependencies: None
+### Description: Formalize the structure of basic client-side queries including `where`, `fields`, `orderBy`, and `limit` clauses. Define the Abstract Syntax Tree (AST) representation for these query types to enable structured parsing and execution.
+### Details:
+This involves designing the JSON-like query object structure that clients will use, and mapping it to an internal AST that the parser and executor will understand. Consider how `where` clauses will handle basic comparisons like equality and range.
+
+## 2. Implement Query Parser for Basic Operators [pending]
+### Dependencies: 4.1
+### Description: Develop a parser that takes a client-side query object (JSON) and transforms it into the defined Abstract Syntax Tree (AST). The parser should validate the query structure and parameters for `where`, `fields`, `orderBy`, and `limit`.
+### Details:
+The parser will be responsible for converting the declarative query into an executable internal representation. It should include robust error handling for malformed queries or invalid parameters.
+
+## 3. Implement Core Query Execution Engine [pending]
+### Dependencies: 4.1, 4.2
+### Description: Build the foundational execution engine responsible for traversing the query AST and applying the query logic to the in-memory triple store. This subtask focuses on the execution flow and data iteration mechanism, not the specific operator logic.
+### Details:
+The executor will receive the AST from the parser and orchestrate the application of `where`, `fields`, `orderBy`, and `limit` operations on the in-memory data. It should provide a flexible framework for integrating operator-specific logic.
+
+## 4. Implement `where`, `fields`, `orderBy`, and `limit` Operators [pending]
+### Dependencies: 4.3
+### Description: Develop the specific logic for each fundamental query operator: `where` (for basic filtering like equality, comparison, inclusion), `fields` (for projection), `orderBy` (for sorting), and `limit` (for result truncation).
+### Details:
+For `where`, implement basic comparison operators such as `equals`, `notEquals`, `greaterThan`, `lessThan`, `in`, and `notIn`. Ensure efficient application of these operators within the executor framework, considering data types and indexing if applicable.
+
+## 5. Integrate Query Engine with Client API Methods [pending]
+### Dependencies: 4.4
+### Description: Connect the implemented query engine to the client-side API methods: `query`, `updateMany`, `replaceMany`, and `deleteMany`. Ensure these methods correctly utilize the query engine for data retrieval, filtering, and identification of target documents.
+### Details:
+The `query` method will directly use the full query engine. `updateMany`, `replaceMany`, and `deleteMany` will primarily use the `where` clause functionality of the engine to select the documents to modify or delete.
+
+## 6. Add Comprehensive Query Engine Tests [pending]
+### Dependencies: 4.5
+### Description: Write extensive unit, integration, and performance tests for the client-side in-memory query engine. Cover all operators, their combinations, edge cases, and verify correct behavior with the in-memory triple store.
+### Details:
+Include tests for complex queries combining multiple operators (`where` + `orderBy` + `limit`), edge cases (empty results, no matching criteria, large limits), and performance tests on medium-sized datasets as per the parent task's test strategy.
+
