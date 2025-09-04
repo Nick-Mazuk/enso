@@ -107,6 +107,9 @@ export class Client<S extends Schema<any>> {
     const entityNames = Object.keys(this.schema.definition.entities);
 
     for (const entityName of entityNames) {
+      const entityDef = this.schema.definition.entities[entityName];
+      if (!entityDef) continue;
+
       db[entityName] = {
         create: async (
           fields: CreateFields<any>
@@ -204,8 +207,6 @@ export class Client<S extends Schema<any>> {
           }
 
           for (const field of existingFields) {
-            const entityDef = this.schema.definition.entities[entityName];
-            if (!entityDef) continue;
             const definition = entityDef[field];
             if (
               definition &&
@@ -235,7 +236,7 @@ export class Client<S extends Schema<any>> {
 
           const activeSubjects = subjects.filter((subject) => {
             const deletedTriple = this.store.query([subject, "_deleted"]);
-            return deletedTriple.length === 0 || deletedTriple[0][2] !== true;
+            return deletedTriple.length === 0 || deletedTriple[0]?.[2] !== true;
           });
 
           const data = activeSubjects
