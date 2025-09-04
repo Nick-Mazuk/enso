@@ -71,11 +71,11 @@ type EntityAPI<Def extends EntityDefinition> = {
   create: (fields: CreateFields<Def>) => CreateResult<Def>;
   update: (opts: {
     id: string;
-    fields: UpdateFields<Def>;
+    fields: UpdateFields<Def> | ((prev: Entity<Def>) => UpdateFields<Def>);
   }) => DatabaseResult<void>;
   replace: (opts: {
     id: string;
-    fields: CreateFields<Def>;
+    fields: CreateFields<Def> | ((prev: Entity<Def>) => CreateFields<Def>);
   }) => DatabaseResult<void>;
   delete: (id: string) => DatabaseResult<void>;
   query: <
@@ -155,13 +155,32 @@ export class Client<S extends Schema<any>> {
 
           return { data, error: undefined };
         },
-        update: (opts: { id: string; fields: UpdateFields<any> }) => {
+        update: (opts: {
+          id: string;
+          fields:
+            | UpdateFields<any>
+            | ((prev: Entity<any>) => UpdateFields<any>);
+        }) => {
           const { id, fields } = opts;
+
+          const triples = this.store.query([id]);
+          if (triples.length === 0)
+            return { data: undefined, error: undefined };
+
+          const prev = triples.reduce((acc, [, p, o]) => {
+            const field = p.split("/")[1];
+            if (field) acc[field] = o;
+            return acc;
+          }, {} as Record<string, any>) as Entity<any>;
+
+          const newFields =
+            typeof fields === "function" ? fields(prev) : fields;
+
           const now = new Date();
           this.hlc = this.hlc.increment();
           this.store.add([id, `${entityName}/updatedAt`, now, this.hlc]);
 
-          for (const [key, value] of Object.entries(fields)) {
+          for (const [key, value] of Object.entries(newFields)) {
             if (value === undefined) continue;
             this.hlc = this.hlc.increment();
             this.store.add([
@@ -174,8 +193,26 @@ export class Client<S extends Schema<any>> {
 
           return { data: undefined, error: undefined };
         },
-        replace: (opts: { id: string; fields: CreateFields<any> }) => {
+        replace: (opts: {
+          id: string;
+          fields:
+            | CreateFields<any>
+            | ((prev: Entity<any>) => CreateFields<any>);
+        }) => {
           const { id, fields } = opts;
+          const triples = this.store.query([id]);
+          if (triples.length === 0)
+            return { data: undefined, error: undefined };
+
+          const prev = triples.reduce((acc, [, p, o]) => {
+            const field = p.split("/")[1];
+            if (field) acc[field] = o;
+            return acc;
+          }, {} as Record<string, any>) as Entity<any>;
+
+          const newFields =
+            typeof fields === "function" ? fields(prev) : fields;
+
           const now = new Date();
           this.hlc = this.hlc.increment();
           this.store.add([id, `${entityName}/updatedAt`, now, this.hlc]);
@@ -198,7 +235,7 @@ export class Client<S extends Schema<any>> {
               })
           );
 
-          for (const [key, value] of Object.entries(fields)) {
+          for (const [key, value] of Object.entries(newFields)) {
             this.hlc = this.hlc.increment();
             this.store.add([
               id,

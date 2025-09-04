@@ -324,7 +324,7 @@
             "title": "Implement Functional Updates for `update` and `replace`",
             "description": "Add support for functional updates to the `update` and `replace` methods, allowing a function `(prev) => ({...})` to be passed as the `fields` argument for atomic operations.",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentTaskId": 3
           }
@@ -585,7 +585,7 @@
     ],
     "metadata": {
       "created": "2025-08-29T02:04:22.495Z",
-      "updated": "2025-09-04T18:57:52.342Z",
+      "updated": "2025-09-04T19:00:20.484Z",
       "description": "Tasks for master context"
     }
   }

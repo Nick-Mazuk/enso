@@ -194,6 +194,34 @@ test("client.database.users.update() updates a user", () => {
   expect(users?.[0]?.name).toBe("updated");
 });
 
+test("client.database.users.update() with functional update", () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ fallback: 0 }),
+      },
+    },
+  });
+  const client = createClient({ schema });
+  const { data: user } = client.database.users.create({
+    name: "test",
+    age: 10,
+  });
+  if (!user) return;
+
+  const { error } = client.database.users.update({
+    id: user.id,
+    fields: (prev) => ({ age: prev.age + 5 }),
+  });
+  expect(error).toBeUndefined();
+
+  const { data: users } = client.database.users.query({
+    fields: { age: true },
+  });
+  expect(users?.[0]?.age).toBe(15);
+});
+
 test("client.database.users.replace() replaces a user", () => {
   const schema = createSchema({
     entities: {
@@ -222,6 +250,38 @@ test("client.database.users.replace() replaces a user", () => {
   });
   expect(users?.[0]?.name).toBe("replaced");
   expect(users?.[0]?.age).toBeUndefined();
+});
+
+test("client.database.users.replace() with functional update", () => {
+  const schema = createSchema({
+    entities: {
+      users: {
+        name: t.string({ fallback: "" }),
+        age: t.number({ fallback: 0 }),
+      },
+    },
+  });
+
+  const client = createClient({ schema });
+  const { data: user } = client.database.users.create({
+    name: "test",
+    age: 10,
+  });
+  if (!user) return;
+
+  const { error } = client.database.users.replace({
+    id: user.id,
+    fields: (prev) => ({ name: "replaced", age: prev.age + 5 }),
+  });
+
+  expect(error).toBeUndefined();
+
+  const { data: users } = client.database.users.query({
+    fields: { name: true, age: true },
+  });
+
+  expect(users?.[0]?.name).toBe("replaced");
+  expect(users?.[0]?.age).toBe(15);
 });
 
 test("client.database.users.delete() deletes a user", () => {
