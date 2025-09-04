@@ -179,7 +179,7 @@ export class TripleStore {
     for (const triple of this._queryAll()) {
       const key = `${triple[0]}-${triple[1]}`;
       const existing = latestTriples.get(key);
-      if (!existing || HLC.compare(triple[3], existing[3]) > 0) {
+      if (!existing || triple[3].compare(existing[3]) > 0) {
         latestTriples.set(key, triple);
       }
     }
@@ -199,7 +199,7 @@ export class TripleStore {
 
     for (let i = 0; i < 3; i++) {
       const term = pattern[i];
-      const value = triple[i]!;
+      const value = triple[i as 0 | 1 | 2]!;
 
       if (this._isVariable(term)) {
         const variable = term as DatalogVariable;
