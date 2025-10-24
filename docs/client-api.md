@@ -646,12 +646,12 @@ The `fields` object specifies what data to return. You must explicitly opt-in to
 
 ```typescript
 fields: {
-	name: true,        // Include name
-	email: true,       // Include email
-	id: true,          // Must explicitly request auto-generated fields
-	createdAt: true,   // Must explicitly request auto-generated fields
-	updatedAt: true    // Must explicitly request auto-generated fields
-	// age: omitted fields are not returned
+  name: true,        // Include name
+  email: true,       // Include email
+  id: true,          // Must explicitly request auto-generated fields
+  createdAt: true,   // Must explicitly request auto-generated fields
+  updatedAt: true    // Must explicitly request auto-generated fields
+  // age: omitted fields are not returned
 }
 ```
 
@@ -663,12 +663,12 @@ The `aggregations` object specifies what aggregations to compute:
 
 ```typescript
 aggregations: {
-	totalPosts: { count: '*' },          // Count all records
-	publishedPosts: { count: 'published' }, // Count non-null published values
-	totalViews: { sum: 'viewCount' },    // Sum numeric values
-	avgViews: { avg: 'viewCount' },      // Average of numeric values
-	maxViews: { max: 'viewCount' },      // Maximum value
-	minViews: { min: 'viewCount' }       // Minimum value
+  totalPosts: { count: '*' },          // Count all records
+  publishedPosts: { count: 'published' }, // Count non-null published values
+  totalViews: { sum: 'viewCount' },    // Sum numeric values
+  avgViews: { avg: 'viewCount' },      // Average of numeric values
+  maxViews: { max: 'viewCount' },      // Maximum value
+  minViews: { min: 'viewCount' }       // Minimum value
 }
 ```
 
@@ -687,27 +687,27 @@ For relation fields (defined with `t.ref()` or `t.refMany()`), you can nest full
 
 ```typescript
 fields: {
-	name: true,
-	posts: {  // t.refMany('posts')
-		fields: {
-			title: true,
-			createdAt: true
-		},
-		where: {
-			published: true
-		},
-		orderBy: { createdAt: 'desc' },
-		limit: 10
-	},
-	profile: {  // t.ref('profiles')
-		fields: {
-			bio: true
-		},
-		where: {
-			isPublic: true
-		}
-		// orderBy, limit allowed but typically meaningless for single refs
-	}
+  name: true,
+  posts: {  // t.refMany('posts')
+    fields: {
+      title: true,
+      createdAt: true
+    },
+    where: {
+      published: true
+    },
+    orderBy: { createdAt: 'desc' },
+    limit: 10
+  },
+  profile: {  // t.ref('profiles')
+    fields: {
+      bio: true
+    },
+    where: {
+      isPublic: true
+    }
+    // orderBy, limit allowed but typically meaningless for single refs
+  }
 }
 ```
 
@@ -1331,101 +1331,101 @@ export const load: PageServerLoad = async () => {
 ```svelte
 <!-- src/routes/users/+page.svelte -->
 <script lang="ts">
-	import { query, paginated } from '@sync-engine/svelte'
-	import { client } from '$lib/sync-client'
-	import type { PageData } from './$types'
+  import { query, paginated } from '@sync-engine/svelte'
+  import { client } from '$lib/sync-client'
+  import type { PageData } from './$types'
 
-	interface Props {
-		data: PageData
-	}
+  interface Props {
+    data: PageData
+  }
 
-	let { data }: Props = $props()
+  let { data }: Props = $props()
 
-	// Option 1: Reactive query using preloaded data - no loading state!
-	const users = query(data.preloadedUsers)
+  // Option 1: Reactive query using preloaded data - no loading state!
+  const users = query(data.preloadedUsers)
 
-	// Option 2: Direct query with loading state
-	// const users = query(client.database.users, {
-	//   fields: { name: true, email: true, age: true },
-	//   where: { age: { greaterThan: 18 } }
-	// })
+  // Option 2: Direct query with loading state
+  // const users = query(client.database.users, {
+  //   fields: { name: true, email: true, age: true },
+  //   where: { age: { greaterThan: 18 } }
+  // })
 
-	// Option 3: Paginated query (with loading state)
-	const paginatedUsers = paginated(client.database.users, {
-		fields: { name: true, email: true, age: true },
-		where: { age: { greaterThan: 18 } },
-		orderBy: { name: 'asc' },
-		pageSize: 20
-	})
+  // Option 3: Paginated query (with loading state)
+  const paginatedUsers = paginated(client.database.users, {
+    fields: { name: true, email: true, age: true },
+    where: { age: { greaterThan: 18 } },
+    orderBy: { name: 'asc' },
+    pageSize: 20
+  })
 
-	// Option 4: Preloaded paginated query (no loading state)
-	const preloadedPaginatedUsers = paginated(data.preloadedPagination)
+  // Option 4: Preloaded paginated query (no loading state)
+  const preloadedPaginatedUsers = paginated(data.preloadedPagination)
 </script>
 
 <div class="user-list">
-	{#if users.error}
-		<p>Error: {users.error.message}</p>
-	{:else}
-		<ul>
-			{#each users.data as user (user.id)}
-				<li>
-					{user.name} ({user.email}) - Age: {user.age}
-				</li>
-			{/each}
-		</ul>
-	{/if}
+  {#if users.error}
+    <p>Error: {users.error.message}</p>
+  {:else}
+    <ul>
+      {#each users.data as user (user.id)}
+        <li>
+          {user.name} ({user.email}) - Age: {user.age}
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </div>
 
 <div class="paginated-user-list">
-	{#if paginatedUsers.error}
-		<p>Error: {paginatedUsers.error.message}</p>
-	{:else if paginatedUsers.loading}
-		<p>Loading users...</p>
-	{:else}
-		<ul>
-			{#each paginatedUsers.data as user (user.id)}
-				<li>
-					{user.name} ({user.email}) - Age: {user.age}
-				</li>
-			{/each}
-		</ul>
-		<div class="pagination">
-			<button onclick={paginatedUsers.previous} disabled={!paginatedUsers.hasPrevious}>
-				Previous
-			</button>
-			<span>
-				Page {paginatedUsers.currentPage} of ~{paginatedUsers.estimatedTotalPages}
-			</span>
-			<button onclick={paginatedUsers.next} disabled={!paginatedUsers.hasNext}>
-				Next
-			</button>
-		</div>
-	{/if}
+  {#if paginatedUsers.error}
+    <p>Error: {paginatedUsers.error.message}</p>
+  {:else if paginatedUsers.loading}
+    <p>Loading users...</p>
+  {:else}
+    <ul>
+      {#each paginatedUsers.data as user (user.id)}
+        <li>
+          {user.name} ({user.email}) - Age: {user.age}
+        </li>
+      {/each}
+    </ul>
+    <div class="pagination">
+      <button onclick={paginatedUsers.previous} disabled={!paginatedUsers.hasPrevious}>
+        Previous
+      </button>
+      <span>
+        Page {paginatedUsers.currentPage} of ~{paginatedUsers.estimatedTotalPages}
+      </span>
+      <button onclick={paginatedUsers.next} disabled={!paginatedUsers.hasNext}>
+        Next
+      </button>
+    </div>
+  {/if}
 </div>
 
 <div class="preloaded-paginated-user-list">
-	{#if preloadedPaginatedUsers.error}
-		<p>Error: {preloadedPaginatedUsers.error.message}</p>
-	{:else}
-		<ul>
-			{#each preloadedPaginatedUsers.data as user (user.id)}
-				<li>
-					{user.name} ({user.email}) - Age: {user.age}
-				</li>
-			{/each}
-		</ul>
-		<div class="pagination">
-			<button onclick={preloadedPaginatedUsers.previous} disabled={!preloadedPaginatedUsers.hasPrevious}>
-				Previous
-			</button>
-			<span>
-				Page {preloadedPaginatedUsers.currentPage} of ~{preloadedPaginatedUsers.estimatedTotalPages}
-			</span>
-			<button onclick={preloadedPaginatedUsers.next} disabled={!preloadedPaginatedUsers.hasNext}>
-				Next
-			</button>
-		</div>
-	{/if}
+  {#if preloadedPaginatedUsers.error}
+    <p>Error: {preloadedPaginatedUsers.error.message}</p>
+  {:else}
+    <ul>
+      {#each preloadedPaginatedUsers.data as user (user.id)}
+        <li>
+          {user.name} ({user.email}) - Age: {user.age}
+        </li>
+      {/each}
+    </ul>
+    <div class="pagination">
+      <button onclick={preloadedPaginatedUsers.previous} disabled={!preloadedPaginatedUsers.hasPrevious}>
+        Previous
+      </button>
+      <span>
+        Page {preloadedPaginatedUsers.currentPage} of ~{preloadedPaginatedUsers.estimatedTotalPages}
+      </span>
+      <button onclick={preloadedPaginatedUsers.next} disabled={!preloadedPaginatedUsers.hasNext}>
+        Next
+      </button>
+    </div>
+  {/if}
 </div>
 ```
 
@@ -1460,36 +1460,36 @@ export const load: PageServerLoad = async ({ params }) => {
 ```svelte
 <!-- src/routes/users/[id]/+page.svelte -->
 <script lang="ts">
-	import { queryOne } from '@sync-engine/svelte'
-	import type { PageData } from './$types'
+  import { queryOne } from '@sync-engine/svelte'
+  import type { PageData } from './$types'
 
-	interface Props {
-		data: PageData
-	}
+  interface Props {
+    data: PageData
+  }
 
-	let { data }: Props = $props()
+  let { data }: Props = $props()
 
-	// Reactive single query using preloaded data - no duplication!
-	const user = queryOne(data.preloadedUser)
+  // Reactive single query using preloaded data - no duplication!
+  const user = queryOne(data.preloadedUser)
 </script>
 
 {#if user.error}
-	<p>Error: {user.error.message}</p>
+  <p>Error: {user.error.message}</p>
 {:else if user.data}
-	<div class="user-profile">
-		<h1>{user.data.name}</h1>
-		<p>{user.data.email}</p>
-		<h2>Posts</h2>
-		{#each user.data.posts as post (post.id)}
-			<article>
-				<h3>{post.title}</h3>
-				<time>{post.createdAt.toDateString()}</time>
-			</article>
-		{/each}
-	</div>
-	{:else}
-		<p>User not found</p>
-	{/if}
+  <div class="user-profile">
+    <h1>{user.data.name}</h1>
+    <p>{user.data.email}</p>
+    <h2>Posts</h2>
+    {#each user.data.posts as post (post.id)}
+      <article>
+        <h3>{post.title}</h3>
+        <time>{post.createdAt.toDateString()}</time>
+      </article>
+    {/each}
+  </div>
+  {:else}
+    <p>User not found</p>
+  {/if}
 ```
 
 #### Rooms Integration
@@ -1566,52 +1566,52 @@ function DocumentEditor() {
 ```svelte
 <!-- Svelte - Real-time collaboration -->
 <script lang="ts">
-	import { useRoom } from '@sync-engine/svelte'
+  import { useRoom } from '@sync-engine/svelte'
 
-		const {
-		emit,
-		set,
-		setUserStatus,
-		roomStatus,
-		userStatuses,
-		on,
-		isConnected,
-		error
-	} = useRoom(client.rooms.documentEditor, 'doc-123')
+    const {
+    emit,
+    set,
+    setUserStatus,
+    roomStatus,
+    userStatuses,
+    on,
+    isConnected,
+    error
+  } = useRoom(client.rooms.documentEditor, 'doc-123')
 
-	// Event handling
-	on('like', (data, fromUserId) => {
-		showToast(`${fromUserId} liked: ${data.targetId}`)
-	})
+  // Event handling
+  on('like', (data, fromUserId) => {
+    showToast(`${fromUserId} liked: ${data.targetId}`)
+  })
 
-	on('celebration', (data, fromUserId) => {
-		showConfetti(data.x, data.y)
-	})
+  on('celebration', (data, fromUserId) => {
+    showConfetti(data.x, data.y)
+  })
 
-	const handleMouseMove = (e) => {
-		setUserStatus('cursor', { x: e.clientX, y: e.clientY })
-	}
+  const handleMouseMove = (e) => {
+    setUserStatus('cursor', { x: e.clientX, y: e.clientY })
+  }
 </script>
 
 {#if !isConnected}
-	<div>Connecting to room... {error ? `Error: ${error}` : ''}</div>
+  <div>Connecting to room... {error ? `Error: ${error}` : ''}</div>
 {:else}
-	<div on:mousemove={handleMouseMove}>
-		<h1>{roomStatus.documentTitle}</h1>
-		<p>Collaborators: {roomStatus.collaboratorCount}</p>
+  <div on:mousemove={handleMouseMove}>
+    <h1>{roomStatus.documentTitle}</h1>
+    <p>Collaborators: {roomStatus.collaboratorCount}</p>
 
-		<!-- Render other users' cursors -->
-		{#each Object.entries(userStatuses).filter(([userId]) => userId !== currentUser.id) as [userId, status] (userId)}
-			<Cursor
-				x={status.cursor.x}
-				y={status.cursor.y}
-				isTyping={status.isTyping}
-			/>
-		{/each}
+    <!-- Render other users' cursors -->
+    {#each Object.entries(userStatuses).filter(([userId]) => userId !== currentUser.id) as [userId, status] (userId)}
+      <Cursor
+        x={status.cursor.x}
+        y={status.cursor.y}
+        isTyping={status.isTyping}
+      />
+    {/each}
 
-		<button on:click={() => emit('like', { targetId: 'document', userId: currentUser.id })}>
-			Like Document
-		</button>
-	</div>
+    <button on:click={() => emit('like', { targetId: 'document', userId: currentUser.id })}>
+      Like Document
+    </button>
+  </div>
 {/if}
 ```

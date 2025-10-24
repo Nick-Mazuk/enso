@@ -6,7 +6,7 @@ This system is a local-first data replication and sync system designed for web b
 
 ## High-Level Architecture
 
-```
+```txt
 ┌─────────────────────────────────────────────────────────────────┐
 │                           Client (Browser)                      │
 ├─────────────────────────────────────────────────────────────────┤
@@ -107,7 +107,7 @@ This system is a local-first data replication and sync system designed for web b
 
 **Example Triple Set**:
 
-```
+```jsonc
 ("abc123", "user/name", "John Doe")
 ("abc123", "user/age", 30)
 ("abc123", "user/isActive", true)
