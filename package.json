@@ -1,7 +1,6 @@
 {
   "name": "enso",
   "module": "index.ts",
-  "type": "module",
   "devDependencies": {
     "@biomejs/biome": "2.3.0",
     "@types/bun": "latest"
@@ -12,5 +11,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {}
+  "type": "module",
+  "dependencies": {
+    "ts-brand": "^0.2.0"
+  }
 }
