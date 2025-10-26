@@ -1,12 +1,14 @@
 import { assert } from "../../../shared/assert";
 import { QueryContext } from "./query-context";
 import {
+	type Datom,
 	type Field,
 	type Id,
 	isVariable,
 	type QueryPattern,
 	type QueryVariable,
 	type Triple,
+	type Value,
 } from "./types";
 
 type Query<Find extends QueryVariable[]> = {
@@ -18,14 +20,29 @@ type Query<Find extends QueryVariable[]> = {
  * The Store is a class that manages the local data store for the client.
  */
 export class Store {
-	private triples: Triple[] = [];
+	// private triples: Triple[] = [];
+	private idIndex: Map<Id, Triple[]> = new Map();
+	private fieldIndex: Map<Field, Triple[]> = new Map();
+	private valueIndex: Map<Value, Triple[]> = new Map();
+	private tripleCount = 0;
 
 	add(...triples: Triple[]) {
 		// TODO: Check for duplicates -- if the id/field already exists, update the value
-		this.triples.push(...triples);
+		for (const triple of triples) {
+			this.addToIndex(this.idIndex, triple[0], triple);
+			this.addToIndex(this.fieldIndex, triple[1], triple);
+			this.addToIndex(this.valueIndex, triple[2], triple);
+		}
+		this.tripleCount += triples.length;
 	}
 
-	delete(triple: [Id, Field]) {}
+	private addToIndex(index: Map<Datom, Triple[]>, key: Datom, triple: Triple) {
+		if (!index.has(key)) {
+			index.set(key, [triple]);
+		} else {
+			index.get(key)?.push(triple);
+		}
+	}
 
 	query<Find extends QueryVariable[]>(query: Query<Find>) {
 		const contexts = this.queryMultiplePatterns(query.where);
@@ -76,13 +93,26 @@ export class Store {
 
 	private querySinglePattern(pattern: QueryPattern, context: QueryContext) {
 		const contexts: QueryContext[] = [];
-		for (const triple of this.triples) {
+		for (const triple of this.relevantTriples(pattern)) {
 			const newContext = this.matchPattern(pattern, triple, context);
 			if (newContext) {
 				contexts.push(newContext);
 			}
 		}
 		return contexts;
+	}
+
+	private relevantTriples(pattern: QueryPattern): Triple[] {
+		if (!isVariable(pattern[0])) {
+			return this.idIndex.get(pattern[0]) ?? [];
+		}
+		if (!isVariable(pattern[1])) {
+			return this.fieldIndex.get(pattern[1]) ?? [];
+		}
+		if (!isVariable(pattern[2])) {
+			return this.valueIndex.get(pattern[2]) ?? [];
+		}
+		return [];
 	}
 
 	private queryMultiplePatterns(patterns: QueryPattern[]) {
@@ -109,6 +139,6 @@ export class Store {
 	}
 
 	size() {
-		return this.triples.length;
+		return this.tripleCount;
 	}
 }
