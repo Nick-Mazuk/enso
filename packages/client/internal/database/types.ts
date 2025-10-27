@@ -11,7 +11,17 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 				? K
 				: never]?: E[K] extends Field<infer V, boolean> ? V : never;
 		},
-	) => DatabaseResult<void>;
+	) => DatabaseResult<
+		{
+			[K in keyof E as E[K] extends Field<FieldValue, false>
+				? K
+				: never]: E[K] extends Field<infer V, boolean> ? V : never;
+		} & {
+			[K in keyof E as E[K] extends Field<FieldValue, true>
+				? K
+				: never]?: E[K] extends Field<infer V, boolean> ? V : never;
+		} & { id: string }
+	>;
 };
 
 export type Database<
@@ -27,9 +37,9 @@ type DatabaseError = {
 export type DatabaseResult<T> =
 	| {
 			data: T;
-			error: undefined;
+			error?: never;
 	  }
 	| {
-			data: undefined;
+			data?: never;
 			error: DatabaseError;
 	  };

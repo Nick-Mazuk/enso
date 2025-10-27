@@ -24,7 +24,8 @@ export const createDatabase = <
 					]);
 				}
 				store.add(...triples);
-				return { data: undefined, error: undefined };
+				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
+				return { data: { ...fields, id } } as any;
 			},
 		};
 	}

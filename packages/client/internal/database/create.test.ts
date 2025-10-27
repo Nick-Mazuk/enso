@@ -61,7 +61,13 @@ describe("database.entity.create", () => {
 		});
 		const store = new Store();
 		const database = createDatabase(schema, store);
-		database.users.create({ name: "John Doe", age: 30 });
+		const result = database.users.create({ name: "John Doe", age: 30 });
 		expect(store.size()).toBe(2);
+		expect(result.error).toBeUndefined();
+		expect(result.data).toEqual({
+			id: expect.any(String),
+			name: "John Doe",
+			age: 30,
+		});
 	});
 });
