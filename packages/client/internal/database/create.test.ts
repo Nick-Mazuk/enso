@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
 import { createSchema, t } from "../../index";
+import { Store } from "../store";
 import { createDatabase } from "./create";
 
 describe("createDatabase", () => {
@@ -13,7 +14,8 @@ describe("createDatabase", () => {
 				tags: {},
 			},
 		});
-		const database = createDatabase(schema);
+		const store = new Store();
+		const database = createDatabase(schema, store);
 		expect(Object.keys(database)).toEqual(["users", "posts", "tags"]);
 		expectTypeOf(database).toHaveProperty("users");
 		expectTypeOf(database).toHaveProperty("posts");
@@ -33,7 +35,8 @@ describe("database.entity.create", () => {
 				},
 			},
 		});
-		const database = createDatabase(schema);
+		const store = new Store();
+		const database = createDatabase(schema, store);
 		expectTypeOf(database.users.create).parameters.toEqualTypeOf<
 			[
 				{
@@ -45,5 +48,20 @@ describe("database.entity.create", () => {
 				},
 			]
 		>();
+	});
+
+	it("creates a triple in the store", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+		database.users.create({ name: "John Doe", age: 30 });
+		expect(store.size()).toBe(2);
 	});
 });
