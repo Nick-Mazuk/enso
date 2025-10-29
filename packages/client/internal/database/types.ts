@@ -22,6 +22,7 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 				: never]?: E[K] extends Field<infer V, boolean> ? V : never;
 		} & { id: string }
 	>;
+	delete: (id: string) => DatabaseResult<void>;
 };
 
 export type Database<

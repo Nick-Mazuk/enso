@@ -138,6 +138,35 @@ export class Store {
 		return contexts;
 	}
 
+	deleteAllById(id: Id) {
+		const triples = this.idIndex.get(id) ?? [];
+		this.tripleCount -= triples.length;
+		this.idIndex.delete(id);
+		for (const triple of triples) {
+			// The field and value indexes may have
+			// triples that both reference this id and
+			// reference other ids.
+			const fieldTriples = this.fieldIndex.get(triple[1]);
+			if (fieldTriples) {
+				const newFieldTriples = fieldTriples.filter((t) => t[0] !== id);
+				if (newFieldTriples.length > 0) {
+					this.fieldIndex.set(triple[1], newFieldTriples);
+				} else {
+					this.fieldIndex.delete(triple[1]);
+				}
+			}
+			const valueTriples = this.valueIndex.get(triple[2]);
+			if (valueTriples) {
+				const newValueTriples = valueTriples.filter((t) => t[0] !== id);
+				if (newValueTriples.length > 0) {
+					this.valueIndex.set(triple[2], newValueTriples);
+				} else {
+					this.valueIndex.delete(triple[2]);
+				}
+			}
+		}
+	}
+
 	size() {
 		return this.tripleCount;
 	}
