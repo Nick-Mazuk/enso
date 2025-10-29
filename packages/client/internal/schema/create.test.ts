@@ -58,38 +58,38 @@ describe("createSchema", () => {
 				}),
 			).toThrow("Reserved field 'id' is not allowed");
 		});
-		it("createdAt is not allowed", () => {
+		it("createTime is not allowed", () => {
 			expect(() =>
 				createSchema({
 					entities: {
 						users: {
-							createdAt: t.string({ fallback: "" }),
+							createTime: t.string({ fallback: "" }),
 						},
 					},
 				}),
-			).toThrow("Reserved field 'createdAt' is not allowed");
+			).toThrow("Reserved field 'createTime' is not allowed");
 		});
-		it("updatedAt is not allowed", () => {
+		it("updateTime is not allowed", () => {
 			expect(() =>
 				createSchema({
 					entities: {
 						users: {
-							updatedAt: t.string({ fallback: "" }),
+							updateTime: t.string({ fallback: "" }),
 						},
 					},
 				}),
-			).toThrow("Reserved field 'updatedAt' is not allowed");
+			).toThrow("Reserved field 'updateTime' is not allowed");
 		});
-		it("createdBy is not allowed", () => {
+		it("creator is not allowed", () => {
 			expect(() =>
 				createSchema({
 					entities: {
 						users: {
-							createdBy: t.string({ fallback: "" }),
+							creator: t.string({ fallback: "" }),
 						},
 					},
 				}),
-			).toThrow("Reserved field 'createdBy' is not allowed");
+			).toThrow("Reserved field 'creator' is not allowed");
 		});
 	});
 });

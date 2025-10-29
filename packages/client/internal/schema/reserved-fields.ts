@@ -1,7 +1,7 @@
 export const reservedFields = [
 	"id",
-	"createdAt",
-	"updatedAt",
-	"createdBy",
+	"createTime",
+	"updateTime",
+	"creator",
 ] as const;
 export type ReservedField = (typeof reservedFields)[number];
