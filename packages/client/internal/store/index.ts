@@ -139,6 +139,7 @@ export class Store {
 	}
 
 	deleteAllById(id: Id) {
+		// TODO: potentially instead just add a tombstone triple to handle replication.
 		const triples = this.idIndex.get(id) ?? [];
 		this.tripleCount -= triples.length;
 		this.idIndex.delete(id);
