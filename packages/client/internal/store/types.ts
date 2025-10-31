@@ -1,11 +1,11 @@
-import { type Brand, make } from "ts-brand";
+import type { Tagged } from "type-fest";
 
-export type Id = Brand<string, "TripleId">;
-export const Id = make<Id>();
-export type Field = Brand<string, "TripleField">;
-export const Field = make<Field>();
-export type Value = Brand<string | number | boolean, "TripleValue"> | Id;
-export const Value = make<Value>();
+export type Id = Tagged<string, "TripleId">;
+export const Id = (id: string) => id as Id;
+export type Field = Tagged<string, "TripleField">;
+export const Field = (field: string) => field as Field;
+export type Value = Tagged<string | number | boolean, "TripleValue"> | Id;
+export const Value = (value: string | number | boolean) => value as Value;
 export type Datom = Id | Field | Value;
 export type Triple = [Id, Field, Value];
 

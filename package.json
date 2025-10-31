@@ -14,7 +14,6 @@
   "type": "module",
   "dependencies": {
     "nanoid": "^5.1.6",
-    "ts-brand": "^0.2.0",
     "type-fest": "^5.1.0"
   }
 }
