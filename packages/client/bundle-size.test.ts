@@ -10,7 +10,7 @@ it("uncompressed bundle size must not exceed 40kb", async () => {
 	});
 	const bundle = Bun.file("dist/uncompressed/index.js");
 	console.log(`Uncompressed bundle size is ${bundle.size / 1000}kb`);
-	expect(bundle.size).toBeLessThan(10_000);
+	expect(bundle.size).toBeLessThan(40_000);
 });
 
 it("compressed bundle size must not exceed 10kb", async () => {
