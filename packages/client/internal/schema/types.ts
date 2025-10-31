@@ -26,5 +26,5 @@ export type Entity<Fields extends Record<string, Field<FieldValue, boolean>>> =
 export type Schema<
 	Entities extends Record<string, Record<string, Field<FieldValue, boolean>>>,
 > = {
-	entities: Entities;
+	readonly entities: Entities;
 };

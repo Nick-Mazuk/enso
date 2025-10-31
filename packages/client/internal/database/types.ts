@@ -1,26 +1,74 @@
+import type { Simplify } from "type-fest";
 import type { Field, FieldValue, Schema } from "../schema/types";
+
+type GeneratedFields = { id: string };
 
 export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 	create: (
-		entity: {
-			[K in keyof E as E[K] extends Field<FieldValue, false>
-				? K
-				: never]: E[K] extends Field<infer V, boolean> ? V : never;
-		} & {
-			[K in keyof E as E[K] extends Field<FieldValue, true>
-				? K
-				: never]?: E[K] extends Field<infer V, boolean> ? V : never;
-		},
+		entity: Simplify<
+			{
+				[K in keyof E as E[K] extends Field<FieldValue, false>
+					? K
+					: never]: E[K] extends Field<infer V, boolean> ? V : never;
+			} & {
+				[K in keyof E as E[K] extends Field<FieldValue, true>
+					? K
+					: never]?: E[K] extends Field<infer V, boolean> ? V : never;
+			}
+		>,
 	) => DatabaseResult<
-		{
-			[K in keyof E as E[K] extends Field<FieldValue, false>
-				? K
-				: never]: E[K] extends Field<infer V, boolean> ? V : never;
-		} & {
-			[K in keyof E as E[K] extends Field<FieldValue, true>
-				? K
-				: never]?: E[K] extends Field<infer V, boolean> ? V : never;
-		} & { id: string }
+		Simplify<
+			{
+				[K in keyof E as E[K] extends Field<FieldValue, false>
+					? K
+					: never]: E[K] extends Field<infer V, boolean> ? V : never;
+			} & {
+				[K in keyof E as E[K] extends Field<FieldValue, true>
+					? K
+					: never]?: E[K] extends Field<infer V, boolean> ? V : never;
+			} & GeneratedFields
+		>
+	>;
+	query: <
+		Fields extends { [K in keyof (E & GeneratedFields)]?: boolean },
+	>(opts: {
+		fields: Fields;
+	}) => DatabaseResult<
+		Simplify<
+			{
+				[K in keyof Fields as Fields[K] extends true
+					? K extends keyof E
+						? E[K] extends Field<FieldValue, false>
+							? K
+							: never
+						: never
+					: never]: K extends keyof E
+					? E[K] extends Field<infer V, boolean>
+						? V
+						: never
+					: never;
+			} & {
+				[K in keyof Fields as Fields[K] extends true
+					? K extends keyof E
+						? E[K] extends Field<FieldValue, true>
+							? K
+							: never
+						: never
+					: never]?: K extends keyof E
+					? E[K] extends Field<infer V, boolean>
+						? V
+						: never
+					: never;
+			} & {
+				[K in keyof Fields as Fields[K] extends true
+					? K extends keyof GeneratedFields
+						? K
+						: never
+					: never]: K extends keyof GeneratedFields
+					? GeneratedFields[K]
+					: never;
+			}
+		>[]
 	>;
 	delete: (id: string) => DatabaseResult<void>;
 };

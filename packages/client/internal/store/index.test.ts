@@ -13,7 +13,6 @@ describe("add", () => {
 describe("deleteAllById", () => {
 	it("deletes all triples with the given id", () => {
 		const store = new Store();
-		console.log(movies.length);
 		store.add(...movies);
 		store.deleteAllById(Id("100"));
 		// There are 2 triples with the id 100:

@@ -14,5 +14,5 @@ export const createSchema = <
 			}
 		}
 	}
-	return schema;
+	return Object.freeze(schema);
 };
