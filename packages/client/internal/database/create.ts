@@ -49,7 +49,6 @@ export const createDatabase = <
 							Variable(field),
 						]),
 				});
-				console.log(response);
 				return {
 					data: response.map((data) => {
 						const result: Record<string, string> = {};
