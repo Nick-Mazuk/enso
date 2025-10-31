@@ -66,5 +66,5 @@ export const createDatabase = <
 			},
 		};
 	}
-	return database as Database<S>;
+	return Object.freeze(database) as Database<S>;
 };
