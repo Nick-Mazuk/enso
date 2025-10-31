@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
+import { assert } from "../../../shared/assert";
 import { createSchema, t } from "../../index";
 import { Store } from "../store";
 import { createDatabase } from "./create";
@@ -148,12 +149,13 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		database.users.create({ name: "John Doe", age: 30 });
+		const user = database.users.create({ name: "John Doe", age: 30 });
+		assert(user.data !== undefined, "User was not created successfully");
 
 		const result = database.users.query({ fields: { id: true } });
 		expectTypeOf(result).toEqualTypeOf<DatabaseResult<{ id: string }[]>>();
 		expect(result).toEqual({
-			data: [{ id: expect.any(String) }],
+			data: [{ id: user.data.id }],
 		});
 	});
 
@@ -170,7 +172,8 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			database.users.create({ name: "John Doe", age: 30 });
+			const user = database.users.create({ name: "John Doe", age: 30 });
+			assert(user.data !== undefined, "User was not created successfully");
 
 			const result = database.users.query({
 				fields: { name: true, id: true },
@@ -179,7 +182,7 @@ describe("database.entity.query", () => {
 				DatabaseResult<{ name: string; id: string }[]>
 			>();
 			expect(result).toEqual({
-				data: [{ id: expect.any(String), name: "John Doe" }],
+				data: [{ id: user.data.id, name: "John Doe" }],
 			});
 		});
 	});
