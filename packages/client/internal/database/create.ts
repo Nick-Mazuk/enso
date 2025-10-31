@@ -3,6 +3,7 @@ import type { Field, FieldValue, Schema } from "../schema/types";
 import type { Store } from "../store";
 import {
 	Id,
+	type QueryPattern,
 	Field as StoreField,
 	type Triple,
 	Value,
@@ -38,17 +39,27 @@ export const createDatabase = <
 				const fields = Object.entries(opts.fields)
 					.filter(([_, value]) => value)
 					.map(([key]) => key);
-				// DO NOT SUBMIT: make it so if the triple for the field doesn't exist, this returns undefined
-				const response = store.query({
-					find: fields.map(Variable),
-					where: fields
-						.filter((field) => field !== "id")
-						.map((field) => [
+				const find = fields.map(Variable);
+				const where: QueryPattern[] = [
+					[
+						Variable("id"),
+						StoreField(`${entity}/id`),
+						// binding to a separate value here enables the developer to query for just an objects id
+						Variable("$$$id_val$$$"),
+					],
+				];
+				fields
+					.filter((field) => field !== "id")
+					.forEach((field) => {
+						where.push([
 							Variable("id"),
 							StoreField(`${entity}/${field}`),
 							Variable(field),
-						]),
-				});
+						]);
+					});
+
+				// DO NOT SUBMIT: make it so if the triple for the field doesn't exist, this returns undefined
+				const response = store.query({ find, where });
 				return {
 					data: response.map((data) => {
 						const result: Record<string, string> = {};
