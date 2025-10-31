@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "bun:test";
 import { createSchema, t } from "../../index";
 import { Store } from "../store";
 import { createDatabase } from "./create";
+import type { DatabaseResult } from "./types";
 
 describe("createDatabase", () => {
 	it("creates a database the correct keys", () => {
@@ -103,6 +104,9 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe", age: 30 });
 
 		const result = database.users.query({ fields: { age: true, name: true } });
+		expectTypeOf(result).toEqualTypeOf<
+			DatabaseResult<{ name: string; age?: number }[]>
+		>();
 		expect(result).toEqual({
 			data: [{ name: "John Doe", age: 30 }],
 		});
@@ -124,6 +128,9 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe" });
 
 		const result = database.users.query({ fields: { age: true, name: true } });
+		expectTypeOf(result).toEqualTypeOf<
+			DatabaseResult<{ name: string; age?: number }[]>
+		>();
 		expect(result).toEqual({
 			data: [{ name: "John Doe", age: 30 }, { name: "John Doe" }],
 		});
@@ -144,6 +151,7 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe", age: 30 });
 
 		const result = database.users.query({ fields: { id: true } });
+		expectTypeOf(result).toEqualTypeOf<DatabaseResult<{ id: string }[]>>();
 		expect(result).toEqual({
 			data: [{ id: expect.any(String) }],
 		});
@@ -167,6 +175,9 @@ describe("database.entity.query", () => {
 			const result = database.users.query({
 				fields: { name: true, id: true },
 			});
+			expectTypeOf(result).toEqualTypeOf<
+				DatabaseResult<{ name: string; id: string }[]>
+			>();
 			expect(result).toEqual({
 				data: [{ id: expect.any(String), name: "John Doe" }],
 			});
