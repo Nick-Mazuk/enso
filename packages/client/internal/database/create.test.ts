@@ -97,22 +97,6 @@ describe("database.entity.create", () => {
 });
 
 describe("database.entity.query", () => {
-	it("argument type is inferred correctly", () => {
-		const schema = createSchema({
-			entities: {
-				users: {
-					name: t.string({ fallback: "" }),
-					age: t.number({ optional: true }),
-				},
-			},
-		});
-		const store = new Store();
-		const database = createDatabase(schema, store);
-		expectTypeOf(database.users.query).parameters.toEqualTypeOf<
-			[{ fields: { name?: boolean; age?: boolean; id?: boolean } }]
-		>();
-	});
-
 	it("can query for all schema fields", () => {
 		const schema = createSchema({
 			entities: {
@@ -358,7 +342,12 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const result = database.users.query({
-			fields: { name: true, age: true, notInSchema: true },
+			fields: {
+				name: true,
+				age: true,
+				// @ts-expect-error
+				notInSchema: true,
+			},
 		});
 		expect(result.error).toBeDefined();
 		expect(result.error?.message).toContain(

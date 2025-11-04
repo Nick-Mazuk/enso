@@ -30,7 +30,11 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 		>
 	>;
 	query: <
-		Fields extends { [K in keyof (E & GeneratedFields)]?: boolean },
+		Fields extends {
+			[K in keyof Fields]?: K extends keyof (E & GeneratedFields)
+				? boolean | undefined
+				: never;
+		},
 	>(opts: {
 		fields: Fields;
 	}) => DatabaseResult<
