@@ -58,7 +58,7 @@ export const createDatabase = <
 				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 				return { data: { ...fields, id } } as any;
 			},
-			query: (opts) => {
+			query: async (opts) => {
 				const entitySchema = schema.entities[entity];
 				assert(
 					entitySchema !== undefined,

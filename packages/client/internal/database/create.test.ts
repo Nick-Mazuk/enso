@@ -97,7 +97,7 @@ describe("database.entity.create", () => {
 });
 
 describe("database.entity.query", () => {
-	it("can query for all schema fields", () => {
+	it("can query for all schema fields", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -111,7 +111,9 @@ describe("database.entity.query", () => {
 
 		database.users.create({ name: "John Doe", age: 30 });
 
-		const result = database.users.query({ fields: { age: true, name: true } });
+		const result = await database.users.query({
+			fields: { age: true, name: true },
+		});
 		expectTypeOf(result).toEqualTypeOf<
 			DatabaseResult<{ name: string; age?: number }[]>
 		>();
@@ -120,7 +122,7 @@ describe("database.entity.query", () => {
 		});
 	});
 
-	it("objects with missing optional fields are still returned", () => {
+	it("objects with missing optional fields are still returned", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -135,7 +137,9 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe", age: 30 });
 		database.users.create({ name: "John Doe" });
 
-		const result = database.users.query({ fields: { age: true, name: true } });
+		const result = await database.users.query({
+			fields: { age: true, name: true },
+		});
 		expectTypeOf(result).toEqualTypeOf<
 			DatabaseResult<{ name: string; age?: number }[]>
 		>();
@@ -144,7 +148,7 @@ describe("database.entity.query", () => {
 		});
 	});
 
-	it("can query for the auto-generated id", () => {
+	it("can query for the auto-generated id", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -159,7 +163,7 @@ describe("database.entity.query", () => {
 		const user = database.users.create({ name: "John Doe", age: 30 });
 		assert(user.data !== undefined, "User was not created successfully");
 
-		const result = database.users.query({ fields: { id: true } });
+		const result = await database.users.query({ fields: { id: true } });
 		expectTypeOf(result).toEqualTypeOf<DatabaseResult<{ id: string }[]>>();
 		expect(result).toEqual({
 			data: [{ id: user.data.id }],
@@ -167,7 +171,7 @@ describe("database.entity.query", () => {
 	});
 
 	it("can query for auto-generated and schema fields in the same query", () => {
-		it("can query for all schema fields", () => {
+		it("can query for all schema fields", async () => {
 			const schema = createSchema({
 				entities: {
 					users: {
@@ -182,7 +186,7 @@ describe("database.entity.query", () => {
 			const user = database.users.create({ name: "John Doe", age: 30 });
 			assert(user.data !== undefined, "User was not created successfully");
 
-			const result = database.users.query({
+			const result = await database.users.query({
 				fields: { name: true, id: true },
 			});
 			expectTypeOf(result).toEqualTypeOf<
@@ -194,7 +198,7 @@ describe("database.entity.query", () => {
 		});
 	});
 
-	it("should apply fallback for required fields when data is missing", () => {
+	it("should apply fallback for required fields when data is missing", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -222,7 +226,7 @@ describe("database.entity.query", () => {
 			// DO NOT add the 'users/name' triple
 		);
 
-		const result = database.users.query({
+		const result = await database.users.query({
 			fields: { name: true, age: true },
 		});
 
@@ -246,7 +250,7 @@ describe("database.entity.query", () => {
 		});
 	});
 
-	it("should apply fallback for an optional field when data is missing", () => {
+	it("should apply fallback for an optional field when data is missing", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -261,7 +265,7 @@ describe("database.entity.query", () => {
 		database.users.create({ age: 30 });
 		database.users.create({});
 
-		const result = database.users.query({
+		const result = await database.users.query({
 			fields: { age: true },
 		});
 
@@ -278,7 +282,7 @@ describe("database.entity.query", () => {
 		]);
 	});
 
-	it("should return an empty array when querying an empty database", () => {
+	it("should return an empty array when querying an empty database", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -290,11 +294,13 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const result = database.users.query({ fields: { name: true, age: true } });
+		const result = await database.users.query({
+			fields: { name: true, age: true },
+		});
 		expect(result.data).toEqual([]);
 	});
 
-	it("should return an empty array when querying for no fields in an empty database", () => {
+	it("should return an empty array when querying for no fields in an empty database", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -306,11 +312,11 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const result = database.users.query({ fields: {} });
+		const result = await database.users.query({ fields: {} });
 		expect(result.data).toEqual([]);
 	});
 
-	it("should return an array of empty objects when querying for no fields", () => {
+	it("should return an array of empty objects when querying for no fields", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -325,11 +331,11 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe", age: 30 });
 		database.users.create({ name: "Jane Doe" });
 
-		const result = database.users.query({ fields: {} });
+		const result = await database.users.query({ fields: {} });
 		expect(result.data).toEqual([{}, {}]);
 	});
 
-	it("should throw an error when querying for a field that is not in the schema", () => {
+	it("should throw an error when querying for a field that is not in the schema", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -341,7 +347,7 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const result = database.users.query({
+		const result = await database.users.query({
 			fields: {
 				name: true,
 				age: true,
@@ -356,7 +362,7 @@ describe("database.entity.query", () => {
 		expect(result.data).toBeUndefined();
 	});
 
-	it("should only return entities of the queried type", () => {
+	it("should only return entities of the queried type", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -373,14 +379,14 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "John Doe" });
 		database.posts.create({ name: "Jane Doe" });
 
-		const result = database.users.query({ fields: { name: true } });
+		const result = await database.users.query({ fields: { name: true } });
 		expect(result.data).toEqual([{ name: "John Doe" }]);
 
-		const result2 = database.posts.query({ fields: { name: true } });
+		const result2 = await database.posts.query({ fields: { name: true } });
 		expect(result2.data).toEqual([{ name: "Jane Doe" }]);
 	});
 
-	it("should correctly retrieve entities that only have optional fields, even when created with no data", () => {
+	it("should correctly retrieve entities that only have optional fields, even when created with no data", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -398,14 +404,14 @@ describe("database.entity.query", () => {
 		const user2 = database.users.create({});
 		assert(user2.data !== undefined, "Expected create to succeed");
 
-		const result = database.users.query({
+		const result = await database.users.query({
 			fields: { id: true, name: true, age: true },
 		});
 		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
 		expect(result.data).toEqual([{ id: user1.data.id }, { id: user2.data.id }]);
 	});
 
-	it("should apply fallbacks for multiple required fields of different types", () => {
+	it("should apply fallbacks for multiple required fields of different types", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -423,7 +429,7 @@ describe("database.entity.query", () => {
 		const user2 = database.users.create({});
 		assert(user2.data !== undefined, "Expected create to succeed");
 
-		const result = database.users.query({
+		const result = await database.users.query({
 			fields: { id: true, name: true, isVerified: true },
 		});
 		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
