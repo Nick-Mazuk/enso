@@ -46,6 +46,17 @@ export const createDatabase = <
 				const fields = Object.entries(opts.fields)
 					.filter(([_, value]) => value)
 					.map(([key]) => key);
+				// validate fields
+				for (const field of fields) {
+					if (field === "id") continue;
+					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
+					if (fieldSchema === undefined) {
+						return {
+							error: { message: `Field '${field}' not found in schema` },
+							data: undefined,
+						};
+					}
+				}
 				const find = fields.map(Variable);
 				const where: QueryPattern[] = [
 					[
@@ -84,7 +95,7 @@ export const createDatabase = <
 								fieldSchema !== undefined,
 								`Field '${field}' not found in schema`,
 							);
-							if (fieldSchema.fallback !== undefined && !fieldSchema.optional) {
+							if (fieldSchema.fallback !== undefined) {
 								result[field] = Value(fieldSchema.fallback);
 							}
 						}

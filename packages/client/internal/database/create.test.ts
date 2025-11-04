@@ -239,4 +239,186 @@ describe("database.entity.query", () => {
 			age: 40,
 		});
 	});
+
+	it("should apply fallback for an optional field when data is missing", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					age: t.number({ optional: true, fallback: 42 }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		// User 1: Create a normal user
+		database.users.create({ age: 30 });
+		database.users.create({});
+
+		const result = database.users.query({
+			fields: { age: true },
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.data).toBeDefined();
+		expect(result.data?.length).toBe(2);
+
+		// Sort by age for stable test
+		const sortedData = result.data?.sort((a, b) => (a.age || 0) - (b.age || 0));
+
+		expect(sortedData).toEqual([
+			{ age: 30 },
+			{ age: 42 }, // Uses the fallback
+		]);
+	});
+
+	it("should return an empty array when querying an empty database", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const result = database.users.query({ fields: { name: true, age: true } });
+		expect(result.data).toEqual([]);
+	});
+
+	it("should return an empty array when querying for no fields in an empty database", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const result = database.users.query({ fields: {} });
+		expect(result.data).toEqual([]);
+	});
+
+	it("should return an array of empty objects when querying for no fields", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		database.users.create({ name: "John Doe", age: 30 });
+		database.users.create({ name: "Jane Doe" });
+
+		const result = database.users.query({ fields: {} });
+		expect(result.data).toEqual([{}, {}]);
+	});
+
+	it("should throw an error when querying for a field that is not in the schema", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const result = database.users.query({
+			fields: { name: true, age: true, notInSchema: true },
+		});
+		expect(result.error).toBeDefined();
+		expect(result.error?.message).toContain(
+			"Field 'notInSchema' not found in schema",
+		);
+		expect(result.data).toBeUndefined();
+	});
+
+	it("should only return entities of the queried type", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+				posts: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		database.users.create({ name: "John Doe" });
+		database.posts.create({ name: "Jane Doe" });
+
+		const result = database.users.query({ fields: { name: true } });
+		expect(result.data).toEqual([{ name: "John Doe" }]);
+
+		const result2 = database.posts.query({ fields: { name: true } });
+		expect(result2.data).toEqual([{ name: "Jane Doe" }]);
+	});
+
+	it("should correctly retrieve entities that only have optional fields, even when created with no data", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ optional: true }),
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const user1 = database.users.create({});
+		assert(user1.data !== undefined, "Expected create to succeed");
+		const user2 = database.users.create({});
+		assert(user2.data !== undefined, "Expected create to succeed");
+
+		const result = database.users.query({
+			fields: { id: true, name: true, age: true },
+		});
+		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
+		expect(result.data).toEqual([{ id: user1.data.id }, { id: user2.data.id }]);
+	});
+
+	it("should apply fallbacks for multiple required fields of different types", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ optional: true, fallback: "string" }),
+					isVerified: t.boolean({ optional: true, fallback: false }),
+				},
+			},
+		});
+
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const user1 = database.users.create({});
+		assert(user1.data !== undefined, "Expected create to succeed");
+		const user2 = database.users.create({});
+		assert(user2.data !== undefined, "Expected create to succeed");
+
+		const result = database.users.query({
+			fields: { id: true, name: true, isVerified: true },
+		});
+		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
+		expect(result.data).toEqual([
+			{ id: user1.data.id, name: "string", isVerified: false },
+			{ id: user2.data.id, name: "string", isVerified: false },
+		]);
+	});
 });
