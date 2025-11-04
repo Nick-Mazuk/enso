@@ -1,4 +1,4 @@
-name: CI
+name: ci-typescript
 jobs:
   my-job:
     name: tests
