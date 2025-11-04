@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "bun:test";
 import { assert } from "../../../shared/assert";
 import { createSchema, t } from "../../index";
 import { Store } from "../store";
+import { Field, Id, Value } from "../store/types";
 import { createDatabase } from "./create";
 import type { DatabaseResult } from "./types";
 
@@ -184,6 +185,58 @@ describe("database.entity.query", () => {
 			expect(result).toEqual({
 				data: [{ id: user.data.id, name: "John Doe" }],
 			});
+		});
+	});
+
+	it("should apply fallback for required fields when data is missing", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					// 'name' is required (has a fallback, not optional)
+					name: t.string({ fallback: "Anonymous" }),
+					// 'age' is optional
+					age: t.number({ optional: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		// User 1: Create a normal user
+		const user1 = database.users.create({ name: "John Doe", age: 30 });
+		assert(user1.data !== undefined, "User 1 was not created successfully");
+
+		// User 2: Simulate a user with missing 'name' triple.
+		// We do this by adding triples directly to the store,
+		// bypassing the database.create() guarantees.
+		const user2Id = "id-user-2";
+		store.add(
+			[Id(user2Id), Field("users/id"), Value(user2Id)],
+			[Id(user2Id), Field("users/age"), Value(40)],
+			// DO NOT add the 'users/name' triple
+		);
+
+		const result = database.users.query({
+			fields: { name: true, age: true },
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(result.data).toBeDefined();
+		expect(result.data?.length).toBe(2);
+
+		// Sort by age for stable test
+		const sortedData = result.data?.sort((a, b) => (a.age || 0) - (b.age || 0));
+
+		// User 1 should be complete
+		expect(sortedData?.[0]).toEqual({
+			name: "John Doe",
+			age: 30,
+		});
+
+		// User 2 should have its name replaced by the fallback
+		expect(sortedData?.[1]).toEqual({
+			name: "Anonymous",
+			age: 40,
 		});
 	});
 });

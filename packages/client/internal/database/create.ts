@@ -43,7 +43,6 @@ export const createDatabase = <
 					entitySchema !== undefined,
 					`Entity '${entity}' not found in schema`,
 				);
-				console.log(entitySchema);
 				const fields = Object.entries(opts.fields)
 					.filter(([_, value]) => value)
 					.map(([key]) => key);
@@ -59,24 +58,11 @@ export const createDatabase = <
 				const optional: QueryPattern[] = [];
 				for (const field of fields) {
 					if (field === "id") continue;
-					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
-					assert(
-						fieldSchema !== undefined,
-						`Field '${field}' not found in schema`,
-					);
-					if (fieldSchema.optional) {
-						optional.push([
-							Variable("id"),
-							StoreField(`${entity}/${field}`),
-							Variable(field),
-						]);
-					} else {
-						where.push([
-							Variable("id"),
-							StoreField(`${entity}/${field}`),
-							Variable(field),
-						]);
-					}
+					optional.push([
+						Variable("id"),
+						StoreField(`${entity}/${field}`),
+						Variable(field),
+					]);
 				}
 
 				const response = store.query({ find, where, optional });
@@ -87,8 +73,20 @@ export const createDatabase = <
 							const field = fields[i];
 							if (field === undefined) continue;
 							const dataItem = data[i];
-							if (dataItem === undefined) continue;
-							result[field] = dataItem;
+							if (dataItem !== undefined) {
+								result[field] = dataItem;
+								continue;
+							}
+							if (field === "id") continue;
+							const fieldSchema =
+								entitySchema[field as keyof typeof entitySchema];
+							assert(
+								fieldSchema !== undefined,
+								`Field '${field}' not found in schema`,
+							);
+							if (fieldSchema.fallback !== undefined && !fieldSchema.optional) {
+								result[field] = Value(fieldSchema.fallback);
+							}
 						}
 						// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 						return result as any;
