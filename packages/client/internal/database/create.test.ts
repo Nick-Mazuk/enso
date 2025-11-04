@@ -72,6 +72,28 @@ describe("database.entity.create", () => {
 			age: 30,
 		});
 	});
+
+	it("create errors if required field is not present", () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+
+		const store = new Store();
+		const database = createDatabase(schema, store);
+		const result = database.users.create(
+			// @ts-expect-error
+			{},
+		);
+		expect(result).toEqual({
+			error: {
+				message: `Missing required field "name" when creating entity "users"`,
+			},
+		});
+	});
 });
 
 describe("database.entity.query", () => {

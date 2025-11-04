@@ -23,6 +23,27 @@ export const createDatabase = <
 	for (const entity in schema.entities) {
 		database[entity as keyof S["entities"]] = {
 			create: (fields) => {
+				const entitySchema = schema.entities[entity];
+				assert(
+					entitySchema !== undefined,
+					`Entity '${entity}' not found in schema`,
+				);
+				for (const schemaField in entitySchema) {
+					const fieldDefinition = entitySchema[schemaField];
+					assert(
+						fieldDefinition !== undefined,
+						`Field definition for ${schemaField} does not exist in entity ${entity}`,
+					);
+					const isRequired = fieldDefinition.optional !== true;
+					if (isRequired && !(schemaField in fields)) {
+						return {
+							error: {
+								message: `Missing required field "${schemaField}" when creating entity "${entity}"`,
+							},
+						};
+					}
+				}
+
 				const id = Id(nanoid());
 				const triples: Triple[] = [];
 				for (const field in fields) {
