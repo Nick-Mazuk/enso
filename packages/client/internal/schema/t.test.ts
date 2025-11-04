@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, it } from "bun:test";
+import { describe, expect, expectTypeOf, it } from "bun:test";
 import { t } from "./t";
 import type { Field } from "./types";
 
@@ -28,9 +28,22 @@ describe("t.string", () => {
 		expectTypeOf(field).toEqualTypeOf<Field<string, true>>();
 	});
 
-	it("typescript errors when the optional is false and fallback is not provided", () => {
-		// @ts-expect-error - fallback is required when optional is false
-		t.string({ optional: false });
+	it("errors when the optional is false and fallback is not provided", () => {
+		expect(() =>
+			t.string(
+				// @ts-expect-error - fallback is required when optional is false
+				{ optional: false },
+			),
+		).toThrow();
+	});
+
+	it("fallback must be a string", () => {
+		expect(() =>
+			t.string(
+				// @ts-expect-error - fallback is required when optional is false
+				{ fallback: false },
+			),
+		).toThrow();
 	});
 });
 
@@ -61,8 +74,21 @@ describe("t.number", () => {
 	});
 
 	it("typescript errors when the optional is false and fallback is not provided", () => {
-		// @ts-expect-error - fallback is required when optional is false
-		t.number({ optional: false });
+		expect(() =>
+			t.number(
+				// @ts-expect-error - fallback is required when optional is false
+				{ optional: false },
+			),
+		).toThrow();
+	});
+
+	it("fallback must be a number", () => {
+		expect(() =>
+			t.number(
+				// @ts-expect-error - fallback is required when optional is false
+				{ fallback: false },
+			),
+		).toThrow();
 	});
 });
 
@@ -92,8 +118,21 @@ describe("t.boolean", () => {
 		expectTypeOf(field).toEqualTypeOf<Field<boolean, true>>();
 	});
 
-	it("typescript errors when the optional is false and fallback is not provided", () => {
-		// @ts-expect-error - fallback is required when optional is false
-		t.boolean({ optional: false });
+	it("errors when the optional is false and fallback is not provided", () => {
+		expect(() =>
+			t.boolean(
+				// @ts-expect-error - fallback is required when optional is false
+				{ optional: false },
+			),
+		).toThrow();
+	});
+
+	it("fallback must be a boolean", () => {
+		expect(() =>
+			t.boolean(
+				// @ts-expect-error - fallback is required when optional is false
+				{ fallback: "hello" },
+			),
+		).toThrow();
 	});
 });
