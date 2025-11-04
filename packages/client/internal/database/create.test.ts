@@ -170,31 +170,29 @@ describe("database.entity.query", () => {
 		});
 	});
 
-	it("can query for auto-generated and schema fields in the same query", () => {
-		it("can query for all schema fields", async () => {
-			const schema = createSchema({
-				entities: {
-					users: {
-						name: t.string({ fallback: "" }),
-						age: t.number({ optional: true }),
-					},
+	it("can query for auto-generated and schema fields in the same query", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+					age: t.number({ optional: true }),
 				},
-			});
-			const store = new Store();
-			const database = createDatabase(schema, store);
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
 
-			const user = database.users.create({ name: "John Doe", age: 30 });
-			assert(user.data !== undefined, "User was not created successfully");
+		const user = database.users.create({ name: "John Doe", age: 30 });
+		assert(user.data !== undefined, "User was not created successfully");
 
-			const result = await database.users.query({
-				fields: { name: true, id: true },
-			});
-			expectTypeOf(result).toEqualTypeOf<
-				DatabaseResult<{ name: string; id: string }[]>
-			>();
-			expect(result).toEqual({
-				data: [{ id: user.data.id, name: "John Doe" }],
-			});
+		const result = await database.users.query({
+			fields: { name: true, id: true },
+		});
+		expectTypeOf(result).toEqualTypeOf<
+			DatabaseResult<{ name: string; id: string }[]>
+		>();
+		expect(result).toEqual({
+			data: [{ id: user.data.id, name: "John Doe" }],
 		});
 	});
 
