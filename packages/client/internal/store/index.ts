@@ -14,6 +14,7 @@ import {
 type Query<Find extends QueryVariable[]> = {
 	find: Find;
 	where: QueryPattern[];
+	optional?: QueryPattern[];
 };
 
 /**
@@ -45,7 +46,12 @@ export class Store {
 	}
 
 	query<Find extends QueryVariable[]>(query: Query<Find>) {
-		const contexts = this.queryMultiplePatterns(query.where);
+		let contexts = this.queryMultiplePatterns(query.where);
+		if (query.optional && query.optional.length > 0 && contexts.length > 0) {
+			for (const pattern of query.optional) {
+				contexts = this.queryOptionalPattern(pattern, contexts);
+			}
+		}
 		return contexts.map((context) => {
 			return query.find.map((datom) => {
 				return isVariable(datom) ? context.get(datom) : datom;
@@ -89,6 +95,24 @@ export class Store {
 			}
 		}
 		return newContext;
+	}
+
+	private queryOptionalPattern(
+		pattern: QueryPattern,
+		contexts: QueryContext[],
+	) {
+		const newContexts: QueryContext[] = [];
+
+		for (const context of contexts) {
+			const matches = this.querySinglePattern(pattern, context);
+
+			if (matches.length > 0) {
+				newContexts.push(...matches);
+			} else {
+				newContexts.push(context);
+			}
+		}
+		return newContexts;
 	}
 
 	private querySinglePattern(pattern: QueryPattern, context: QueryContext) {
