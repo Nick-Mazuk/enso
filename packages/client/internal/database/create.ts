@@ -1,7 +1,9 @@
 import { nanoid } from "nanoid";
+import { assert } from "../../../shared/assert";
 import type { Field, FieldValue, Schema } from "../schema/types";
 import type { Store } from "../store";
 import {
+	type Datom,
 	Id,
 	type QueryPattern,
 	Field as StoreField,
@@ -36,6 +38,12 @@ export const createDatabase = <
 				return { data: { ...fields, id } } as any;
 			},
 			query: (opts) => {
+				const entitySchema = schema.entities[entity];
+				assert(
+					entitySchema !== undefined,
+					`Entity '${entity}' not found in schema`,
+				);
+				console.log(entitySchema);
 				const fields = Object.entries(opts.fields)
 					.filter(([_, value]) => value)
 					.map(([key]) => key);
@@ -48,26 +56,42 @@ export const createDatabase = <
 						Variable("$$$id_val$$$"),
 					],
 				];
-				fields
-					.filter((field) => field !== "id")
-					.forEach((field) => {
+				const optional: QueryPattern[] = [];
+				for (const field of fields) {
+					if (field === "id") continue;
+					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
+					assert(
+						fieldSchema !== undefined,
+						`Field '${field}' not found in schema`,
+					);
+					if (fieldSchema.optional) {
+						optional.push([
+							Variable("id"),
+							StoreField(`${entity}/${field}`),
+							Variable(field),
+						]);
+					} else {
 						where.push([
 							Variable("id"),
 							StoreField(`${entity}/${field}`),
 							Variable(field),
 						]);
-					});
+					}
+				}
 
-				// DO NOT SUBMIT: make it so if the triple for the field doesn't exist, this returns undefined
-				const response = store.query({ find, where });
+				const response = store.query({ find, where, optional });
 				return {
 					data: response.map((data) => {
-						const result: Record<string, string> = {};
+						const result: Record<string, Datom> = {};
 						for (let i = 0; i < fields.length; i++) {
-							// DO NOT SUBMIT: for required fields without data, set this to the fallback.
-							result[fields[i]] = data[i];
+							const field = fields[i];
+							if (field === undefined) continue;
+							const dataItem = data[i];
+							if (dataItem === undefined) continue;
+							result[field] = dataItem;
 						}
-						return result;
+						// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
+						return result as any;
 					}),
 				};
 			},
