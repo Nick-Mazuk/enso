@@ -91,10 +91,10 @@ type DatabaseError = {
 
 export type DatabaseResult<T> =
 	| {
+			success: true;
 			data: T;
-			error?: never;
 	  }
 	| {
-			data?: never;
+			success: false;
 			error: DatabaseError;
 	  };

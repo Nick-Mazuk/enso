@@ -65,7 +65,9 @@ describe("database.entity.create", () => {
 		const database = createDatabase(schema, store);
 		const result = database.users.create({ name: "John Doe", age: 30 });
 		expect(store.size()).toBe(3); // id, name, age
-		expect(result.error).toBeUndefined();
+		assert(result.success, "Expected the query to work");
+		// biome-ignore lint/suspicious/noExplicitAny: needed to test runtime behavior
+		expect((result as any).error).toBeUndefined();
 		expect(result.data).toEqual({
 			id: expect.any(String),
 			name: "John Doe",
@@ -89,6 +91,7 @@ describe("database.entity.create", () => {
 			{},
 		);
 		expect(result).toEqual({
+			success: false,
 			error: {
 				message: `Missing required field "name" when creating entity "users"`,
 			},
@@ -118,6 +121,7 @@ describe("database.entity.query", () => {
 			DatabaseResult<{ name: string; age?: number }[]>
 		>();
 		expect(result).toEqual({
+			success: true,
 			data: [{ name: "John Doe", age: 30 }],
 		});
 	});
@@ -144,6 +148,7 @@ describe("database.entity.query", () => {
 			DatabaseResult<{ name: string; age?: number }[]>
 		>();
 		expect(result).toEqual({
+			success: true,
 			data: [{ name: "John Doe", age: 30 }, { name: "John Doe" }],
 		});
 	});
@@ -161,11 +166,12 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const user = database.users.create({ name: "John Doe", age: 30 });
-		assert(user.data !== undefined, "User was not created successfully");
+		assert(user.success, "User was not created successfully");
 
 		const result = await database.users.query({ fields: { id: true } });
 		expectTypeOf(result).toEqualTypeOf<DatabaseResult<{ id: string }[]>>();
 		expect(result).toEqual({
+			success: true,
 			data: [{ id: user.data.id }],
 		});
 	});
@@ -183,7 +189,7 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const user = database.users.create({ name: "John Doe", age: 30 });
-		assert(user.data !== undefined, "User was not created successfully");
+		assert(user.success, "User was not created successfully");
 
 		const result = await database.users.query({
 			fields: { name: true, id: true },
@@ -192,6 +198,7 @@ describe("database.entity.query", () => {
 			DatabaseResult<{ name: string; id: string }[]>
 		>();
 		expect(result).toEqual({
+			success: true,
 			data: [{ id: user.data.id, name: "John Doe" }],
 		});
 	});
@@ -212,7 +219,7 @@ describe("database.entity.query", () => {
 
 		// User 1: Create a normal user
 		const user1 = database.users.create({ name: "John Doe", age: 30 });
-		assert(user1.data !== undefined, "User 1 was not created successfully");
+		assert(user1.success, "User 1 was not created successfully");
 
 		// User 2: Simulate a user with missing 'name' triple.
 		// We do this by adding triples directly to the store,
@@ -227,10 +234,11 @@ describe("database.entity.query", () => {
 		const result = await database.users.query({
 			fields: { name: true, age: true },
 		});
+		assert(result.success, "expected the query to succeed");
 
-		expect(result.error).toBeUndefined();
-		expect(result.data).toBeDefined();
-		expect(result.data?.length).toBe(2);
+		// biome-ignore lint/suspicious/noExplicitAny: needed to test runtime behavior
+		expect((result as any).error).toBeUndefined();
+		expect(result.data.length).toBe(2);
 
 		// Sort by age for stable test
 		const sortedData = result.data?.sort((a, b) => (a.age || 0) - (b.age || 0));
@@ -266,9 +274,10 @@ describe("database.entity.query", () => {
 		const result = await database.users.query({
 			fields: { age: true },
 		});
+		assert(result.success, "expected query to succeed");
 
-		expect(result.error).toBeUndefined();
-		expect(result.data).toBeDefined();
+		// biome-ignore lint/suspicious/noExplicitAny: needed to test runtime behavior
+		expect((result as any).error).toBeUndefined();
 		expect(result.data?.length).toBe(2);
 
 		// Sort by age for stable test
@@ -295,6 +304,7 @@ describe("database.entity.query", () => {
 		const result = await database.users.query({
 			fields: { name: true, age: true },
 		});
+		assert(result.success, "expected query to succeed");
 		expect(result.data).toEqual([]);
 	});
 
@@ -311,6 +321,7 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const result = await database.users.query({ fields: {} });
+		assert(result.success, "expected query to succeed");
 		expect(result.data).toEqual([]);
 	});
 
@@ -330,6 +341,7 @@ describe("database.entity.query", () => {
 		database.users.create({ name: "Jane Doe" });
 
 		const result = await database.users.query({ fields: {} });
+		assert(result.success, "expected query to succeed");
 		expect(result.data).toEqual([{}, {}]);
 	});
 
@@ -353,11 +365,12 @@ describe("database.entity.query", () => {
 				notInSchema: true,
 			},
 		});
-		expect(result.error).toBeDefined();
-		expect(result.error?.message).toContain(
-			"Field 'notInSchema' not found in schema",
-		);
-		expect(result.data).toBeUndefined();
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message: "Field 'notInSchema' not found in schema",
+			},
+		});
 	});
 
 	it("should only return entities of the queried type", async () => {
@@ -378,9 +391,11 @@ describe("database.entity.query", () => {
 		database.posts.create({ name: "Jane Doe" });
 
 		const result = await database.users.query({ fields: { name: true } });
+		assert(result.success, "expected query to succeed");
 		expect(result.data).toEqual([{ name: "John Doe" }]);
 
 		const result2 = await database.posts.query({ fields: { name: true } });
+		assert(result2.success, "expected query to succeed");
 		expect(result2.data).toEqual([{ name: "Jane Doe" }]);
 	});
 
@@ -398,13 +413,14 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const user1 = database.users.create({});
-		assert(user1.data !== undefined, "Expected create to succeed");
+		assert(user1.success, "Expected create to succeed");
 		const user2 = database.users.create({});
-		assert(user2.data !== undefined, "Expected create to succeed");
+		assert(user2.success, "Expected create to succeed");
 
 		const result = await database.users.query({
 			fields: { id: true, name: true, age: true },
 		});
+		assert(result.success, "expected query to succeed");
 		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
 		expect(result.data).toEqual([{ id: user1.data.id }, { id: user2.data.id }]);
 	});
@@ -423,13 +439,14 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		const user1 = database.users.create({});
-		assert(user1.data !== undefined, "Expected create to succeed");
+		assert(user1.success, "Expected create to succeed");
 		const user2 = database.users.create({});
-		assert(user2.data !== undefined, "Expected create to succeed");
+		assert(user2.success, "Expected create to succeed");
 
 		const result = await database.users.query({
 			fields: { id: true, name: true, isVerified: true },
 		});
+		assert(result.success, "expected query to succeed");
 		result.data?.sort((a, b) => (a.id.localeCompare(b.id) ? 1 : -1));
 		expect(result.data).toEqual([
 			{ id: user1.data.id, name: "string", isVerified: false },

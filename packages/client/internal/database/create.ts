@@ -37,6 +37,7 @@ export const createDatabase = <
 					const isRequired = fieldDefinition.optional !== true;
 					if (isRequired && !(schemaField in fields)) {
 						return {
+							success: false,
 							error: {
 								message: `Missing required field "${schemaField}" when creating entity "${entity}"`,
 							},
@@ -56,7 +57,7 @@ export const createDatabase = <
 				triples.push([id, StoreField(`${entity}/id`), Value(id)]);
 				store.add(...triples);
 				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
-				return { data: { ...fields, id } } as any;
+				return { success: true, data: { ...fields, id } } as any;
 			},
 			query: async (opts) => {
 				const entitySchema = schema.entities[entity];
@@ -73,8 +74,8 @@ export const createDatabase = <
 					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
 					if (fieldSchema === undefined) {
 						return {
+							success: false,
 							error: { message: `Field '${field}' not found in schema` },
-							data: undefined,
 						};
 					}
 				}
@@ -99,6 +100,7 @@ export const createDatabase = <
 
 				const response = store.query({ find, where, optional });
 				return {
+					success: true,
 					data: response.map((data) => {
 						const result: Record<string, Datom> = {};
 						for (let i = 0; i < fields.length; i++) {
@@ -127,7 +129,7 @@ export const createDatabase = <
 			},
 			delete: (id) => {
 				store.deleteAllById(Id(id));
-				return { data: undefined };
+				return { data: undefined, success: true };
 			},
 		};
 	}
