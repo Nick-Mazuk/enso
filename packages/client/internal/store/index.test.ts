@@ -208,3 +208,265 @@ describe("movies example", () => {
 		]);
 	});
 });
+
+describe("Store.query with filters", () => {
+	const yearVar = Variable("year");
+	const titleVar = Variable("title");
+	const idVar = Variable("id");
+
+	it("should filter numbers: greaterThan", () => {
+		const store = new Store();
+		store.add(...movies);
+		const result = store.query({
+			find: [titleVar, yearVar],
+			where: [
+				[idVar, Field("movie/title"), titleVar],
+				[idVar, Field("movie/year"), yearVar],
+			],
+			filters: [
+				{
+					selector: yearVar,
+					filter: (year) => typeof year === "number" && year > 1990,
+				},
+			],
+		});
+
+		const sorted = sortResult(result, 0);
+		expect(sorted).toEqual([
+			[Value("Braveheart"), Value(1995)],
+			[Value("Lethal Weapon 3"), Value(1992)],
+			[Value("Terminator 2: Judgment Day"), Value(1991)],
+			[Value("Terminator 3: Rise of the Machines"), Value(2003)],
+		]);
+	});
+
+	it("should filter numbers: lessThanOrEqual", () => {
+		const store = new Store();
+		store.add(...movies);
+		const result = store.query({
+			find: [titleVar, yearVar],
+			where: [
+				[idVar, Field("movie/title"), titleVar],
+				[idVar, Field("movie/year"), yearVar],
+			],
+			filters: [
+				{
+					selector: yearVar,
+					filter: (year) => typeof year === "number" && year <= 1982,
+				},
+			],
+		});
+
+		const sorted = sortResult(result, 0);
+		expect(sorted).toEqual([
+			[Value("Alien"), Value(1979)],
+			[Value("First Blood"), Value(1982)],
+			[Value("Mad Max"), Value(1979)],
+			[Value("Mad Max 2"), Value(1981)],
+		]);
+	});
+
+	it("should filter strings: startsWith", () => {
+		const store = new Store();
+		store.add(...movies);
+		const result = store.query({
+			find: [titleVar],
+			where: [[idVar, Field("movie/title"), titleVar]],
+			filters: [
+				{
+					selector: titleVar,
+					filter: (title) =>
+						typeof title === "string" && title.startsWith("Terminator"),
+				},
+			],
+		});
+
+		const sorted = sortResult(result, 0);
+		expect(sorted).toEqual([
+			[Value("Terminator 2: Judgment Day")],
+			[Value("Terminator 3: Rise of the Machines")],
+		]);
+		// Note: "The Terminator" will not match.
+	});
+
+	it("should filter strings: contains", () => {
+		const store = new Store();
+		store.add(...movies);
+		const nameVar = Variable("name");
+		const result = store.query({
+			find: [nameVar],
+			where: [[idVar, Field("person/name"), nameVar]],
+			filters: [
+				{
+					selector: nameVar,
+					filter: (name) =>
+						typeof name === "string" && name.includes("Cameron"),
+				},
+			],
+		});
+		expect(result).toEqual([[Value("James Cameron")]]);
+	});
+
+	it("should combine multiple filters (AND)", () => {
+		const store = new Store();
+		store.add(...movies);
+		const result = store.query({
+			find: [titleVar, yearVar],
+			where: [
+				[idVar, Field("movie/title"), titleVar],
+				[idVar, Field("movie/year"), yearVar],
+			],
+			filters: [
+				{
+					selector: yearVar,
+					filter: (year) => typeof year === "number" && year > 1985,
+				},
+				{
+					selector: titleVar,
+					filter: (title) => typeof title === "string" && title.startsWith("L"),
+				},
+			],
+		});
+
+		const sorted = sortResult(result, 0);
+		expect(sorted).toEqual([
+			[Value("Lethal Weapon"), Value(1987)],
+			[Value("Lethal Weapon 2"), Value(1989)],
+			[Value("Lethal Weapon 3"), Value(1992)],
+		]);
+	});
+
+	it("should apply filters to optional fields", () => {
+		const store = new Store();
+		store.add(...movies);
+		const nameVar = Variable("name");
+		const deathVar = Variable("death");
+		const result = store.query({
+			find: [nameVar, deathVar],
+			where: [[idVar, Field("person/name"), nameVar]],
+			optional: [[idVar, Field("person/death"), deathVar]],
+			filters: [
+				// Find people who died, but only after 2000
+				{
+					selector: deathVar,
+					filter: (death) => {
+						if (death === undefined) return true;
+						return typeof death === "string" && death > "2000-01-01T00:00:00Z";
+					},
+				},
+			],
+		});
+
+		// This should return all living people (deathVar = undefined)
+		// AND people who died after 2000.
+		const peopleWhoDiedAfter2000 = result.filter((r) => r[1] !== undefined);
+		const sorted = sortResult(peopleWhoDiedAfter2000, 0);
+
+		expect(sorted).toEqual([
+			[Value("Charles Napier"), Value("2011-10-05T00:00:00Z")],
+			[Value("George P. Cosmatos"), Value("2005-04-19T00:00:00Z")],
+			[Value("Richard Crenna"), Value("2003-01-17T00:00:00Z")],
+		]);
+		// Ensure we still get living people
+		expect(result.length).toBeGreaterThan(3);
+	});
+
+	it("should filter booleans", () => {
+		const boolStore = new Store();
+		const nameVar = Variable("name");
+		const awesomeVar = Variable("awesome");
+		boolStore.add([Id("1"), Field("person/name"), Value("Nick")]);
+		boolStore.add([Id("1"), Field("person/isAwesome"), Value(true)]);
+		boolStore.add([Id("2"), Field("person/name"), Value("SomeoneElse")]);
+		boolStore.add([Id("2"), Field("person/isAwesome"), Value(false)]);
+
+		const result = boolStore.query({
+			find: [nameVar],
+			where: [
+				[idVar, Field("person/name"), nameVar],
+				[idVar, Field("person/isAwesome"), awesomeVar],
+			],
+			filters: [
+				{
+					selector: awesomeVar,
+					filter: (isAwesome) =>
+						typeof isAwesome === "boolean" && isAwesome === true,
+				},
+			],
+		});
+
+		expect(result).toEqual([[Value("Nick")]]);
+	});
+});
+
+describe("Store.query with whereNot", () => {
+	const idVar = Variable("id");
+
+	it("should filter out results: `isUndefined` equivalent", () => {
+		const store = new Store();
+		store.add(...movies);
+		const nameVar = Variable("name");
+		const deathVar = Variable("death");
+
+		// Find people who are *not* dead (i.e., have no person/death triple)
+		const result = store.query({
+			find: [nameVar],
+			where: [[idVar, Field("person/name"), nameVar]],
+			whereNot: [[idVar, Field("person/death"), deathVar]],
+		});
+
+		const totalPeople = movies.filter((m) => m[1] === "person/name").length;
+		const deadPeople = movies.filter((m) => m[1] === "person/death").length;
+		expect(result.length).toBe(totalPeople - deadPeople);
+	});
+
+	it("should filter out results based on a specific value", () => {
+		const store = new Store();
+		store.add(...movies);
+		const titleVar = Variable("title");
+		const result = store.query({
+			find: [titleVar],
+			where: [[idVar, Field("movie/title"), titleVar]],
+			whereNot: [[idVar, Field("movie/title"), Value("Alien")]],
+		});
+
+		const totalMovies = movies.filter((m) => m[1] === "movie/title").length;
+		expect(result.length).toBe(totalMovies - 1);
+		expect(result.some((r) => r[0] === "Alien")).toBe(false);
+	});
+
+	it("should interact with variable bindings from `where`", () => {
+		const store = new Store();
+		store.add(...movies);
+		const directorNameVar = Variable("directorName");
+		const directorIdVar = Variable("directorId");
+
+		// Find all directors who directed a movie,
+		// *unless* they directed "The Terminator"
+		const result = store.query({
+			find: [directorNameVar],
+			where: [
+				[Variable("movieId"), Field("movie/director"), directorIdVar],
+				[directorIdVar, Field("person/name"), directorNameVar],
+			],
+			whereNot: [
+				[Variable("otherMovie"), Field("movie/director"), directorIdVar],
+				[Variable("otherMovie"), Field("movie/title"), Value("The Terminator")],
+			],
+		});
+		const nonJamesCameronDirectors = new Set(result.map((item) => item[0]));
+
+		const allDirectors = store.query({
+			find: [directorNameVar],
+			where: [
+				[Variable("movieId"), Field("movie/director"), directorIdVar],
+				[directorIdVar, Field("person/name"), directorNameVar],
+			],
+		});
+		const allUniqueDirectors = new Set(allDirectors.map((item) => item[0]));
+
+		// We expect all directors *except* James Cameron
+		expect(nonJamesCameronDirectors.size).toBe(allUniqueDirectors.size - 1);
+		expect(result.some((r) => r[0] === "James Cameron")).toBe(false);
+	});
+});

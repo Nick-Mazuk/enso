@@ -31,3 +31,8 @@ export type QueryPattern = [
 	Field | QueryVariable,
 	Value | QueryVariable,
 ];
+export type Filter = {
+	selector: QueryVariable;
+	/** Returns true if the datom should be included. Only called if datom exists. */
+	filter: (datom: Datom | undefined) => boolean;
+};

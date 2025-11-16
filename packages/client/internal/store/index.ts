@@ -3,6 +3,7 @@ import { QueryContext } from "./query-context";
 import {
 	type Datom,
 	type Field,
+	type Filter,
 	type Id,
 	isVariable,
 	type QueryPattern,
@@ -15,6 +16,8 @@ type Query<Find extends QueryVariable[]> = {
 	find: Find;
 	where: QueryPattern[];
 	optional?: QueryPattern[];
+	filters?: Filter[];
+	whereNot?: QueryPattern[];
 };
 
 /**
@@ -51,6 +54,25 @@ export class Store {
 			for (const pattern of query.optional) {
 				contexts = this.queryOptionalPattern(pattern, contexts);
 			}
+		}
+		if (query.whereNot && query.whereNot.length > 0 && contexts.length > 0) {
+			const whereNot = query.whereNot;
+			contexts = contexts.filter((context) => {
+				const notMatches = this.queryMultiplePatterns(whereNot, [
+					context.clone(),
+				]);
+				// Keep if no "not" patterns matched
+				return notMatches.length === 0;
+			});
+		}
+		if (query.filters && query.filters.length > 0 && contexts.length > 0) {
+			const filters = query.filters;
+			contexts = contexts.filter((context) =>
+				filters.every(({ selector, filter }) => {
+					const value = context.get(selector);
+					return filter(value);
+				}),
+			);
 		}
 		return contexts.map((context) => {
 			return query.find.map((datom) => {
@@ -139,8 +161,10 @@ export class Store {
 		return [];
 	}
 
-	private queryMultiplePatterns(patterns: QueryPattern[]) {
-		let contexts: QueryContext[] = [new QueryContext()];
+	private queryMultiplePatterns(
+		patterns: QueryPattern[],
+		contexts: QueryContext[] = [new QueryContext()],
+	) {
 		for (const pattern of patterns) {
 			contexts = contexts.flatMap((context) =>
 				this.querySinglePattern(pattern, context),
