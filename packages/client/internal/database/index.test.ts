@@ -460,7 +460,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						isVerified: t.boolean({ optional: true, fallback: false }),
+						isVerified: t.boolean({
+							optional: true,
+							fallback: false,
+						}),
 					},
 				},
 			});
@@ -468,7 +471,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", isVerified: true });
+			const user1 = database.users.create({
+				name: "user 1",
+				isVerified: true,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
@@ -488,7 +494,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						isVerified: t.boolean({ optional: true, fallback: false }),
+						isVerified: t.boolean({
+							optional: true,
+							fallback: false,
+						}),
 					},
 				},
 			});
@@ -496,7 +505,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", isVerified: true });
+			const user1 = database.users.create({
+				name: "user 1",
+				isVerified: true,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
@@ -518,7 +530,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						isVerified: t.boolean({ optional: true, fallback: false }),
+						isVerified: t.boolean({
+							optional: true,
+							fallback: false,
+						}),
 					},
 				},
 			});
@@ -526,7 +541,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", isVerified: true });
+			const user1 = database.users.create({
+				name: "user 1",
+				isVerified: true,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
@@ -546,7 +564,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						maybeDefined: t.string({ optional: true, fallback: "" }),
+						maybeDefined: t.string({
+							optional: true,
+							fallback: "",
+						}),
 					},
 				},
 			});
@@ -577,7 +598,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						maybeDefined: t.string({ optional: true, fallback: "" }),
+						maybeDefined: t.string({
+							optional: true,
+							fallback: "",
+						}),
 					},
 				},
 			});
@@ -610,7 +634,10 @@ describe("database.entity.query", () => {
 				entities: {
 					users: {
 						name: t.string({ optional: true, fallback: "string" }),
-						maybeDefined: t.string({ optional: true, fallback: "" }),
+						maybeDefined: t.string({
+							optional: true,
+							fallback: "",
+						}),
 					},
 				},
 			});
@@ -649,7 +676,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: 1,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
@@ -677,7 +707,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: 1,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
@@ -707,7 +740,10 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: 1,
+			});
 			assert(user1.success, "Expected create to succeed");
 			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");

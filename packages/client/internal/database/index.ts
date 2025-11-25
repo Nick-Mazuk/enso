@@ -4,13 +4,13 @@ import type { Field, FieldValue, Schema } from "../schema/types";
 import type { Store } from "../store";
 import {
 	type Datom,
+	type Filter,
 	Id,
 	type QueryPattern,
 	Field as StoreField,
 	type Triple,
 	Value,
 	Variable,
-	type Filter,
 } from "../store/types";
 import type { Database } from "./types";
 
@@ -71,7 +71,9 @@ export const createDatabase = <
 					if (fieldSchema === undefined) {
 						return {
 							success: false,
-							error: { message: `Field '${field}' not found in schema` },
+							error: {
+								message: `Field '${field}' not found in schema`,
+							},
 						};
 					}
 				}
@@ -107,7 +109,9 @@ export const createDatabase = <
 					if (fieldSchema === undefined) {
 						return {
 							success: false,
-							error: { message: `Field '${field}' not found in schema` },
+							error: {
+								message: `Field '${field}' not found in schema`,
+							},
 						};
 					}
 
@@ -200,7 +204,9 @@ export const createDatabase = <
 							selector,
 							filter: (v) => {
 								const val = getValue(v);
-								return typeof val === "number" && val >= conf.greaterThanOrEqual;
+								return (
+									typeof val === "number" && val >= conf.greaterThanOrEqual
+								);
 							},
 						});
 					}
