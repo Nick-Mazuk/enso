@@ -954,7 +954,7 @@ describe("database.entity.query number filters edge cases", () => {
 		expect(result.data).toEqual([{ val: 20.1 }]);
 	});
 
-	it("throws runtime error if number filter applied to string field", async () => {
+	it("returns error if number filter applied to string field", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -965,16 +965,50 @@ describe("database.entity.query number filters edge cases", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		const promise = db.items.query({
+		const result = await db.items.query({
 			fields: { str: true },
 			// @ts-expect-error - testing runtime check
 			where: { str: { greaterThan: 10 } },
 		});
 
-		expect(promise).rejects.toThrow("Field 'str' is not a number field");
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message: "Filter 'greaterThan' not allowed on str which is a string",
+			},
+		});
 	});
 
-	it("throws runtime error if number filter applied to boolean field", async () => {
+	it("returns error if number filter has a boolean config", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					num: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const result = await db.items.query({
+			fields: { num: true },
+			where: {
+				num: {
+					// @ts-expect-error - testing runtime check
+					greaterThan: "10",
+				},
+			},
+		});
+
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message: "Expected filter greaterThan on num to be a number",
+			},
+		});
+	});
+
+	it("returns error if number filter applied to boolean field", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -985,13 +1019,18 @@ describe("database.entity.query number filters edge cases", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		const promise = db.items.query({
+		const result = await db.items.query({
 			fields: { bool: true },
 			// @ts-expect-error - testing runtime check
 			where: { bool: { equals: 10 } },
 		});
 
-		expect(promise).rejects.toThrow("Field 'bool' is not a number field");
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message: "Expected filter equals on bool to be a boolean",
+			},
+		});
 	});
 
 	it("uses fallback value for filtering if field is missing but has fallback", async () => {
@@ -1032,7 +1071,7 @@ describe("database.entity.query number filters edge cases", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({}); // Should be 100
+		db.items.create({});
 		db.items.create({ val: 50 });
 
 		const result = await db.items.query({

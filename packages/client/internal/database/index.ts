@@ -14,6 +14,11 @@ import {
 } from "../store/types";
 import type { Database } from "./types";
 
+const getValue = (v: unknown, schema: { fallback?: unknown }) => {
+	if (v !== undefined) return v;
+	return schema.fallback;
+};
+
 export const createDatabase = <
 	S extends Schema<Record<string, Record<string, Field<FieldValue, boolean>>>>,
 >(
@@ -61,11 +66,9 @@ export const createDatabase = <
 				return { success: true, data: { ...fields, id } } as any;
 			},
 			query: async (opts) => {
-				const fields = Object.entries(opts.fields)
-					.filter(([_, value]) => value)
-					.map(([key]) => key);
-				// validate fields
-				for (const field of fields) {
+				const selectedFields = Object.keys(opts.fields);
+				// validate all selected fields are in the schema
+				for (const field of selectedFields) {
 					if (field === "id") continue;
 					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
 					if (fieldSchema === undefined) {
@@ -77,7 +80,9 @@ export const createDatabase = <
 						};
 					}
 				}
-				const find = fields.map(Variable);
+
+				// Initialize store.query options
+				const find = selectedFields.map(Variable);
 				const where: QueryPattern[] = [
 					[
 						Variable("id"),
@@ -87,7 +92,13 @@ export const createDatabase = <
 					],
 				];
 				const optional: QueryPattern[] = [];
-				for (const field of fields) {
+				const whereNot: QueryPattern[] = [];
+				const filters: Filter[] = [];
+
+				// Query for fields. Make them optional because they may not be defined.
+				// Even if the schema says the field is required, the underlying data
+				// could be missing.
+				for (const field of selectedFields) {
 					if (field === "id") continue;
 					optional.push([
 						Variable("id"),
@@ -97,161 +108,139 @@ export const createDatabase = <
 				}
 
 				// Apply filters
-				const whereNot: QueryPattern[] = [];
-				const filters: Filter[] = [];
-				const boundVars = new Set(fields);
-
-				for (const field in opts.where) {
-					const config = opts.where[field];
-					if (!config) continue;
-
-					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
+				for (const filteredField in opts.where) {
+					// Ensure all filtered fields are in the schema.
+					const fieldSchema = entitySchema[filteredField];
 					if (fieldSchema === undefined) {
 						return {
 							success: false,
 							error: {
-								message: `Field '${field}' not found in schema`,
+								message: `Field '${filteredField}' not found in schema`,
 							},
-						};
+						} as const;
 					}
 
-					// biome-ignore lint/suspicious/noExplicitAny: config is typed as CommonFilters but at runtime can correspond to NumberFilters
-					const conf = config as any;
+					const config = opts.where[filteredField];
+					if (!config) continue;
 
-					const hasNumberFilter =
-						conf.greaterThan !== undefined ||
-						conf.greaterThanOrEqual !== undefined ||
-						conf.lessThan !== undefined ||
-						conf.lessThanOrEqual !== undefined;
+					for (const filter in config) {
+						// Validate config is not undefined
+						const filterValue = config[filter as keyof typeof config];
+						if (typeof filterValue === "undefined") continue;
 
-					if (hasNumberFilter && fieldSchema.kind !== "number") {
-						throw new Error(`Field '${field}' is not a number field`);
-					}
-
-					if (conf.equals !== undefined) {
-						if (
-							typeof conf.equals === "number" &&
-							fieldSchema.kind !== "number"
-						) {
-							throw new Error(`Field '${field}' is not a number field`);
-						}
-						if (
-							typeof conf.equals === "boolean" &&
-							fieldSchema.kind !== "boolean"
-						) {
-							throw new Error(`Field '${field}' is not a boolean field`);
-						}
-					}
-
-					if (conf.notEquals !== undefined) {
-						if (
-							typeof conf.notEquals === "number" &&
-							fieldSchema.kind !== "number"
-						) {
-							throw new Error(`Field '${field}' is not a number field`);
-						}
-					}
-
-					const hasValueFilter =
-						conf.equals !== undefined ||
-						conf.notEquals !== undefined ||
-						hasNumberFilter;
-
-					let addedToWhere = false;
-
-					if (conf.isDefined) {
-						where.push([
-							Variable("id"),
-							StoreField(`${entity}/${field}`),
-							Variable(field),
-						]);
-						addedToWhere = true;
-					} else if (conf.isDefined === false) {
-						whereNot.push([
-							Variable("id"),
-							StoreField(`${entity}/${field}`),
-							Variable(field),
-						]);
-					} else if (hasValueFilter) {
-						// If we have a value filter, check if we need to strictly require existence.
-						// If the field has a fallback, we MUST NOT require existence so that we can match the fallback.
-						// If the field is optional and has no fallback, we also generally shouldn't require existence
-						// (unless we are sure undefined never matches, but let's be permissive and let the filter handle it).
-						// Only if the field is strictly required (not optional) do we know it must exist.
-						if (!fieldSchema.optional) {
-							where.push([
+						// Filters common to all field kinds
+						if (filter === "isDefined") {
+							if (filterValue) {
+								where.push([
+									Variable("id"),
+									StoreField(`${entity}/${filteredField}`),
+									Variable(filteredField),
+								]);
+								continue;
+							}
+							whereNot.push([
 								Variable("id"),
-								StoreField(`${entity}/${field}`),
-								Variable(field),
+								StoreField(`${entity}/${filteredField}`),
+								Variable(filteredField),
 							]);
-							addedToWhere = true;
+							continue;
+						}
+
+						// Constants for multiple filters
+						const selector = Variable(filteredField);
+						const filterError = {
+							success: false,
+							error: {
+								message: `Filter '${filter}' not allowed on ${filteredField} which is a ${fieldSchema.kind}`,
+							},
+						} as const;
+						const filterValueTypeError = {
+							success: false,
+							error: {
+								message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
+							},
+						} as const;
+
+						// Filters specific to different field kinds
+						switch (fieldSchema.kind) {
+							case "number": {
+								if (typeof filterValue !== "number")
+									return filterValueTypeError;
+								switch (filter) {
+									case "equals":
+										filters.push({
+											selector,
+											filter: (v) => getValue(v, fieldSchema) === filterValue,
+										});
+										continue;
+									case "notEquals":
+										filters.push({
+											selector,
+											filter: (v) => getValue(v, fieldSchema) !== filterValue,
+										});
+										continue;
+									case "greaterThan":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return typeof val === "number" && val > filterValue;
+											},
+										});
+										continue;
+									case "greaterThanOrEqual":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return typeof val === "number" && val >= filterValue;
+											},
+										});
+										continue;
+									case "lessThan":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return typeof val === "number" && val < filterValue;
+											},
+										});
+										continue;
+									case "lessThanOrEqual":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return typeof val === "number" && val <= filterValue;
+											},
+										});
+										continue;
+									default:
+										return filterError;
+								}
+							}
+							case "boolean":
+								if (filter !== "equals") return filterError;
+								if (typeof filterValue !== "boolean")
+									return filterValueTypeError;
+								filters.push({
+									selector,
+									filter: (v) => getValue(v, fieldSchema) === filterValue,
+								});
+								continue;
+							default:
+								return filterError;
 						}
 					}
 
-					if (!addedToWhere && !boundVars.has(field)) {
+					// If the schema has a fallback, we still want to use that fallback for filtering.
+					// Therefore we need to make sure the query still looks for this field.
+					if (fieldSchema.fallback && !selectedFields.includes(filteredField)) {
 						optional.push([
 							Variable("id"),
-							StoreField(`${entity}/${field}`),
-							Variable(field),
+							StoreField(`${entity}/${filteredField}`),
+							Variable(filteredField),
 						]);
-						boundVars.add(field);
-					}
-
-					const selector = Variable(field);
-					const getValue = (v: unknown) => {
-						if (v !== undefined) return v;
-						return fieldSchema.fallback;
-					};
-
-					if (conf.equals !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => getValue(v) === conf.equals,
-						});
-					}
-					if (conf.notEquals !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => getValue(v) !== conf.notEquals,
-						});
-					}
-					if (conf.greaterThan !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => {
-								const val = getValue(v);
-								return typeof val === "number" && val > conf.greaterThan;
-							},
-						});
-					}
-					if (conf.greaterThanOrEqual !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => {
-								const val = getValue(v);
-								return (
-									typeof val === "number" && val >= conf.greaterThanOrEqual
-								);
-							},
-						});
-					}
-					if (conf.lessThan !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => {
-								const val = getValue(v);
-								return typeof val === "number" && val < conf.lessThan;
-							},
-						});
-					}
-					if (conf.lessThanOrEqual !== undefined) {
-						filters.push({
-							selector,
-							filter: (v) => {
-								const val = getValue(v);
-								return typeof val === "number" && val <= conf.lessThanOrEqual;
-							},
-						});
 					}
 				}
 
@@ -266,8 +255,8 @@ export const createDatabase = <
 					success: true,
 					data: response.map((data) => {
 						const result: Record<string, Datom> = {};
-						for (let i = 0; i < fields.length; i++) {
-							const field = fields[i];
+						for (let i = 0; i < selectedFields.length; i++) {
+							const field = selectedFields[i];
 							if (field === undefined) continue;
 							const dataItem = data[i];
 							if (dataItem !== undefined) {
