@@ -118,19 +118,44 @@ export const createDatabase = <
 					// biome-ignore lint/suspicious/noExplicitAny: config is typed as CommonFilters but at runtime can correspond to NumberFilters
 					const conf = config as any;
 
-					const hasValueFilter =
-						conf.equals !== undefined ||
-						conf.notEquals !== undefined ||
+					const hasNumberFilter =
 						conf.greaterThan !== undefined ||
 						conf.greaterThanOrEqual !== undefined ||
 						conf.lessThan !== undefined ||
 						conf.lessThanOrEqual !== undefined;
 
-					if (hasValueFilter && fieldSchema.kind !== "number") {
-						// We throw here to match the test expectation of a runtime error.
-						// In a production system we might prefer returning a Result object.
+					if (hasNumberFilter && fieldSchema.kind !== "number") {
 						throw new Error(`Field '${field}' is not a number field`);
 					}
+
+					if (conf.equals !== undefined) {
+						if (
+							typeof conf.equals === "number" &&
+							fieldSchema.kind !== "number"
+						) {
+							throw new Error(`Field '${field}' is not a number field`);
+						}
+						if (
+							typeof conf.equals === "boolean" &&
+							fieldSchema.kind !== "boolean"
+						) {
+							throw new Error(`Field '${field}' is not a boolean field`);
+						}
+					}
+
+					if (conf.notEquals !== undefined) {
+						if (
+							typeof conf.notEquals === "number" &&
+							fieldSchema.kind !== "number"
+						) {
+							throw new Error(`Field '${field}' is not a number field`);
+						}
+					}
+
+					const hasValueFilter =
+						conf.equals !== undefined ||
+						conf.notEquals !== undefined ||
+						hasNumberFilter;
 
 					let addedToWhere = false;
 

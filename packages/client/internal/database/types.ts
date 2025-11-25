@@ -41,7 +41,9 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 			[K in keyof (E & GeneratedFields)]?: (K extends keyof E
 				? E[K] extends Field<number, boolean>
 					? NumberFilters
-					: unknown
+					: E[K] extends Field<boolean, boolean>
+						? BooleanFilters
+						: unknown
 				: unknown) &
 				CommonFilters;
 		};
@@ -89,6 +91,10 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 
 export type CommonFilters = {
 	isDefined?: boolean;
+};
+
+export type BooleanFilters = {
+	equals?: boolean;
 };
 
 export type NumberFilters = {

@@ -1044,3 +1044,77 @@ describe("database.entity.query number filters edge cases", () => {
 		expect(result.data).toHaveLength(1);
 	});
 });
+
+describe("database.entity.query boolean filters", () => {
+	it("can filter by equals", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.boolean({ fallback: false }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: true });
+		db.items.create({ val: false });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { equals: true } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: true }]);
+	});
+
+	it("can filter by equals (false)", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.boolean({ fallback: false }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: true });
+		db.items.create({ val: false });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { equals: false } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: false }]);
+	});
+
+	it("uses fallback value for filtering if field is missing but has fallback", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.boolean({ optional: true, fallback: true }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		// Create item without the field. It should take fallback true.
+		db.items.create({});
+		// Create item with explicit field.
+		db.items.create({ val: false });
+
+		const result = await db.items.query({
+			fields: { id: true, val: true },
+			where: { val: { equals: true } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(1);
+		expect(result.data[0]?.val).toBe(true);
+	});
+});
