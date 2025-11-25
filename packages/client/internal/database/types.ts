@@ -37,6 +37,7 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 		},
 	>(opts: {
 		fields: Fields;
+		where?: { [K in keyof (E & GeneratedFields)]?: CommonFilters };
 	}) => Promise<
 		DatabaseResult<
 			Simplify<
@@ -77,6 +78,10 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 		>
 	>;
 	delete: (id: string) => DatabaseResult<void>;
+};
+
+export type CommonFilters = {
+	isDefined?: boolean;
 };
 
 export type Database<

@@ -79,6 +79,7 @@ export const createDatabase = <
 						};
 					}
 				}
+				// DO NOT SUBMIT - validate filters
 				const find = fields.map(Variable);
 				const where: QueryPattern[] = [
 					[
@@ -98,7 +99,27 @@ export const createDatabase = <
 					]);
 				}
 
-				const response = store.query({ find, where, optional });
+				// Apply filters
+				const whereNot: QueryPattern[] = [];
+				for (const field in opts.where) {
+					const config = opts.where[field];
+					if (!config) continue;
+					if (config.isDefined) {
+						where.push([
+							Variable("id"),
+							StoreField(`${entity}/${field}`),
+							Variable(field),
+						]);
+					} else if (config.isDefined === false) {
+						whereNot.push([
+							Variable("id"),
+							StoreField(`${entity}/${field}`),
+							Variable(field),
+						]);
+					}
+				}
+
+				const response = store.query({ find, where, optional, whereNot });
 				return {
 					success: true,
 					data: response.map((data) => {
