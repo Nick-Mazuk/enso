@@ -1283,7 +1283,7 @@ describe("database.entity.query string filters", () => {
 		expect(result.data).toContainEqual({ name: "Beatrice" });
 	});
 
-	it("throws runtime error if string filter applied to number field", async () => {
+	it("returnss error if string filter applied to number field", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -1297,13 +1297,13 @@ describe("database.entity.query string filters", () => {
 		const result = await db.items.query({
 			fields: { num: true },
 			// @ts-expect-error - testing runtime check
-			where: { num: { equals: "invalid" } },
+			where: { num: { includes: "invalid" } },
 		});
 
 		expect(result).toEqual({
 			success: false,
 			error: {
-				message: "Expected filter equals on num to be a number",
+				message: "Filter 'includes' not allowed on num which is a number",
 			},
 		});
 	});

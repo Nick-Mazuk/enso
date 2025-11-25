@@ -164,6 +164,18 @@ export const createDatabase = <
 						// Filters specific to different field kinds
 						switch (fieldSchema.kind) {
 							case "number": {
+								if (
+									![
+										"equals",
+										"notEquals",
+										"greaterThan",
+										"greaterThanOrEqual",
+										"lessThan",
+										"lessThanOrEqual",
+									].includes(filter)
+								) {
+									return filterError;
+								}
 								if (typeof filterValue !== "number")
 									return filterValueTypeError;
 								switch (filter) {
