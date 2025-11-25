@@ -723,3 +723,173 @@ describe("database.entity.query", () => {
 		});
 	});
 });
+
+describe("database.entity.query number filters", () => {
+	it("can filter by equals", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { equals: 10 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 10 }]);
+	});
+
+	it("can filter by notEquals", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { notEquals: 10 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 20 }]);
+	});
+
+	it("can filter by greaterThan", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+		db.items.create({ val: 30 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 15 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+		expect(result.data).toContainEqual({ val: 20 });
+		expect(result.data).toContainEqual({ val: 30 });
+	});
+
+	it("can filter by greaterThanOrEqual", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThanOrEqual: 20 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 20 }]);
+	});
+
+	it("can filter by lessThan", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { lessThan: 15 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 10 }]);
+	});
+
+	it("can filter by lessThanOrEqual", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { lessThanOrEqual: 10 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 10 }]);
+	});
+
+	it("can combine range filters", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 5 });
+		db.items.create({ val: 10 });
+		db.items.create({ val: 15 });
+		db.items.create({ val: 20 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 5, lessThan: 20 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+		expect(result.data).toContainEqual({ val: 10 });
+		expect(result.data).toContainEqual({ val: 15 });
+	});
+});

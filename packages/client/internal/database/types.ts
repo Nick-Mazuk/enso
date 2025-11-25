@@ -37,7 +37,14 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 		},
 	>(opts: {
 		fields: Fields;
-		where?: { [K in keyof (E & GeneratedFields)]?: CommonFilters };
+		where?: {
+			[K in keyof (E & GeneratedFields)]?: (K extends keyof E
+				? E[K] extends Field<number, boolean>
+					? NumberFilters
+					: unknown
+				: unknown) &
+				CommonFilters;
+		};
 	}) => Promise<
 		DatabaseResult<
 			Simplify<
@@ -82,6 +89,15 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 
 export type CommonFilters = {
 	isDefined?: boolean;
+};
+
+export type NumberFilters = {
+	equals?: number;
+	notEquals?: number;
+	greaterThan?: number;
+	greaterThanOrEqual?: number;
+	lessThan?: number;
+	lessThanOrEqual?: number;
 };
 
 export type Database<
