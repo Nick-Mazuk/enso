@@ -3,7 +3,7 @@ import { assert } from "../../../shared/assert";
 import { createSchema, t } from "../../index";
 import { Store } from "../store";
 import { Field, Id, Value } from "../store/types";
-import { createDatabase } from "./create";
+import { createDatabase } from "./index";
 import type { DatabaseResult } from "./types";
 
 describe("createDatabase", () => {

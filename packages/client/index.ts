@@ -1,4 +1,4 @@
-import { createDatabase } from "./internal/database/create";
+import { createDatabase } from "./internal/database";
 import type { Database } from "./internal/database/types";
 import type { Field, FieldValue, Schema } from "./internal/schema/types";
 import { Store } from "./internal/store";
