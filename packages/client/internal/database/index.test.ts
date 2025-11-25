@@ -1157,3 +1157,154 @@ describe("database.entity.query boolean filters", () => {
 		expect(result.data[0]?.val).toBe(true);
 	});
 });
+
+describe("database.entity.query string filters", () => {
+	it("can filter by equals", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "Alice" });
+		db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { equals: "Alice" } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ name: "Alice" }]);
+	});
+
+	it("can filter by notEquals", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "Alice" });
+		db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { notEquals: "Alice" } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ name: "Bob" }]);
+	});
+
+	it("can filter by contains", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "Alice" });
+		db.users.create({ name: "Alicia" });
+		db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { contains: "Ali" } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+		expect(result.data).toContainEqual({ name: "Alice" });
+		expect(result.data).toContainEqual({ name: "Alicia" });
+	});
+
+	it("can filter by startsWith", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "Alice" });
+		db.users.create({ name: "Alicia" });
+		db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { startsWith: "Ali" } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+		expect(result.data).toContainEqual({ name: "Alice" });
+		expect(result.data).toContainEqual({ name: "Alicia" });
+	});
+
+	it("can filter by endsWith", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "Alice" });
+		db.users.create({ name: "Beatrice" });
+		db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { endsWith: "ce" } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+		expect(result.data).toContainEqual({ name: "Alice" });
+		expect(result.data).toContainEqual({ name: "Beatrice" });
+	});
+
+	it("throws runtime error if string filter applied to number field", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					num: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const result = await db.items.query({
+			fields: { num: true },
+			// @ts-expect-error - testing runtime check
+			where: { num: { equals: "invalid" } },
+		});
+
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message: "Expected filter equals on num to be a number",
+			},
+		});
+	});
+});

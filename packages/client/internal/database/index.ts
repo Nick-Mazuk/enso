@@ -228,6 +228,69 @@ export const createDatabase = <
 									filter: (v) => getValue(v, fieldSchema) === filterValue,
 								});
 								continue;
+							case "string":
+								if (
+									![
+										"equals",
+										"notEquals",
+										"contains",
+										"startsWith",
+										"endsWith",
+									].includes(filter)
+								) {
+									return filterError;
+								}
+								if (typeof filterValue !== "string")
+									return filterValueTypeError;
+								switch (filter) {
+									case "equals":
+										filters.push({
+											selector,
+											filter: (v) => getValue(v, fieldSchema) === filterValue,
+										});
+										continue;
+									case "notEquals":
+										filters.push({
+											selector,
+											filter: (v) => getValue(v, fieldSchema) !== filterValue,
+										});
+										continue;
+									case "contains":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return (
+													typeof val === "string" && val.includes(filterValue)
+												);
+											},
+										});
+										continue;
+									case "startsWith":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return (
+													typeof val === "string" && val.startsWith(filterValue)
+												);
+											},
+										});
+										continue;
+									case "endsWith":
+										filters.push({
+											selector,
+											filter: (v) => {
+												const val = getValue(v, fieldSchema);
+												return (
+													typeof val === "string" && val.endsWith(filterValue)
+												);
+											},
+										});
+										continue;
+									default:
+										return filterError;
+								}
 							default:
 								return filterError;
 						}
