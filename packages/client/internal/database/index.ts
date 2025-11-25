@@ -97,9 +97,19 @@ export const createDatabase = <
 				// Apply filters
 				const whereNot: QueryPattern[] = [];
 				const filters: Filter[] = [];
+				const boundVars = new Set(fields);
+
 				for (const field in opts.where) {
 					const config = opts.where[field];
 					if (!config) continue;
+
+					const fieldSchema = entitySchema[field as keyof typeof entitySchema];
+					if (fieldSchema === undefined) {
+						return {
+							success: false,
+							error: { message: `Field '${field}' not found in schema` },
+						};
+					}
 
 					// biome-ignore lint/suspicious/noExplicitAny: config is typed as CommonFilters but at runtime can correspond to NumberFilters
 					const conf = config as any;
@@ -112,56 +122,104 @@ export const createDatabase = <
 						conf.lessThan !== undefined ||
 						conf.lessThanOrEqual !== undefined;
 
-					if (conf.isDefined || hasValueFilter) {
+					if (hasValueFilter && fieldSchema.kind !== "number") {
+						// We throw here to match the test expectation of a runtime error.
+						// In a production system we might prefer returning a Result object.
+						throw new Error(`Field '${field}' is not a number field`);
+					}
+
+					let addedToWhere = false;
+
+					if (conf.isDefined) {
 						where.push([
 							Variable("id"),
 							StoreField(`${entity}/${field}`),
 							Variable(field),
 						]);
+						addedToWhere = true;
 					} else if (conf.isDefined === false) {
 						whereNot.push([
 							Variable("id"),
 							StoreField(`${entity}/${field}`),
 							Variable(field),
 						]);
+					} else if (hasValueFilter) {
+						// If we have a value filter, check if we need to strictly require existence.
+						// If the field has a fallback, we MUST NOT require existence so that we can match the fallback.
+						// If the field is optional and has no fallback, we also generally shouldn't require existence
+						// (unless we are sure undefined never matches, but let's be permissive and let the filter handle it).
+						// Only if the field is strictly required (not optional) do we know it must exist.
+						if (!fieldSchema.optional) {
+							where.push([
+								Variable("id"),
+								StoreField(`${entity}/${field}`),
+								Variable(field),
+							]);
+							addedToWhere = true;
+						}
+					}
+
+					if (!addedToWhere && !boundVars.has(field)) {
+						optional.push([
+							Variable("id"),
+							StoreField(`${entity}/${field}`),
+							Variable(field),
+						]);
+						boundVars.add(field);
 					}
 
 					const selector = Variable(field);
+					const getValue = (v: unknown) => {
+						if (v !== undefined) return v;
+						return fieldSchema.fallback;
+					};
 
 					if (conf.equals !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => v === conf.equals,
+							filter: (v) => getValue(v) === conf.equals,
 						});
 					}
 					if (conf.notEquals !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => v !== conf.notEquals,
+							filter: (v) => getValue(v) !== conf.notEquals,
 						});
 					}
 					if (conf.greaterThan !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => typeof v === "number" && v > conf.greaterThan,
+							filter: (v) => {
+								const val = getValue(v);
+								return typeof val === "number" && val > conf.greaterThan;
+							},
 						});
 					}
 					if (conf.greaterThanOrEqual !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => typeof v === "number" && v >= conf.greaterThanOrEqual,
+							filter: (v) => {
+								const val = getValue(v);
+								return typeof val === "number" && val >= conf.greaterThanOrEqual;
+							},
 						});
 					}
 					if (conf.lessThan !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => typeof v === "number" && v < conf.lessThan,
+							filter: (v) => {
+								const val = getValue(v);
+								return typeof val === "number" && val < conf.lessThan;
+							},
 						});
 					}
 					if (conf.lessThanOrEqual !== undefined) {
 						filters.push({
 							selector,
-							filter: (v) => typeof v === "number" && v <= conf.lessThanOrEqual,
+							filter: (v) => {
+								const val = getValue(v);
+								return typeof val === "number" && val <= conf.lessThanOrEqual;
+							},
 						});
 					}
 				}

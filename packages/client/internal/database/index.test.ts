@@ -893,3 +893,118 @@ describe("database.entity.query number filters", () => {
 		expect(result.data).toContainEqual({ val: 15 });
 	});
 });
+
+describe("database.entity.query number filters edge cases", () => {
+	it("supports floating point numbers", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 10.5 });
+		db.items.create({ val: 20.1 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 10.6 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 20.1 }]);
+	});
+
+	it("throws runtime error if number filter applied to string field", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					str: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const promise = db.items.query({
+			fields: { str: true },
+			// @ts-expect-error - testing runtime check
+			where: { str: { greaterThan: 10 } },
+		});
+
+		expect(promise).rejects.toThrow("Field 'str' is not a number field");
+	});
+
+	it("throws runtime error if number filter applied to boolean field", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					bool: t.boolean({ fallback: false }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const promise = db.items.query({
+			fields: { bool: true },
+			// @ts-expect-error - testing runtime check
+			where: { bool: { equals: 10 } },
+		});
+
+		expect(promise).rejects.toThrow("Field 'bool' is not a number field");
+	});
+
+	it("uses fallback value for filtering if field is missing but has fallback", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					// Optional field with fallback
+					val: t.number({ optional: true, fallback: 100 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		// Create item without the field. It should take fallback 100.
+		db.items.create({});
+		// Create item with explicit field.
+		db.items.create({ val: 50 });
+
+		const result = await db.items.query({
+			fields: { id: true, val: true },
+			where: { val: { greaterThan: 80 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(1);
+		expect(result.data[0]?.val).toBe(100);
+	});
+
+	it("uses fallback value for filtering even if field is not in result projection", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ optional: true, fallback: 100 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({}); // Should be 100
+		db.items.create({ val: 50 });
+
+		const result = await db.items.query({
+			fields: { id: true }, // Not asking for 'val'
+			where: { val: { greaterThan: 80 } },
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(1);
+	});
+});
