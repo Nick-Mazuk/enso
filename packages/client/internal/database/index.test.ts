@@ -540,5 +540,186 @@ describe("database.entity.query", () => {
 			assert(result.success, "expected query to succeed");
 			expect(result.data).toEqual([{ id: user1.data.id, name: "user 1" }]);
 		});
+
+		it("string: is undefined", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.string({ optional: true, fallback: "" }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: "hello",
+			});
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true },
+				where: {
+					maybeDefined: { isDefined: false },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([{ id: user2.data.id, name: "user 2" }]);
+		});
+
+		it("string: is undefined still returns fallback", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.string({ optional: true, fallback: "" }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: "hello",
+			});
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true, maybeDefined: true },
+				where: {
+					maybeDefined: { isDefined: false },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([
+				{ id: user2.data.id, name: "user 2", maybeDefined: "" },
+			]);
+		});
+
+		it("string: is defined", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.string({ optional: true, fallback: "" }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({
+				name: "user 1",
+				maybeDefined: "hello",
+			});
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true },
+				where: {
+					maybeDefined: { isDefined: true },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([{ id: user1.data.id, name: "user 1" }]);
+		});
+
+		it("number: is undefined", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.number({ optional: true, fallback: 0 }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true },
+				where: {
+					maybeDefined: { isDefined: false },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([{ id: user2.data.id, name: "user 2" }]);
+		});
+
+		it("number: is undefined still returns fallback", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.number({ optional: true, fallback: 0 }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true, maybeDefined: true },
+				where: {
+					maybeDefined: { isDefined: false },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([
+				{ id: user2.data.id, name: "user 2", maybeDefined: 0 },
+			]);
+		});
+
+		it("number: is defined", async () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ optional: true, fallback: "string" }),
+						maybeDefined: t.number({ optional: true, fallback: 0 }),
+					},
+				},
+			});
+
+			const store = new Store();
+			const database = createDatabase(schema, store);
+
+			const user1 = database.users.create({ name: "user 1", maybeDefined: 1 });
+			assert(user1.success, "Expected create to succeed");
+			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			assert(user2.success, "Expected create to succeed");
+
+			const result = await database.users.query({
+				fields: { id: true, name: true },
+				where: {
+					maybeDefined: { isDefined: true },
+				},
+			});
+			assert(result.success, "expected query to succeed");
+			expect(result.data).toEqual([{ id: user1.data.id, name: "user 1" }]);
+		});
 	});
 });

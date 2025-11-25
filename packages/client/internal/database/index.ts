@@ -21,13 +21,13 @@ export const createDatabase = <
 ): Database<S> => {
 	const database: Partial<Database<S>> = {};
 	for (const entity in schema.entities) {
+		const entitySchema = schema.entities[entity];
+		assert(
+			entitySchema !== undefined,
+			`Entity '${entity}' not found in schema`,
+		);
 		database[entity as keyof S["entities"]] = {
 			create: (fields) => {
-				const entitySchema = schema.entities[entity];
-				assert(
-					entitySchema !== undefined,
-					`Entity '${entity}' not found in schema`,
-				);
 				for (const schemaField in entitySchema) {
 					const fieldDefinition = entitySchema[schemaField];
 					assert(
@@ -60,11 +60,6 @@ export const createDatabase = <
 				return { success: true, data: { ...fields, id } } as any;
 			},
 			query: async (opts) => {
-				const entitySchema = schema.entities[entity];
-				assert(
-					entitySchema !== undefined,
-					`Entity '${entity}' not found in schema`,
-				);
 				const fields = Object.entries(opts.fields)
 					.filter(([_, value]) => value)
 					.map(([key]) => key);
@@ -79,7 +74,6 @@ export const createDatabase = <
 						};
 					}
 				}
-				// DO NOT SUBMIT - validate filters
 				const find = fields.map(Variable);
 				const where: QueryPattern[] = [
 					[
