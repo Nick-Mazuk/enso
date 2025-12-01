@@ -165,11 +165,12 @@ export class Store {
 		patterns: QueryPattern[],
 		contexts: QueryContext[] = [new QueryContext()],
 	) {
+		let newContexts = contexts;
 		for (const pattern of patterns) {
-			contexts = contexts.flatMap((context) =>
+			newContexts = newContexts.flatMap((context) =>
 				this.querySinglePattern(pattern, context),
 			);
-			if (contexts.length === 0) {
+			if (newContexts.length === 0) {
 				// No need to process more patterns if we have no matches.
 				return [];
 			}
@@ -178,12 +179,12 @@ export class Store {
 		// and the database is empty.
 		if (
 			patterns.length > 0 &&
-			contexts.length === 1 &&
-			contexts[0]?.size() === 0
+			newContexts.length === 1 &&
+			newContexts[0]?.size() === 0
 		) {
 			return [];
 		}
-		return contexts;
+		return newContexts;
 	}
 
 	deleteAllById(id: Id) {

@@ -33,6 +33,7 @@ export const createDatabase = <
 ): Database<S> => {
 	const database: Partial<Database<S>> = {};
 	for (const entity in schema.entities) {
+		if (!Object.hasOwn(schema.entities, entity)) continue;
 		const entitySchema = schema.entities[entity];
 		assert(
 			entitySchema !== undefined,
@@ -41,6 +42,7 @@ export const createDatabase = <
 		database[entity as keyof S["entities"]] = {
 			create: (fields) => {
 				for (const schemaField in entitySchema) {
+					if (!Object.hasOwn(entitySchema, schemaField)) continue;
 					const fieldDefinition = entitySchema[schemaField];
 					assert(
 						fieldDefinition !== undefined,
@@ -60,6 +62,7 @@ export const createDatabase = <
 				const id = Id(nanoid());
 				const triples: Triple[] = [];
 				for (const field in fields) {
+					if (!Object.hasOwn(fields, field)) continue;
 					triples.push([
 						id,
 						StoreField(`${entity}/${field}`),
@@ -71,6 +74,7 @@ export const createDatabase = <
 				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 				return { success: true, data: { ...fields, id } } as any;
 			},
+			// biome-ignore lint/suspicious/useAwait: The async will be needed in the future
 			query: async (opts) => {
 				const selectedFields = Object.keys(opts.fields);
 				// validate all selected fields are in the schema
@@ -115,6 +119,7 @@ export const createDatabase = <
 
 				// Apply filters
 				for (const filteredField in opts.where) {
+					if (!Object.hasOwn(opts.where, filteredField)) continue;
 					// Ensure all filtered fields are in the schema.
 					const fieldSchema = entitySchema[filteredField];
 					if (fieldSchema === undefined) {
@@ -130,6 +135,7 @@ export const createDatabase = <
 					if (!config) continue;
 
 					for (const filter in config) {
+						if (!Object.hasOwn(config, filter)) continue;
 						// Validate config is not undefined
 						const filterValue = config[filter as keyof typeof config];
 						if (typeof filterValue === "undefined") continue;

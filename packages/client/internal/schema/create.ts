@@ -8,7 +8,9 @@ export const createSchema = <
 	schema: Schema<Entities>,
 ): Schema<Entities> => {
 	for (const entity in schema.entities) {
+		if (!Object.hasOwn(schema.entities, entity)) continue;
 		for (const field in schema.entities[entity]) {
+			if (!Object.hasOwn(schema.entities[entity], field)) continue;
 			if (reservedFields.includes(field as ReservedField)) {
 				throw new Error(`Reserved field '${field}' is not allowed`);
 			}

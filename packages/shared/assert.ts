@@ -14,9 +14,7 @@ export function assert(condition: boolean, message: string): asserts condition {
 	if (!condition) {
 		if (
 			// biome-ignore lint/complexity/useLiteralKeys: required by TypeScript
-			!import.meta.env["PROD"] &&
-			// biome-ignore lint/complexity/useLiteralKeys: required by TypeScript
-			!import.meta.env["TEST"] &&
+			!(import.meta.env["PROD"] || import.meta.env["TEST"]) &&
 			typeof window !== "undefined" &&
 			typeof alert === "function"
 		) {

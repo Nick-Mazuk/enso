@@ -18,6 +18,49 @@
 			"recommended": true,
 			"nursery": {
 				"noShadow": "error"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noArrayIndexKey": "error",
+				"noDuplicateTestHooks": "error",
+				"noEmptyBlockStatements": "error",
+				"noEvolvingTypes": "error",
+				"noExportsInTest": "error",
+				"noFocusedTests": "error",
+				"noMisplacedAssertion": "error",
+				"noSkippedTests": "error",
+				"noUnassignedVariables": "error",
+				"noVar": "error",
+				"useAwait": "error",
+				"useGuardForIn": "error",
+				"useNumberToFixedDigitsArgument": "error",
+				"useStaticResponseMethods": "error"
+			},
+			"style": {
+				"noNonNullAssertion": "error",
+				"noParameterAssign": "error"
+			},
+			"complexity": {
+				"noForEach": "error",
+				"noImplicitCoercions": "error",
+				"noUselessStringConcat": "error",
+				"noVoid": "error",
+				"useSimplifiedLogicExpression": "error",
+				"useWhile": "error"
+			},
+			"correctness": {
+				"noUndeclaredDependencies": "error",
+				"useImportExtensions": {
+					"options": {
+						"forceJsExtensions": true
+					}
+				}
+			},
+			"performance": {
+				"noDelete": "error",
+				"noAwaitInLoops": "error",
+				"noReExportAll": "error",
+				"useTopLevelRegex": "error"
 			}
 		}
 	},
