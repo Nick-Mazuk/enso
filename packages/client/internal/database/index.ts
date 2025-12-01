@@ -7,12 +7,18 @@ import {
 	type Filter,
 	Id,
 	type QueryPattern,
+	type QueryVariable,
 	Field as StoreField,
 	type Triple,
 	Value,
 	Variable,
 } from "../store/types";
-import type { Database } from "./types";
+import type {
+	BooleanFilters,
+	Database,
+	NumberFilters,
+	StringFilters,
+} from "./types";
 
 const getValue = (v: unknown, schema: { fallback?: unknown }) => {
 	if (v !== undefined) return v;
@@ -164,145 +170,41 @@ export const createDatabase = <
 						// Filters specific to different field kinds
 						switch (fieldSchema.kind) {
 							case "number": {
-								if (
-									![
-										"equals",
-										"notEquals",
-										"greaterThan",
-										"greaterThanOrEqual",
-										"lessThan",
-										"lessThanOrEqual",
-									].includes(filter)
-								) {
-									return filterError;
-								}
+								if (!(filter in numberFilters)) return filterError;
 								if (typeof filterValue !== "number")
 									return filterValueTypeError;
-								switch (filter) {
-									case "equals":
-										filters.push({
-											selector,
-											filter: (v) => getValue(v, fieldSchema) === filterValue,
-										});
-										continue;
-									case "notEquals":
-										filters.push({
-											selector,
-											filter: (v) => getValue(v, fieldSchema) !== filterValue,
-										});
-										continue;
-									case "greaterThan":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return typeof val === "number" && val > filterValue;
-											},
-										});
-										continue;
-									case "greaterThanOrEqual":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return typeof val === "number" && val >= filterValue;
-											},
-										});
-										continue;
-									case "lessThan":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return typeof val === "number" && val < filterValue;
-											},
-										});
-										continue;
-									case "lessThanOrEqual":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return typeof val === "number" && val <= filterValue;
-											},
-										});
-										continue;
-									default:
-										return filterError;
-								}
-							}
-							case "boolean":
-								if (filter !== "equals") return filterError;
-								if (typeof filterValue !== "boolean")
-									return filterValueTypeError;
-								filters.push({
+								numberFilters[filter as keyof NumberFilters]({
+									value: filterValue,
+									filters,
 									selector,
-									filter: (v) => getValue(v, fieldSchema) === filterValue,
+									fieldSchema,
 								});
 								continue;
-							case "string":
-								if (
-									![
-										"equals",
-										"notEquals",
-										"contains",
-										"startsWith",
-										"endsWith",
-									].includes(filter)
-								) {
-									return filterError;
-								}
+							}
+							case "boolean": {
+								if (!(filter in booleanFilters)) return filterError;
+								if (typeof filterValue !== "boolean")
+									return filterValueTypeError;
+								booleanFilters[filter as keyof BooleanFilters]({
+									value: filterValue,
+									filters,
+									selector,
+									fieldSchema,
+								});
+								continue;
+							}
+							case "string": {
+								if (!(filter in stringFilters)) return filterError;
 								if (typeof filterValue !== "string")
 									return filterValueTypeError;
-								switch (filter) {
-									case "equals":
-										filters.push({
-											selector,
-											filter: (v) => getValue(v, fieldSchema) === filterValue,
-										});
-										continue;
-									case "notEquals":
-										filters.push({
-											selector,
-											filter: (v) => getValue(v, fieldSchema) !== filterValue,
-										});
-										continue;
-									case "contains":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return (
-													typeof val === "string" && val.includes(filterValue)
-												);
-											},
-										});
-										continue;
-									case "startsWith":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return (
-													typeof val === "string" && val.startsWith(filterValue)
-												);
-											},
-										});
-										continue;
-									case "endsWith":
-										filters.push({
-											selector,
-											filter: (v) => {
-												const val = getValue(v, fieldSchema);
-												return (
-													typeof val === "string" && val.endsWith(filterValue)
-												);
-											},
-										});
-										continue;
-									default:
-										return filterError;
-								}
+								stringFilters[filter as keyof StringFilters]({
+									value: filterValue,
+									filters,
+									selector,
+									fieldSchema,
+								});
+								continue;
+							}
 							default:
 								return filterError;
 						}
@@ -361,4 +263,118 @@ export const createDatabase = <
 		};
 	}
 	return Object.freeze(database) as Database<S>;
+};
+
+const numberFilters: Record<
+	keyof NumberFilters,
+	(opts: {
+		value: number;
+		filters: Filter[];
+		selector: QueryVariable;
+		fieldSchema: Field<FieldValue, boolean>;
+	}) => void
+> = {
+	equals: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => getValue(v, fieldSchema) === value,
+		}),
+	notEquals: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => getValue(v, fieldSchema) !== value,
+		}),
+	greaterThan: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "number" && val > value;
+			},
+		}),
+	greaterThanOrEqual: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "number" && val >= value;
+			},
+		}),
+	lessThan: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "number" && val < value;
+			},
+		}),
+	lessThanOrEqual: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "number" && val <= value;
+			},
+		}),
+};
+
+const stringFilters: Record<
+	keyof StringFilters,
+	(opts: {
+		value: string;
+		filters: Filter[];
+		selector: QueryVariable;
+		fieldSchema: Field<FieldValue, boolean>;
+	}) => void
+> = {
+	equals: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => getValue(v, fieldSchema) === value,
+		}),
+	notEquals: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => getValue(v, fieldSchema) !== value,
+		}),
+	contains: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "string" && val.includes(value);
+			},
+		}),
+	startsWith: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "string" && val.startsWith(value);
+			},
+		}),
+	endsWith: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => {
+				const val = getValue(v, fieldSchema);
+				return typeof val === "string" && val.endsWith(value);
+			},
+		}),
+};
+
+const booleanFilters: Record<
+	keyof BooleanFilters,
+	(opts: {
+		value: boolean;
+		filters: Filter[];
+		selector: QueryVariable;
+		fieldSchema: Field<FieldValue, boolean>;
+	}) => void
+> = {
+	equals: ({ value, filters, selector, fieldSchema }) =>
+		filters.push({
+			selector,
+			filter: (v) => getValue(v, fieldSchema) === value,
+		}),
 };
