@@ -25,6 +25,11 @@ const getValue = (v: unknown, schema: { fallback?: unknown }) => {
 	return schema.fallback;
 };
 
+const isKeyOfRecord = <T extends object>(
+	key: string | number | symbol,
+	record: T,
+): key is keyof T => key in record;
+
 export const createDatabase = <
 	S extends Schema<Record<string, Record<string, Field<FieldValue, boolean>>>>,
 >(
@@ -170,10 +175,12 @@ export const createDatabase = <
 						// Filters specific to different field kinds
 						switch (fieldSchema.kind) {
 							case "number": {
-								if (!(filter in numberFilters)) return filterError;
+								if (!isKeyOfRecord(filter, numberFilters)) {
+									return filterError;
+								}
 								if (typeof filterValue !== "number")
 									return filterValueTypeError;
-								numberFilters[filter as keyof NumberFilters]({
+								numberFilters[filter]({
 									value: filterValue,
 									filters,
 									selector,
@@ -182,10 +189,12 @@ export const createDatabase = <
 								continue;
 							}
 							case "boolean": {
-								if (!(filter in booleanFilters)) return filterError;
+								if (!isKeyOfRecord(filter, booleanFilters)) {
+									return filterError;
+								}
 								if (typeof filterValue !== "boolean")
 									return filterValueTypeError;
-								booleanFilters[filter as keyof BooleanFilters]({
+								booleanFilters[filter]({
 									value: filterValue,
 									filters,
 									selector,
@@ -194,10 +203,12 @@ export const createDatabase = <
 								continue;
 							}
 							case "string": {
-								if (!(filter in stringFilters)) return filterError;
+								if (!isKeyOfRecord(filter, stringFilters)) {
+									return filterError;
+								}
 								if (typeof filterValue !== "string")
 									return filterValueTypeError;
-								stringFilters[filter as keyof StringFilters]({
+								stringFilters[filter]({
 									value: filterValue,
 									filters,
 									selector,
