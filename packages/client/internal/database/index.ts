@@ -159,18 +159,6 @@ export const createDatabase = <
 
 						// Constants for multiple filters
 						const selector = Variable(filteredField);
-						const filterError = {
-							success: false,
-							error: {
-								message: `Filter '${filter}' not allowed on ${filteredField} which is a ${fieldSchema.kind}`,
-							},
-						} as const;
-						const filterValueTypeError = {
-							success: false,
-							error: {
-								message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
-							},
-						} as const;
 
 						// Filters specific to different field kinds
 						assert(
@@ -179,10 +167,20 @@ export const createDatabase = <
 						);
 						const typeFilters = filtersByKind[fieldSchema.kind];
 						if (!(filter in typeFilters)) {
-							return filterError;
+							return {
+								success: false,
+								error: {
+									message: `Filter '${filter}' not allowed on ${filteredField} which is a ${fieldSchema.kind}`,
+								},
+							} as const;
 						}
 						if (typeof filterValue !== fieldSchema.kind) {
-							return filterValueTypeError;
+							return {
+								success: false,
+								error: {
+									message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
+								},
+							} as const;
 						}
 						const addFilterFunction =
 							typeFilters[filter as keyof typeof typeFilters];
