@@ -25,11 +25,6 @@ const getValue = (v: unknown, schema: { fallback?: unknown }) => {
 	return schema.fallback;
 };
 
-const isKeyOfRecord = <T extends object>(
-	key: string | number | symbol,
-	record: T,
-): key is keyof T => key in record;
-
 export const createDatabase = <
 	S extends Schema<Record<string, Record<string, Field<FieldValue, boolean>>>>,
 >(
