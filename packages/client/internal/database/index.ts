@@ -7,7 +7,6 @@ import {
 	type Filter,
 	Id,
 	type QueryPattern,
-	type QueryVariable,
 	Field as StoreField,
 	type Triple,
 	Value,
@@ -20,9 +19,12 @@ import type {
 	StringFilters,
 } from "./types";
 
-const getValue = (v: unknown, schema: { fallback?: unknown }) => {
+const getValue = (
+	v: Datom | undefined,
+	schema: Field<FieldValue, boolean>,
+): Datom | undefined => {
 	if (v !== undefined) return v;
-	return schema.fallback;
+	return schema.fallback as Datom | undefined;
 };
 
 export const createDatabase = <
@@ -183,17 +185,14 @@ export const createDatabase = <
 								},
 							} as const;
 						}
-						const addFilterFunction =
-							typeFilters[filter as keyof typeof typeFilters];
+						const predicate = typeFilters[filter as keyof typeof typeFilters];
 						assert(
-							typeof addFilterFunction !== "undefined",
-							"addFilterFunction not in typeFilters",
+							typeof predicate !== "undefined",
+							"predicate not in typeFilters",
 						);
-						addFilterFunction({
-							value: filterValue,
-							filters,
+						filters.push({
 							selector,
-							fieldSchema,
+							filter: (v) => predicate(getValue(v, fieldSchema), filterValue),
 						});
 					}
 
@@ -252,105 +251,41 @@ export const createDatabase = <
 	return Object.freeze(database) as Database<S>;
 };
 
-type AddFilterFunc<T extends FieldValue> = (opts: {
-	value: T;
-	filters: Filter[];
-	selector: QueryVariable;
-	fieldSchema: Field<FieldValue, boolean>;
-}) => void;
+type FilterPredicate<T extends FieldValue> = (
+	currentValue: Datom | undefined,
+	comparison: T,
+) => boolean;
 
-const numberFilters: Record<keyof NumberFilters, AddFilterFunc<number>> = {
-	equals: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => getValue(v, fieldSchema) === value,
-		}),
-	notEquals: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => getValue(v, fieldSchema) !== value,
-		}),
-	greaterThan: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "number" && val > value;
-			},
-		}),
-	greaterThanOrEqual: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "number" && val >= value;
-			},
-		}),
-	lessThan: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "number" && val < value;
-			},
-		}),
-	lessThanOrEqual: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "number" && val <= value;
-			},
-		}),
+const numberFilters: Record<keyof NumberFilters, FilterPredicate<number>> = {
+	equals: (currentValue, comparison) => currentValue === comparison,
+	notEquals: (currentValue, comparison) => currentValue !== comparison,
+	greaterThan: (currentValue, comparison) =>
+		typeof currentValue === "number" && currentValue > comparison,
+	greaterThanOrEqual: (currentValue, comparison) =>
+		typeof currentValue === "number" && currentValue >= comparison,
+	lessThan: (currentValue, comparison) =>
+		typeof currentValue === "number" && currentValue < comparison,
+	lessThanOrEqual: (currentValue, comparison) =>
+		typeof currentValue === "number" && currentValue <= comparison,
 };
 
-const stringFilters: Record<keyof StringFilters, AddFilterFunc<string>> = {
-	equals: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => getValue(v, fieldSchema) === value,
-		}),
-	notEquals: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => getValue(v, fieldSchema) !== value,
-		}),
-	contains: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "string" && val.includes(value);
-			},
-		}),
-	startsWith: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "string" && val.startsWith(value);
-			},
-		}),
-	endsWith: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => {
-				const val = getValue(v, fieldSchema);
-				return typeof val === "string" && val.endsWith(value);
-			},
-		}),
+const stringFilters: Record<keyof StringFilters, FilterPredicate<string>> = {
+	equals: (currentValue, comparison) => currentValue === comparison,
+	notEquals: (currentValue, comparison) => currentValue !== comparison,
+	contains: (currentValue, comparison) =>
+		typeof currentValue === "string" && currentValue.includes(comparison),
+	startsWith: (currentValue, comparison) =>
+		typeof currentValue === "string" && currentValue.startsWith(comparison),
+	endsWith: (currentValue, comparison) =>
+		typeof currentValue === "string" && currentValue.endsWith(comparison),
 };
 
-const booleanFilters: Record<keyof BooleanFilters, AddFilterFunc<boolean>> = {
-	equals: ({ value, filters, selector, fieldSchema }) =>
-		filters.push({
-			selector,
-			filter: (v) => getValue(v, fieldSchema) === value,
-		}),
+const booleanFilters: Record<keyof BooleanFilters, FilterPredicate<boolean>> = {
+	equals: (currentValue, comparison) => currentValue === comparison,
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
-const filtersByKind: Record<FieldKind, Record<string, AddFilterFunc<any>>> = {
+const filtersByKind: Record<FieldKind, Record<string, FilterPredicate<any>>> = {
 	number: numberFilters,
 	string: stringFilters,
 	boolean: booleanFilters,
