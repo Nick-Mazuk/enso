@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { assert } from "../../../shared/assert";
-import type { Field, FieldValue, Schema } from "../schema/types";
+import type { Field, FieldKind, FieldValue, Schema } from "../schema/types";
 import type { Store } from "../store";
 import {
 	type Datom,
@@ -173,52 +173,29 @@ export const createDatabase = <
 						} as const;
 
 						// Filters specific to different field kinds
-						switch (fieldSchema.kind) {
-							case "number": {
-								if (!isKeyOfRecord(filter, numberFilters)) {
-									return filterError;
-								}
-								if (typeof filterValue !== "number")
-									return filterValueTypeError;
-								numberFilters[filter]({
-									value: filterValue,
-									filters,
-									selector,
-									fieldSchema,
-								});
-								continue;
-							}
-							case "boolean": {
-								if (!isKeyOfRecord(filter, booleanFilters)) {
-									return filterError;
-								}
-								if (typeof filterValue !== "boolean")
-									return filterValueTypeError;
-								booleanFilters[filter]({
-									value: filterValue,
-									filters,
-									selector,
-									fieldSchema,
-								});
-								continue;
-							}
-							case "string": {
-								if (!isKeyOfRecord(filter, stringFilters)) {
-									return filterError;
-								}
-								if (typeof filterValue !== "string")
-									return filterValueTypeError;
-								stringFilters[filter]({
-									value: filterValue,
-									filters,
-									selector,
-									fieldSchema,
-								});
-								continue;
-							}
-							default:
-								return filterError;
+						assert(
+							fieldSchema.kind in filtersByKind,
+							`Internal error: fieldSchema.kind "${fieldSchema.kind}" not in filtersByKind`,
+						);
+						const typeFilters = filtersByKind[fieldSchema.kind];
+						if (!(filter in typeFilters)) {
+							return filterError;
 						}
+						if (typeof filterValue !== fieldSchema.kind) {
+							return filterValueTypeError;
+						}
+						const addFilterFunction =
+							typeFilters[filter as keyof typeof typeFilters];
+						assert(
+							typeof addFilterFunction !== "undefined",
+							"addFilterFunction not in typeFilters",
+						);
+						addFilterFunction({
+							value: filterValue,
+							filters,
+							selector,
+							fieldSchema,
+						});
 					}
 
 					// If the schema has a fallback, we still want to use that fallback for filtering.
@@ -276,15 +253,14 @@ export const createDatabase = <
 	return Object.freeze(database) as Database<S>;
 };
 
-const numberFilters: Record<
-	keyof NumberFilters,
-	(opts: {
-		value: number;
-		filters: Filter[];
-		selector: QueryVariable;
-		fieldSchema: Field<FieldValue, boolean>;
-	}) => void
-> = {
+type AddFilterFunc<T extends FieldValue> = (opts: {
+	value: T;
+	filters: Filter[];
+	selector: QueryVariable;
+	fieldSchema: Field<FieldValue, boolean>;
+}) => void;
+
+const numberFilters: Record<keyof NumberFilters, AddFilterFunc<number>> = {
 	equals: ({ value, filters, selector, fieldSchema }) =>
 		filters.push({
 			selector,
@@ -329,15 +305,7 @@ const numberFilters: Record<
 		}),
 };
 
-const stringFilters: Record<
-	keyof StringFilters,
-	(opts: {
-		value: string;
-		filters: Filter[];
-		selector: QueryVariable;
-		fieldSchema: Field<FieldValue, boolean>;
-	}) => void
-> = {
+const stringFilters: Record<keyof StringFilters, AddFilterFunc<string>> = {
 	equals: ({ value, filters, selector, fieldSchema }) =>
 		filters.push({
 			selector,
@@ -374,18 +342,17 @@ const stringFilters: Record<
 		}),
 };
 
-const booleanFilters: Record<
-	keyof BooleanFilters,
-	(opts: {
-		value: boolean;
-		filters: Filter[];
-		selector: QueryVariable;
-		fieldSchema: Field<FieldValue, boolean>;
-	}) => void
-> = {
+const booleanFilters: Record<keyof BooleanFilters, AddFilterFunc<boolean>> = {
 	equals: ({ value, filters, selector, fieldSchema }) =>
 		filters.push({
 			selector,
 			filter: (v) => getValue(v, fieldSchema) === value,
 		}),
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
+const filtersByKind: Record<FieldKind, Record<string, AddFilterFunc<any>>> = {
+	number: numberFilters,
+	string: stringFilters,
+	boolean: booleanFilters,
 };
