@@ -107,17 +107,8 @@ export const createDatabase = <
 				const whereNot: QueryPattern[] = [];
 				const filters: Filter[] = [];
 
-				// Query for fields. Make them optional because they may not be defined.
-				// Even if the schema says the field is required, the underlying data
-				// could be missing.
-				for (const field of selectedFields) {
-					if (field === "id") continue;
-					optional.push([
-						Variable("id"),
-						StoreField(`${entity}/${field}`),
-						Variable(field),
-					]);
-				}
+				const fieldsToBind = new Set(selectedFields);
+				fieldsToBind.delete("id");
 
 				// Apply filters
 				for (const filteredField in opts.where) {
@@ -198,13 +189,20 @@ export const createDatabase = <
 
 					// If the schema has a fallback, we still want to use that fallback for filtering.
 					// Therefore we need to make sure the query still looks for this field.
-					if (fieldSchema.fallback && !selectedFields.includes(filteredField)) {
-						optional.push([
-							Variable("id"),
-							StoreField(`${entity}/${filteredField}`),
-							Variable(filteredField),
-						]);
+					if (fieldSchema.fallback) {
+						fieldsToBind.add(filteredField);
 					}
+				}
+
+				// Query for fields. Make them optional because they may not be defined.
+				// Even if the schema says the field is required, the underlying data
+				// could be missing.
+				for (const field of fieldsToBind) {
+					optional.push([
+						Variable("id"),
+						StoreField(`${entity}/${field}`),
+						Variable(field),
+					]);
 				}
 
 				const response = store.query({
