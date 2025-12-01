@@ -14,7 +14,9 @@ import {
 } from "../store/types";
 import type {
 	BooleanFilters,
+	CommonFilters,
 	Database,
+	DatabaseResult,
 	NumberFilters,
 	StringFilters,
 } from "./types";
@@ -95,113 +97,38 @@ export const createDatabase = <
 
 				// Initialize store.query options
 				const find = selectedFields.map(Variable);
-				const where: QueryPattern[] = [
-					[
-						Variable("id"),
-						StoreField(`${entity}/id`),
-						// binding to a separate value here enables the developer to query for just an objects id
-						Variable("$$$id_val$$$"),
-					],
-				];
+				const filterResult = computeFilters({
+					entity,
+					entitySchema,
+					where: opts.where,
+				});
+				if (!filterResult.success) return filterResult;
+				const where = filterResult.data.where;
+				const whereNot = filterResult.data.whereNot;
+				const filters = filterResult.data.filters;
 				const optional: QueryPattern[] = [];
-				const whereNot: QueryPattern[] = [];
-				const filters: Filter[] = [];
+				where.push([
+					Variable("id"),
+					StoreField(`${entity}/id`),
+					// binding to a separate value here enables the developer to query for just an objects id
+					Variable("$$$id_val$$$"),
+				]);
 
-				const fieldsToBind = new Set(selectedFields);
-				fieldsToBind.delete("id");
-
-				// Apply filters
-				for (const filteredField in opts.where) {
-					if (!Object.hasOwn(opts.where, filteredField)) continue;
-					// Ensure all filtered fields are in the schema.
-					const fieldSchema = entitySchema[filteredField];
-					if (fieldSchema === undefined) {
-						return {
-							success: false,
-							error: {
-								message: `Field '${filteredField}' not found in schema`,
-							},
-						} as const;
-					}
-
-					const config = opts.where[filteredField];
-					if (!config) continue;
-
-					for (const filter in config) {
-						if (!Object.hasOwn(config, filter)) continue;
-						// Validate config is not undefined
-						const filterValue = config[filter as keyof typeof config];
-						if (typeof filterValue === "undefined") continue;
-
-						// Filters common to all field kinds
-						if (filter === "isDefined") {
-							if (filterValue) {
-								where.push([
-									Variable("id"),
-									StoreField(`${entity}/${filteredField}`),
-									Variable(filteredField),
-								]);
-								continue;
-							}
-							whereNot.push([
-								Variable("id"),
-								StoreField(`${entity}/${filteredField}`),
-								Variable(filteredField),
-							]);
-							continue;
-						}
-
-						// Constants for multiple filters
-						const selector = Variable(filteredField);
-
-						// Filters specific to different field kinds
-						assert(
-							fieldSchema.kind in filtersByKind,
-							`Internal error: fieldSchema.kind "${fieldSchema.kind}" not in filtersByKind`,
-						);
-						const typeFilters = filtersByKind[fieldSchema.kind];
-						if (!(filter in typeFilters)) {
-							return {
-								success: false,
-								error: {
-									message: `Filter '${filter}' not allowed on ${filteredField} which is a ${fieldSchema.kind}`,
-								},
-							} as const;
-						}
-						if (typeof filterValue !== fieldSchema.kind) {
-							return {
-								success: false,
-								error: {
-									message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
-								},
-							} as const;
-						}
-						const predicate = typeFilters[filter as keyof typeof typeFilters];
-						assert(
-							typeof predicate !== "undefined",
-							"predicate not in typeFilters",
-						);
-						filters.push({
-							selector,
-							filter: (v) => predicate(getValue(v, fieldSchema), filterValue),
-						});
-					}
-
-					// If the schema has a fallback, we still want to use that fallback for filtering.
-					// Therefore we need to make sure the query still looks for this field.
-					if (fieldSchema.fallback) {
-						fieldsToBind.add(filteredField);
-					}
-				}
-
-				// Query for fields. Make them optional because they may not be defined.
-				// Even if the schema says the field is required, the underlying data
-				// could be missing.
-				for (const field of fieldsToBind) {
+				for (const field of selectedFields) {
 					optional.push([
 						Variable("id"),
 						StoreField(`${entity}/${field}`),
 						Variable(field),
+					]);
+				}
+				for (const filteredField in opts.where) {
+					if (!Object.hasOwn(opts.where, filteredField)) continue;
+					// If the schema has a fallback, we still want to use that fallback for filtering.
+					// Therefore we need to make sure the query still looks for this field.
+					optional.push([
+						Variable("id"),
+						StoreField(`${entity}/${filteredField}`),
+						Variable(filteredField),
 					]);
 				}
 
@@ -247,6 +174,94 @@ export const createDatabase = <
 		};
 	}
 	return Object.freeze(database) as Database<S>;
+};
+
+const computeFilters = (opts: {
+	where?: Partial<
+		Record<
+			string,
+			Partial<CommonFilters & NumberFilters & StringFilters & BooleanFilters>
+		>
+	>;
+	entity: string;
+	entitySchema: Record<string, Field<FieldValue, boolean>>;
+}): DatabaseResult<{
+	where: QueryPattern[];
+	whereNot: QueryPattern[];
+	filters: Filter[];
+}> => {
+	const where: QueryPattern[] = [];
+	const whereNot: QueryPattern[] = [];
+	const filters: Filter[] = [];
+
+	for (const filteredField in opts.where) {
+		if (!Object.hasOwn(opts.where, filteredField)) continue;
+		// Ensure all filtered fields are in the schema.
+		const fieldSchema = opts.entitySchema[filteredField];
+		if (fieldSchema === undefined) {
+			return {
+				success: false,
+				error: {
+					message: `Field '${filteredField}' not found in schema`,
+				},
+			} as const;
+		}
+
+		const config = opts.where[filteredField];
+		if (!config) continue;
+
+		for (const filter in config) {
+			if (!Object.hasOwn(config, filter)) continue;
+			// Validate config is not undefined
+			const filterValue = config[filter as keyof typeof config];
+			if (typeof filterValue === "undefined") continue;
+
+			// Filters common to all field kinds
+			if (filter === "isDefined") {
+				const pattern: QueryPattern = [
+					Variable("id"),
+					StoreField(`${opts.entity}/${filteredField}`),
+					Variable(filteredField),
+				];
+				if (filterValue) {
+					where.push(pattern);
+					continue;
+				}
+				whereNot.push(pattern);
+				continue;
+			}
+
+			// Filters specific to different field kinds
+			assert(
+				fieldSchema.kind in filtersByKind,
+				`Internal error: fieldSchema.kind "${fieldSchema.kind}" not in filtersByKind`,
+			);
+			const typeFilters = filtersByKind[fieldSchema.kind];
+			if (!(filter in typeFilters)) {
+				return {
+					success: false,
+					error: {
+						message: `Filter '${filter}' not allowed on ${filteredField} which is a ${fieldSchema.kind}`,
+					},
+				} as const;
+			}
+			if (typeof filterValue !== fieldSchema.kind) {
+				return {
+					success: false,
+					error: {
+						message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
+					},
+				} as const;
+			}
+			const predicate = typeFilters[filter as keyof typeof typeFilters];
+			assert(typeof predicate !== "undefined", "predicate not in typeFilters");
+			filters.push({
+				selector: Variable(filteredField),
+				filter: (v) => predicate(getValue(v, fieldSchema), filterValue),
+			});
+		}
+	}
+	return { success: true, data: { where, whereNot, filters } };
 };
 
 type FilterPredicate<T extends FieldValue> = (
