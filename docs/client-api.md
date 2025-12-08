@@ -386,7 +386,7 @@ const paginatedUsers = client.database.users.paginated({
     age: true,
   },
   where: { age: { greaterThan: 18 } },
-  orderBy: [{ name: "asc" }],
+  orderBy: [["name","asc"]],
   pageSize: 20,
 });
 
@@ -421,7 +421,7 @@ const { data: limitedUsers, error: limitError } =
       age: { greaterThan: 18 },
     },
     limit: 10,
-    orderBy: [{ age: "desc" }, { name: "asc" }],
+    orderBy: [["age", "desc"], ["name", "asc"]],
   });
 
 // ORDERING results
@@ -436,8 +436,8 @@ const { data: orderedPosts, error: orderError } =
       published: true,
     },
     orderBy: [
-      { createdAt: "desc" }, // Most recent first
-      { viewCount: "desc" }, // Then by view count
+      ["createdAt", "desc"], // Most recent first
+      ["viewCount", "desc"], // Then by view count
     ],
     limit: 5,
   });
@@ -466,7 +466,7 @@ const { data: byAuthor } = await client.database.posts.query({
   },
   groupBy: ["authorId"],
   where: { published: true },
-  orderBy: [{ totalViews: "desc" }],
+  orderBy: [["totalViews", "desc"]],
   limit: 5,
 });
 // Returns: Array<{ authorId: string, postCount: number, totalViews: number, avgViews: number }>
@@ -501,14 +501,14 @@ const { data: usersWithPosts } = await client.database.users.query({
       where: {
         published: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: ["createdAt", "desc"],
       limit: 10, // Only get 10 most recent posts
     },
   },
   where: {
     age: { greaterThan: 25 },
   },
-  orderBy: { name: "asc" },
+  orderBy: ["name","asc"],
 });
 
 // === Batch Write Operations ===
@@ -696,7 +696,7 @@ fields: {
     where: {
       published: true
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: ['createdAt', 'desc'],
     limit: 10
   },
   profile: {  // t.ref('profiles')
@@ -746,24 +746,22 @@ fields: {
 
 ### Ordering
 
-Specify sorting with the `orderBy` clause. For single field sorting, use an object:
+Specify sorting with the `orderBy` clause.
+
+For single field sorting, use a tuple `[fieldName, direction]`:
 
 ```typescript
-orderBy: {
-  name: "asc";
-}
+orderBy: ["name", "asc"];
 ```
 
-For multiple field sorting, use an array of objects to ensure correct precedence:
+For multiple field sorting, use an array of tuples `[[fieldName, direction], ...]`:
 
 ```typescript
 orderBy: [
-  { age: "desc" }, // Primary sort: age descending
-  { name: "asc" }, // Secondary sort: name ascending
+  ["age", "desc"], // Primary sort: age descending
+  ["name", "asc"], // Secondary sort: name ascending
 ];
 ```
-
-Each object in the array can contain exactly one field to maintain sort precedence. The TypeScript typings will enforce this.
 
 ### Limiting Results
 
@@ -864,7 +862,7 @@ Use `.paginated()` for large datasets that need to be displayed in pages:
 const paginatedUsers = client.database.users.paginated({
   fields: { name: true, email: true },
   where: { age: { greaterThan: 18 } },
-  orderBy: [{ name: "asc" }],
+  orderBy: [["name","asc"]],
   pageSize: 20, // Required for pagination
 });
 
@@ -893,7 +891,7 @@ const { data: preloadedPagination } =
       age: true,
     },
     where: { age: { greaterThan: 18 } },
-    orderBy: [{ name: "asc" }],
+    orderBy: [["name","asc"]],
     pageSize: 20,
   });
 
@@ -926,7 +924,7 @@ Preloading allows you to fetch data before components render, eliminating loadin
 const { data: preloadedUsers, error } = await client.database.users.preload({
   fields: { name: true, email: true },
   where: { age: { greaterThan: 18 } },
-  orderBy: { name: "asc" },
+  orderBy: ["name","asc"],
 });
 
 // Preload single result
@@ -940,7 +938,7 @@ const { data: preloadedPagination, error } =
   await client.database.users.preloadPaginated({
     fields: { name: true, email: true },
     where: { age: { greaterThan: 18 } },
-    orderBy: { name: "asc" },
+    orderBy: ["name","asc"],
     pageSize: 20,
   });
 ```
@@ -1078,7 +1076,7 @@ function UserList() {
     where: {
       age: { greaterThan: 18 },
     },
-    orderBy: { name: "asc" },
+    orderBy: ["name","asc"],
   });
 
   if (loading) return <div>Loading users...</div>;
@@ -1116,7 +1114,7 @@ function PaginatedUserList() {
     where: {
       age: { greaterThan: 18 },
     },
-    orderBy: { name: "asc" },
+    orderBy: ["name","asc"],
     pageSize: 20,
   });
 
@@ -1166,7 +1164,7 @@ export default async function UsersPage() {
     where: {
       age: { greaterThan: 18 },
     },
-    orderBy: { name: "asc" },
+    orderBy: ["name","asc"],
   });
 
   if (error) {
@@ -1223,7 +1221,7 @@ export default async function PaginatedUsersPage() {
       where: {
         age: { greaterThan: 18 },
       },
-      orderBy: { name: "asc" },
+      orderBy: ["name","asc"],
       pageSize: 20,
     });
 
@@ -1303,7 +1301,7 @@ export const load: PageServerLoad = async () => {
     where: {
       age: { greaterThan: 18 },
     },
-    orderBy: { name: "asc" },
+    orderBy: ["name","asc"],
   });
 
   // Preload paginated data
@@ -1317,7 +1315,7 @@ export const load: PageServerLoad = async () => {
       where: {
         age: { greaterThan: 18 },
       },
-      orderBy: { name: "asc" },
+      orderBy: ["name","asc"],
       pageSize: 20,
     });
 
@@ -1354,7 +1352,7 @@ export const load: PageServerLoad = async () => {
   const paginatedUsers = paginated(client.database.users, {
     fields: { name: true, email: true, age: true },
     where: { age: { greaterThan: 18 } },
-    orderBy: { name: 'asc' },
+    orderBy: ['name', 'asc'],
     pageSize: 20
   })
 
