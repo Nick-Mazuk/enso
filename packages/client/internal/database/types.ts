@@ -3,6 +3,15 @@ import type { Field, FieldValue, Schema } from "../schema/types";
 
 type GeneratedFields = { id: string };
 
+export type OrderDirection = "asc" | "desc";
+export type OrderByItem<E extends Record<string, unknown>> = [
+	keyof E,
+	OrderDirection,
+];
+export type OrderBy<E extends Record<string, unknown>> =
+	| OrderByItem<E>
+	| OrderByItem<E>[];
+
 export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 	create: (
 		entity: Simplify<
@@ -50,6 +59,7 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 				CommonFilters;
 		};
 		limit?: number;
+		orderBy?: OrderBy<E & GeneratedFields>;
 	}) => Promise<
 		DatabaseResult<
 			Simplify<

@@ -1407,3 +1407,259 @@ describe("database.entity.query limit", () => {
 		}
 	});
 });
+
+describe("database.entity.query sorting", () => {
+	it("sorts by string field asc", async () => {
+		const schema = createSchema({
+			entities: {
+				users: { name: t.string({ fallback: "" }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "C" });
+		db.users.create({ name: "A" });
+		db.users.create({ name: "B" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			orderBy: ["name", "asc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ name: "A" }, { name: "B" }, { name: "C" }]);
+	});
+
+	it("sorts by string field desc", async () => {
+		const schema = createSchema({
+			entities: {
+				users: { name: t.string({ fallback: "" }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ name: "A" });
+		db.users.create({ name: "C" });
+		db.users.create({ name: "B" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			orderBy: ["name", "desc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ name: "C" }, { name: "B" }, { name: "A" }]);
+	});
+
+	it("sorts by number field asc", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.number({ fallback: 0 }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 3 });
+		db.items.create({ val: 1 });
+		db.items.create({ val: 2 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			orderBy: ["val", "asc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 1 }, { val: 2 }, { val: 3 }]);
+	});
+
+	it("sorts by number field desc", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.number({ fallback: 0 }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 1 });
+		db.items.create({ val: 3 });
+		db.items.create({ val: 2 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			orderBy: ["val", "desc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 3 }, { val: 2 }, { val: 1 }]);
+	});
+
+	it("sorts by boolean field asc (false < true)", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.boolean({ fallback: false }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: true });
+		db.items.create({ val: false });
+		db.items.create({ val: true });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			orderBy: ["val", "asc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: false }, { val: true }, { val: true }]);
+	});
+
+	it("sorts by multiple fields", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					group: t.string({ fallback: "" }),
+					score: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.users.create({ group: "A", score: 10 });
+		db.users.create({ group: "B", score: 20 });
+		db.users.create({ group: "A", score: 5 });
+		db.users.create({ group: "B", score: 15 });
+
+		const result = await db.users.query({
+			fields: { group: true, score: true },
+			orderBy: [
+				["group", "asc"],
+				["score", "desc"],
+			],
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([
+			{ group: "A", score: 10 },
+			{ group: "A", score: 5 },
+			{ group: "B", score: 20 },
+			{ group: "B", score: 15 },
+		]);
+	});
+
+	it("puts undefined values last regardless of direction (asc)", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.number({ optional: true }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const i1 = db.items.create({ val: 1 });
+		const i2 = db.items.create({}); // undefined
+		const i3 = db.items.create({ val: 2 });
+		assert(i1.success, "Expect item to be created");
+		assert(i2.success, "Expect item to be created");
+		assert(i3.success, "Expect item to be created");
+
+		const result = await db.items.query({
+			fields: { id: true, val: true },
+			orderBy: ["val", "asc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		// defined values first sorted, then undefined
+		expect(result.data).toEqual([
+			{ id: i1.data.id, val: 1 },
+			{ id: i3.data.id, val: 2 },
+			{ id: i2.data.id },
+		]);
+	});
+
+	it("puts undefined values last regardless of direction (desc)", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.number({ optional: true }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		const i1 = db.items.create({ val: 1 });
+		const i2 = db.items.create({}); // undefined
+		const i3 = db.items.create({ val: 2 });
+		assert(i1.success, "Expect item to be created");
+		assert(i2.success, "Expect item to be created");
+		assert(i3.success, "Expect item to be created");
+
+		const result = await db.items.query({
+			fields: { id: true, val: true },
+			orderBy: ["val", "desc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		// defined values first (sorted desc), then undefined
+		expect(result.data).toEqual([
+			{ id: i3.data.id, val: 2 },
+			{ id: i1.data.id, val: 1 },
+			{ id: i2.data.id },
+		]);
+	});
+
+	it("sorts by id", async () => {
+		const schema = createSchema({
+			entities: {
+				users: { name: t.string({ fallback: "" }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		// IDs are random, so we can't predict them, but we can verify the order is consistent with the values
+		const u1 = db.users.create({ name: "A" });
+		const u2 = db.users.create({ name: "B" });
+		assert(u1.success, "Expect item to be created");
+		assert(u2.success, "Expect item to be created");
+
+		const result = await db.users.query({
+			fields: { id: true, name: true },
+			orderBy: ["id", "asc"],
+		});
+
+		assert(result.success, "expected query to succeed");
+		const sortedIds = [u1.data.id, u2.data.id].sort();
+
+		expect(result.data.map((d) => d.id)).toEqual(sortedIds);
+	});
+
+	it("applies sorting before limit", async () => {
+		const schema = createSchema({
+			entities: {
+				items: { val: t.number({ fallback: 0 }) },
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 5 });
+		db.items.create({ val: 1 });
+		db.items.create({ val: 10 });
+		db.items.create({ val: 2 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			orderBy: ["val", "asc"],
+			limit: 2,
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toEqual([{ val: 1 }, { val: 2 }]);
+	});
+});

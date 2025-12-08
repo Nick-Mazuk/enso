@@ -139,6 +139,33 @@ export const createDatabase = <
 					whereNot,
 					filters,
 				});
+				let sortParams: [string, "asc" | "desc"][];
+				if (!opts.orderBy || opts.orderBy.length === 0) {
+					sortParams = [];
+				} else if (Array.isArray(opts.orderBy[0])) {
+					// It is an array of tuples: [['name', 'asc'], ['age', 'desc']]
+					sortParams = opts.orderBy as [string, "asc" | "desc"][];
+				} else {
+					// It is a single tuple: ['name', 'asc']
+					sortParams = [opts.orderBy as [string, "asc" | "desc"]];
+				}
+				if (sortParams.length > 0) {
+					response.sort((a, b) => {
+						for (const [field, dir] of sortParams) {
+							const index = selectedFields.indexOf(field);
+							const valA = a[index];
+							const valB = b[index];
+
+							if (valA === valB) continue;
+							if (valA === undefined) return 1;
+							if (valB === undefined) return -1;
+
+							if (valA < valB) return dir === "asc" ? -1 : 1;
+							if (valA > valB) return dir === "asc" ? 1 : -1;
+						}
+						return 0;
+					});
+				}
 				const rows =
 					opts.limit !== undefined ? response.slice(0, opts.limit) : response;
 				return {
