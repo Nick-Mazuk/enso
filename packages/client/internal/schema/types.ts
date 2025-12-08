@@ -1,4 +1,4 @@
-export type FieldKind = "string" | "number" | "boolean";
+export type FieldKind = "string" | "number" | "boolean" | "ref";
 export type FieldValue = string | number | boolean;
 
 export type FieldOptions<
@@ -16,6 +16,7 @@ export type FieldOptions<
 
 export type Field<T extends FieldValue, Optional extends boolean> = {
 	kind: FieldKind;
+	entity?: string;
 } & FieldOptions<T, Optional>;
 
 export type Entity<Fields extends Record<string, Field<FieldValue, boolean>>> =

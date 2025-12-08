@@ -60,4 +60,11 @@ export const t = {
 			...opts,
 		};
 	},
+	ref: (entity: string): Field<string, true> => {
+		return {
+			kind: "ref",
+			optional: true,
+			entity,
+		};
+	},
 };

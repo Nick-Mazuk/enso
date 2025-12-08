@@ -18,6 +18,7 @@ import type {
 	Database,
 	DatabaseResult,
 	NumberFilters,
+	RefFilters,
 	StringFilters,
 } from "./types";
 
@@ -274,11 +275,14 @@ const computeFilters = (opts: {
 					},
 				} as const;
 			}
-			if (typeof filterValue !== fieldSchema.kind) {
+			const expectedType =
+				fieldSchema.kind === "ref" ? "string" : fieldSchema.kind;
+
+			if (typeof filterValue !== expectedType) {
 				return {
 					success: false,
 					error: {
-						message: `Expected filter ${filter} on ${filteredField} to be a ${fieldSchema.kind}`,
+						message: `Expected filter ${filter} on ${filteredField} to be a ${expectedType}`,
 					},
 				} as const;
 			}
@@ -326,9 +330,15 @@ const booleanFilters: Record<keyof BooleanFilters, FilterPredicate<boolean>> = {
 	equals: (currentValue, comparison) => currentValue === comparison,
 };
 
+const refFilters: Record<keyof RefFilters, FilterPredicate<string>> = {
+	equals: (currentValue, comparison) => currentValue === comparison,
+	notEquals: (currentValue, comparison) => currentValue !== comparison,
+};
+
 // biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 const filtersByKind: Record<FieldKind, Record<string, FilterPredicate<any>>> = {
 	number: numberFilters,
 	string: stringFilters,
 	boolean: booleanFilters,
+	ref: refFilters,
 };

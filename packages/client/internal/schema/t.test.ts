@@ -136,3 +136,15 @@ describe("t.boolean", () => {
 		).toThrow();
 	});
 });
+
+describe("t.ref", () => {
+	it("returns a ref field", () => {
+		const field = t.ref("users");
+		expectTypeOf(field).toEqualTypeOf<Field<string, true>>();
+		expect(field).toEqual({
+			kind: "ref",
+			optional: true,
+			entity: "users",
+		});
+	});
+});

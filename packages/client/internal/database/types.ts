@@ -53,7 +53,9 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 					: E[K] extends Field<boolean, boolean>
 						? BooleanFilters
 						: E[K] extends Field<string, boolean>
-							? StringFilters
+							? E[K]["kind"] extends "ref"
+								? RefFilters
+								: StringFilters
 							: unknown
 				: unknown) &
 				CommonFilters;
@@ -116,6 +118,11 @@ export type StringFilters = {
 	contains?: string;
 	startsWith?: string;
 	endsWith?: string;
+};
+
+export type RefFilters = {
+	equals?: string;
+	notEquals?: string;
 };
 
 export type NumberFilters = {

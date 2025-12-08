@@ -46,6 +46,20 @@ describe("createSchema", () => {
 			};
 		}>();
 	});
+	it("infers ref types", () => {
+		const schema = createSchema({
+			entities: {
+				posts: {
+					authorId: t.ref("users"),
+				},
+			},
+		});
+		expectTypeOf(schema.entities).toEqualTypeOf<{
+			posts: {
+				authorId: Field<string, true>;
+			};
+		}>();
+	});
 	describe("reserved fields are not allowed", () => {
 		it("id is not allowed", () => {
 			expect(() =>

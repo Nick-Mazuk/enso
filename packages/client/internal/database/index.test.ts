@@ -930,6 +930,133 @@ describe("database.entity.query number filters", () => {
 	});
 });
 
+describe("database.entity.create with refs", () => {
+	it("can create an entity with a ref", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "Guest" }),
+				},
+				posts: {
+					title: t.string({ fallback: "Untitled" }),
+					authorId: t.ref("users"),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const user = database.users.create({ name: "Alice" });
+		assert(user.success, "User creation failed");
+
+		const post = database.posts.create({
+			title: "Hello World",
+			authorId: user.data.id,
+		});
+		assert(post.success, "Post creation failed");
+
+		expect(post.data.authorId).toBe(user.data.id);
+
+		const result = await database.posts.query({
+			fields: { title: true, authorId: true },
+		});
+
+		assert(result.success, "Query failed");
+		expect(result.data).toEqual([
+			{ title: "Hello World", authorId: user.data.id },
+		]);
+	});
+
+	it("ref is optional", async () => {
+		const schema = createSchema({
+			entities: {
+				posts: {
+					authorId: t.ref("users"),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const post = database.posts.create({});
+		assert(post.success, "Post creation failed");
+		expect(post.data.authorId).toBeUndefined();
+
+		const result = await database.posts.query({
+			fields: { authorId: true },
+		});
+
+		assert(result.success, "Query failed");
+		expect(result.data).toEqual([{}]);
+	});
+
+	it("can filter by ref", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+				posts: {
+					authorId: t.ref("users"),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const user1 = database.users.create({ name: "Alice" });
+		const user2 = database.users.create({ name: "Bob" });
+
+		assert(user1.success, "User1 creation failed");
+		assert(user2.success, "User2 creation failed");
+
+		database.posts.create({ authorId: user1.data.id });
+		database.posts.create({ authorId: user2.data.id });
+
+		const result = await database.posts.query({
+			fields: { authorId: true },
+			where: { authorId: { equals: user1.data.id } },
+		});
+
+		assert(result.success, "Query failed");
+		expect(result.data).toHaveLength(1);
+		expect(result.data[0]?.authorId).toBe(user1.data.id);
+	});
+
+	it("can filter by ref notEquals", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+				posts: {
+					authorId: t.ref("users"),
+				},
+			},
+		});
+		const store = new Store();
+		const database = createDatabase(schema, store);
+
+		const user1 = database.users.create({ name: "Alice" });
+		const user2 = database.users.create({ name: "Bob" });
+
+		assert(user1.success, "User1 creation failed");
+		assert(user2.success, "User2 creation failed");
+
+		database.posts.create({ authorId: user1.data.id });
+		database.posts.create({ authorId: user2.data.id });
+
+		const result = await database.posts.query({
+			fields: { authorId: true },
+			where: { authorId: { notEquals: user1.data.id } },
+		});
+
+		assert(result.success, "Query failed");
+		expect(result.data).toHaveLength(1);
+		expect(result.data[0]?.authorId).toBe(user2.data.id);
+	});
+});
+
 describe("database.entity.query number filters edge cases", () => {
 	it("supports floating point numbers", async () => {
 		const schema = createSchema({
