@@ -49,6 +49,7 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 				: unknown) &
 				CommonFilters;
 		};
+		limit?: number;
 	}) => Promise<
 		DatabaseResult<
 			Simplify<

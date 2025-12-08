@@ -139,9 +139,11 @@ export const createDatabase = <
 					whereNot,
 					filters,
 				});
+				const rows =
+					opts.limit !== undefined ? response.slice(0, opts.limit) : response;
 				return {
 					success: true,
-					data: response.map((data) => {
+					data: rows.map((data) => {
 						const result: Record<string, Datom> = {};
 						for (let i = 0; i < selectedFields.length; i++) {
 							const field = selectedFields[i];

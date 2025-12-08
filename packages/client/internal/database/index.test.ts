@@ -1308,3 +1308,102 @@ describe("database.entity.query string filters", () => {
 		});
 	});
 });
+
+describe("database.entity.query limit", () => {
+	it("limits the number of results", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		for (let i = 0; i < 10; i++) {
+			db.items.create({ val: i });
+		}
+
+		const result = await db.items.query({
+			fields: { val: true },
+			limit: 5,
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(5);
+	});
+
+	it("returns all results if limit is greater than count", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 1 });
+		db.items.create({ val: 2 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			limit: 10,
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(2);
+	});
+
+	it("returns empty array if limit is 0", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		db.items.create({ val: 1 });
+
+		const result = await db.items.query({
+			fields: { val: true },
+			limit: 0,
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(0);
+	});
+
+	it("applies limit after filters", async () => {
+		const schema = createSchema({
+			entities: {
+				items: {
+					val: t.number({ fallback: 0 }),
+				},
+			},
+		});
+		const store = new Store();
+		const db = createDatabase(schema, store);
+
+		for (let i = 0; i < 10; i++) {
+			db.items.create({ val: i });
+		}
+
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThanOrEqual: 5 } },
+			limit: 3,
+		});
+
+		assert(result.success, "expected query to succeed");
+		expect(result.data).toHaveLength(3);
+		for (const item of result.data) {
+			expect(item.val).toBeGreaterThanOrEqual(5);
+		}
+	});
+});
