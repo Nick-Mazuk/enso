@@ -3,7 +3,7 @@ import { brotliCompressSync } from "node:zlib";
 
 it("uncompressed bundle size must not exceed 40kb", async () => {
 	await Bun.build({
-		entrypoints: ["./packages/client/index.ts"],
+		entrypoints: ["./client/typescript/index.ts"],
 		outdir: "./dist/uncompressed",
 		minify: true,
 		format: "esm",
@@ -15,7 +15,7 @@ it("uncompressed bundle size must not exceed 40kb", async () => {
 
 it("compressed bundle size must not exceed 10kb", async () => {
 	await Bun.build({
-		entrypoints: ["./packages/client/index.ts"],
+		entrypoints: ["./client/typescript/index.ts"],
 		outdir: "./dist/compressed",
 		minify: true,
 		format: "esm",
