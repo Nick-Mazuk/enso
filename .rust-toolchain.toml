@@ -1,0 +1,14 @@
+[toolchain]
+# Update GitHub actions when bumping Rust version
+channel = "1.92.0"
+components = [
+    "rustc-dev",
+    "cargo",
+    "rustc",
+    "clippy",
+    "rustfmt",
+    "rust-docs",
+    "rust-std",
+    "rust-analyzer",
+]
+profile = "default"

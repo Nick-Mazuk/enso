@@ -6,6 +6,7 @@ node_modules
 out
 dist
 *.tgz
+target
 
 # code coverage
 coverage
@@ -54,4 +55,4 @@ node_modules/
 
 # Task files
 # tasks.json
-# tasks/ 
+# tasks/
