@@ -1,0 +1,5 @@
+- Clients do 1-time queries
+- Clients can subscribe to triple updates ("send me triples that look like X").
+- On subscribing to triple updates, clients can optionally say "and start providing updates from HCL X"
+- Clients can unsubscribe from triple updates
+- Clients can send triple updates. Server acks. If server denies, client rolls back.

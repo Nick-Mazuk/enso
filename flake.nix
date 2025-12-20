@@ -25,6 +25,7 @@
           name = name;
           buildInputs = with pkgs; [
             bun
+            cargo
           ];
         };
       }
