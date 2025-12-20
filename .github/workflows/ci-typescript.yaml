@@ -1,16 +1,21 @@
 on:
-  push:
-  pull_request:
+    push:
+    pull_request:
 
 name: ci-typescript
 jobs:
-  my-job:
-    name: tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install
-      - run: bun test
-      - run: bun check
-      - run: bun typecheck
+    my-job:
+        name: tests
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+            - uses: oven-sh/setup-bun@v2
+            - run: bun install
+            - run: bun test
+            - run: bun check
+            - run: bun typecheck
+
+            # Ensure generated protos are up-to-date
+            - run: bun proto-gen
+            - name: Verify no changes
+              run: git diff --exit-code client/typescript/proto

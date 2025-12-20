@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
-import { assert } from "../../../shared/assert";
-import type { Field, FieldKind, FieldValue, Schema } from "../schema/types";
-import type { Store } from "../store";
+import { assert } from "../../../shared/assert.js";
+import type { Field, FieldKind, FieldValue, Schema } from "../schema/types.js";
+import type { Store } from "../store/index.js";
 import {
 	type Datom,
 	type Filter,
@@ -11,7 +11,7 @@ import {
 	type Triple,
 	Value,
 	Variable,
-} from "../store/types";
+} from "../store/types.js";
 import type {
 	BooleanFilters,
 	CommonFilters,
@@ -20,7 +20,7 @@ import type {
 	NumberFilters,
 	RefFilters,
 	StringFilters,
-} from "./types";
+} from "./types.js";
 
 const getValue = (
 	v: Datom | undefined,

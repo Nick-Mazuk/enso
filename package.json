@@ -9,13 +9,17 @@
 		"typescript": "^5"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
 		"check": "biome ci",
 		"format": "biome format --write",
-		"lint:fix": "biome lint --write"
+		"lint:fix": "biome lint --write",
+		"proto-gen": "buf generate",
+		"typecheck": "tsc --noEmit"
 	},
 	"type": "module",
 	"dependencies": {
+		"@bufbuild/buf": "^1.61.0",
+		"@bufbuild/protobuf": "^2.10.2",
+		"@bufbuild/protoc-gen-es": "^2.10.2",
 		"nanoid": "^5.1.6",
 		"type-fest": "^5.1.0"
 	}

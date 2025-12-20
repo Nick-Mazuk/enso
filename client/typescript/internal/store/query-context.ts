@@ -1,4 +1,4 @@
-import type { Datom, QueryVariable } from "./types";
+import type { Datom, QueryVariable } from "./types.js";
 
 export class QueryContext {
 	private context: Map<string, Datom>;

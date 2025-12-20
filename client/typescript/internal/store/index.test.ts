@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { Store } from "./index";
-import { movies } from "./testdata/movies";
-import { type Datom, Field, Id, Value, Variable } from "./types";
+import { Store } from "./index.js";
+import { movies } from "./testdata/movies.js";
+import { type Datom, Field, Id, Value, Variable } from "./types.js";
 
 const sortResult = (result: (Datom | undefined)[][], index: number) => {
 	return result.sort((a, b) => {

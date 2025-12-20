@@ -1,10 +1,10 @@
-import { createDatabase } from "./internal/database";
-import type { Database } from "./internal/database/types";
-import type { Field, FieldValue, Schema } from "./internal/schema/types";
-import { Store } from "./internal/store";
+import { createDatabase } from "./internal/database/index.js";
+import type { Database } from "./internal/database/types.js";
+import type { Field, FieldValue, Schema } from "./internal/schema/types.js";
+import { Store } from "./internal/store/index.js";
 
-export { createSchema } from "./internal/schema/create";
-export { t } from "./internal/schema/t";
+export { createSchema } from "./internal/schema/create.js";
+export { t } from "./internal/schema/t.js";
 
 export const createClient = <
 	S extends Schema<Record<string, Record<string, Field<FieldValue, boolean>>>>,

@@ -1,4 +1,4 @@
-import { Field, Id, type Triple, Value } from "../types";
+import { Field, Id, type Triple, Value } from "../types.js";
 
 // From https://github.com/stopachka/datalogJS/blob/main/src/exampeTriples.js
 export const movies: Triple[] = [

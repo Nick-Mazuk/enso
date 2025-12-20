@@ -1,5 +1,5 @@
 import type { Simplify } from "type-fest";
-import type { Field, FieldValue, Schema } from "../schema/types";
+import type { Field, FieldValue, Schema } from "../schema/types.js";
 
 type GeneratedFields = { id: string };
 

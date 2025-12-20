@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
-import { isVariable, type QueryVariable, Variable } from "./types";
+import { isVariable, type QueryVariable, Variable } from "./types.js";
 
 describe("QueryVariable", () => {
 	it("can create and validate a query variable", () => {

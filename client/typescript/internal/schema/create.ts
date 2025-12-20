@@ -1,5 +1,5 @@
-import { type ReservedField, reservedFields } from "./reserved-fields";
-import type { Field, FieldValue, Schema } from "./types";
+import { type ReservedField, reservedFields } from "./reserved-fields.js";
+import type { Field, FieldValue, Schema } from "./types.js";
 
 // TODO: update the type definition to disallow reserved fields
 export const createSchema = <

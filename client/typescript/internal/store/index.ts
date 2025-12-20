@@ -1,5 +1,5 @@
-import { assert } from "../../../shared/assert";
-import { QueryContext } from "./query-context";
+import { assert } from "../../../shared/assert.js";
+import { QueryContext } from "./query-context.js";
 import {
 	type Datom,
 	type Field,
@@ -10,7 +10,7 @@ import {
 	type QueryVariable,
 	type Triple,
 	type Value,
-} from "./types";
+} from "./types.js";
 
 type Query<Find extends QueryVariable[]> = {
 	find: Find;

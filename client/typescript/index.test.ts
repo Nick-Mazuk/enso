@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
-import { createClient, createSchema } from "./index";
-import type { Database } from "./internal/database/types";
+import { createClient, createSchema } from "./index.js";
+import type { Database } from "./internal/database/types.js";
 
 describe("createClient", () => {
 	it("client has a database", () => {

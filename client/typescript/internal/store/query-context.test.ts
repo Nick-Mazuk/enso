@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { QueryContext } from "./query-context";
-import { Id, Variable } from "./types";
+import { QueryContext } from "./query-context.js";
+import { Id, Variable } from "./types.js";
 
 describe("QueryContext", () => {
 	it("can set and get a variable", () => {

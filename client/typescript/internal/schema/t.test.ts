@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
-import { t } from "./t";
-import type { Field } from "./types";
+import { t } from "./t.js";
+import type { Field } from "./types.js";
 
 describe("t.string", () => {
 	it("when fallback is provided, optional is optional", () => {

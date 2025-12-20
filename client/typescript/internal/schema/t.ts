@@ -1,5 +1,5 @@
-import { assert } from "../../../shared/assert";
-import type { Field, FieldOptions, FieldValue } from "./types";
+import { assert } from "../../../shared/assert.js";
+import type { Field, FieldOptions, FieldValue } from "./types.js";
 
 // Helper type to correctly infer the 'Optional' boolean from the options
 type InferOptional<Opts> = Opts extends { optional: true } ? true : false;

@@ -1,10 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
-import { assert } from "../../../shared/assert";
-import { createSchema, t } from "../../index";
-import { Store } from "../store";
-import { Field, Id, Value } from "../store/types";
-import { createDatabase } from "./index";
-import type { DatabaseResult } from "./types";
+import { assert } from "../../../shared/assert.js";
+import { createSchema, t } from "../../index.js";
+import { Store } from "../store/index.js";
+import { Field, Id, Value } from "../store/types.js";
+import { createDatabase } from "./index.js";
+import type { DatabaseResult } from "./types.js";
 
 describe("createDatabase", () => {
 	it("creates a database the correct keys", () => {

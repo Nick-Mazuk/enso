@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "bun:test";
-import { createSchema } from "./create";
-import { t } from "./t";
-import type { Field } from "./types";
+import { createSchema } from "./create.js";
+import { t } from "./t.js";
+import type { Field } from "./types.js";
 
 describe("createSchema", () => {
 	it("infers entity types", () => {

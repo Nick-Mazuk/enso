@@ -6,7 +6,8 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"ignoreUnknown": false
+		"ignoreUnknown": false,
+		"includes": ["**", "!client/typescript/proto"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -53,7 +54,8 @@
 				"useImportExtensions": {
 					"options": {
 						"forceJsExtensions": true
-					}
+					},
+					"level": "error"
 				}
 			},
 			"performance": {
