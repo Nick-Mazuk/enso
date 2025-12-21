@@ -1,33 +1,33 @@
 [workspace]
-resolver = "2"
 members = ["server"]
+resolver = "2"
 
 
 [workspace.package]
 edition = "2024"
-version = "0.1.0"
 publish = false
+version = "0.1.0"
 
 # Keep as few dependencies as possible
 [workspace.dependencies]
 axum = { version = "0.8.8", features = ["ws"] }
-tokio = { version = "1.48.0", features = ["full"] }
 futures = "0.3.31"
+tokio = { version = "1.48.0", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 
 [workspace.lints]
+clippy.expect_used = "deny"
+clippy.missing_errors_doc = "allow"
+clippy.missing_panics_doc = "allow"
+clippy.module_name_repetitions = "allow"
+clippy.no_effect_underscore_binding = "allow"
+clippy.nursery = { level = "deny", priority = -1 }
+clippy.pedantic = { level = "deny", priority = -1 }
+clippy.perf = { level = "deny", priority = -1 }
+clippy.struct_excessive_bools = "allow"
+clippy.unused_async = "allow"
+clippy.unwrap_used = "deny"
 rust.unsafe_code = "deny"
 rust.unused_crate_dependencies = "deny"
-clippy.pedantic = { level = "deny", priority = -1 }
-clippy.nursery = { level = "deny", priority = -1 }
-clippy.perf = { level = "deny", priority = -1 }
-clippy.unwrap_used = "deny"
-clippy.expect_used = "deny"
-clippy.module_name_repetitions = "allow"
-clippy.missing_errors_doc = "allow"
-clippy.struct_excessive_bools = "allow"
-clippy.missing_panics_doc = "allow"
-clippy.unused_async = "allow"
-clippy.no_effect_underscore_binding = "allow"
