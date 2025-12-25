@@ -24,8 +24,10 @@
         devShell = pkgs.mkShell {
           name = name;
           buildInputs = with pkgs; [
+            bacon # for background rust code checking
             bun
             cargo
+            protobuf
           ];
         };
       }

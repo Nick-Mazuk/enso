@@ -1,0 +1,3 @@
+pub const MAX_TRIPLE_SUBJECT_LENGTH: usize = 256;
+pub const MAX_TRIPLE_PREDICATE_LENGTH: usize = 256;
+pub const MAX_TRIPLE_OBJECT_STRING_LENGTH: usize = 1024;

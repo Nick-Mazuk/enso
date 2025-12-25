@@ -1,55 +1,56 @@
-edition = "2023";
+syntax = "proto3";
+
+package protocol;
+
+import "google/rpc/status.proto";
 
 message Triple {
-  string subject = 1;
-  string predicate = 2;
+  optional string subject = 1;
+  optional string predicate = 2;
   oneof object {
-    string s = 3;
-    double n = 4;
-    bool b = 5;
+    string string = 3;
+    double number = 4;
+    bool boolean = 5;
   }
-}
-
-message TripleUpdate {
-  Triple triple = 1;
-  string hlc = 2; // Hybrid Logical Clock timestamp
 }
 
 message ClientMessage {
-  uint32 request_id = 1;
+  // A unique ID determined by the client. This ID enables the client
+  // to match the request and response, as well as allow for idempotent retries.
+  optional uint32 request_id = 1;
   oneof payload {
-    QueryRequest query = 2; // One-time query
-    SubscribeRequest subscribe = 3; // Reactive subscription
-    uint32 unsubscribe_id = 4; // subscription_id to stop
-    TransactRequest transact = 5; // Client-side updates
+    TripleUpdateRequest triple_update_request = 2;
+    // QueryRequest query = 2; // One-time query
+    // SubscribeRequest subscribe = 3; // Reactive subscription
+    // uint32 unsubscribe_id = 4; // subscription_id to stop
   }
 }
 
-message QueryRequest {
-  // repeated Pattern patterns = 1; // e.g., ["id-123", "user/*", ?]
-  // repeated Filter filters = 2; // e.g., "age > 30"
-}
+// message QueryRequest {
+// repeated Pattern patterns = 1; // e.g., ["id-123", "user/*", ?]
+// repeated Filter filters = 2; // e.g., "age > 30"
+// }
 
-message SubscribeRequest {
-  uint32 subscription_id = 1;
-  // repeated Pattern patterns = 2;
-  string since_hlc = 3; // Optional: Resume from this point
-}
+// message SubscribeRequest {
+//   uint32 subscription_id = 1;
+//   // repeated Pattern patterns = 2;
+//   string since_hlc = 3; // Optional: Resume from this point
+// }
 
-message TransactRequest {
-  repeated TripleUpdate updates = 1;
+message TripleUpdateRequest {
+  repeated Triple triples = 1;
 }
 
 message ServerMessage {
-  uint32 request_id = 1;
-  oneof payload {
-    // QueryResult result = 2; // Response to QueryRequest
-    TripleUpdate update = 3; // Streamed update from subscription
-    Ack ack = 4; // Response to TransactRequest
-  }
+  ServerResponse response = 1;
+  // oneof payload {
+  //   // QueryResult result = 2; // Response to QueryRequest
+  //   // TripleUpdate update = 3; // Streamed update from subscription
+  //   // Ack ack = 4; // Response to TransactRequest
+  // }
 }
 
-message Ack {
-  bool success = 1;
-  string error = 2;
+message ServerResponse {
+  optional uint32 request_id = 1;
+  optional google.rpc.Status status = 2;
 }

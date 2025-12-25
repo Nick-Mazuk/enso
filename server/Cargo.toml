@@ -6,6 +6,11 @@ version.workspace = true
 [dependencies]
 axum.workspace = true
 futures.workspace = true
+prost.workspace = true
+prost-types.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
