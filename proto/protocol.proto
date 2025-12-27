@@ -3,11 +3,12 @@ syntax = "proto3";
 package protocol;
 
 import "google/rpc/status.proto";
-
+ w
 message Triple {
-  optional string subject = 1;
-  optional string predicate = 2;
-  oneof object {
+  optional bytes entity_id = 1;
+  // TODO: describe the hashing algorithm used to get this id
+  optional bytes attribute_id = 2;
+  oneof value {
     string string = 3;
     double number = 4;
     bool boolean = 5;

@@ -18,6 +18,7 @@
 mod constants;
 mod proto;
 mod server;
+mod testing;
 mod types;
 
 pub use server::Server;
