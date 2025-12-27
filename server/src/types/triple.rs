@@ -15,10 +15,27 @@ pub enum TripleValue {
 }
 
 #[derive(Debug, Clone)]
+/// A triple, readonly.
+///
+/// INVARIANT: the Triple struct must always represent a well-formed triple.
 pub struct Triple {
-    pub entity_id: ID,
-    pub attribute_id: ID,
-    pub value: TripleValue,
+    entity_id: ID,
+    attribute_id: ID,
+    value: TripleValue,
+}
+
+impl Triple {
+    pub fn entity_id(&self) -> &[u8] {
+        &self.entity_id
+    }
+
+    pub fn attribute_id(&self) -> &[u8] {
+        &self.attribute_id
+    }
+
+    pub fn value(&self) -> &TripleValue {
+        &self.value
+    }
 }
 
 fn validate_proto_string<S: Into<Option<prost::alloc::string::String>>>(

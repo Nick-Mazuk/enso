@@ -3,7 +3,7 @@ syntax = "proto3";
 package protocol;
 
 import "google/rpc/status.proto";
- w
+
 message Triple {
   optional bytes entity_id = 1;
   // TODO: describe the hashing algorithm used to get this id

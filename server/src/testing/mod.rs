@@ -1,10 +1,11 @@
-use turso::{Builder, Database};
+use turso::{Builder, Connection};
 
-pub async fn create_test_db() -> Result<Database, turso::Error> {
-    let db = Builder::new_local(":memory:").build().await?;
-    let conn = db.connect()?;
+pub async fn new_test_database_connection() -> Result<Connection, turso::Error> {
+    let database = Builder::new_local(":memory:").build().await?;
+    let connection = database.connect()?;
 
-    conn.execute(include_str!("../../sql/schema.sql"), ())
+    connection
+        .execute_batch(include_str!("../../sql/schema.sql"))
         .await?;
-    return Ok(db);
+    return Ok(connection);
 }

@@ -15,10 +15,10 @@
 //  - Datalog to SQL query engine
 //  - Pub-sub component
 
+mod client_connection;
 mod constants;
 mod proto;
-mod server;
 mod testing;
 mod types;
 
-pub use server::Server;
+pub use client_connection::ClientConnection;

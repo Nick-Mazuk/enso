@@ -8,6 +8,12 @@ pub struct TripleUpdateRequest {
     triples: Vec<Triple>,
 }
 
+impl TripleUpdateRequest {
+    pub fn triples(&self) -> &[Triple] {
+        &self.triples
+    }
+}
+
 impl ProtoDeserializable<proto::TripleUpdateRequest> for TripleUpdateRequest {
     fn from_proto(request: proto::TripleUpdateRequest) -> Result<Self, String> {
         let mut triples = Vec::with_capacity(request.triples.len());

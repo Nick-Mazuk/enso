@@ -16,7 +16,7 @@ CREATE TABLE triples (
   boolean_value INTEGER,
   -- Ensure there's only a single entity_id / attribute_id pair for each triple.
   PRIMARY KEY (entity_id, attribute_id)
-) strict WITHOUT rowid;
+);
 
 CREATE INDEX idx_triples_attribute_number_value ON triples (attribute_id, number_value)
 WHERE
