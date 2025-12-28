@@ -12,26 +12,28 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file protocol.proto.
  */
 export const file_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wikQEKBlRyaXBsZRIUCgdzdWJqZWN0GAEgASgJSAGIAQESFgoJcHJlZGljYXRlGAIgASgJSAKIAQESEAoGc3RyaW5nGAMgASgJSAASEAoGbnVtYmVyGAQgASgBSAASEQoHYm9vbGVhbhgFIAEoCEgAQggKBm9iamVjdEIKCghfc3ViamVjdEIMCgpfcHJlZGljYXRlIoIBCg1DbGllbnRNZXNzYWdlEhcKCnJlcXVlc3RfaWQYASABKA1IAYgBARI+ChV0cmlwbGVfdXBkYXRlX3JlcXVlc3QYAiABKAsyHS5wcm90b2NvbC5UcmlwbGVVcGRhdGVSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlImwKDlNlcnZlclJlc3BvbnNlEhcKCnJlcXVlc3RfaWQYASABKA1IAIgBARInCgZzdGF0dXMYAiABKAsyEi5nb29nbGUucnBjLlN0YXR1c0gBiAEBQg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
+  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wimgEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAYgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAogBARIQCgZzdHJpbmcYAyABKAlIABIQCgZudW1iZXIYBCABKAFIABIRCgdib29sZWFuGAUgASgISABCBwoFdmFsdWVCDAoKX2VudGl0eV9pZEIPCg1fYXR0cmlidXRlX2lkIoIBCg1DbGllbnRNZXNzYWdlEhcKCnJlcXVlc3RfaWQYASABKA1IAYgBARI+ChV0cmlwbGVfdXBkYXRlX3JlcXVlc3QYAiABKAsyHS5wcm90b2NvbC5UcmlwbGVVcGRhdGVSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlImwKDlNlcnZlclJlc3BvbnNlEhcKCnJlcXVlc3RfaWQYASABKA1IAIgBARInCgZzdGF0dXMYAiABKAsyEi5nb29nbGUucnBjLlN0YXR1c0gBiAEBQg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
 
 /**
  * @generated from message protocol.Triple
  */
 export type Triple = Message<"protocol.Triple"> & {
   /**
-   * @generated from field: optional string subject = 1;
+   * @generated from field: optional bytes entity_id = 1;
    */
-  subject?: string;
+  entityId?: Uint8Array;
 
   /**
-   * @generated from field: optional string predicate = 2;
+   * TODO: describe the hashing algorithm used to get this id
+   *
+   * @generated from field: optional bytes attribute_id = 2;
    */
-  predicate?: string;
+  attributeId?: Uint8Array;
 
   /**
-   * @generated from oneof protocol.Triple.object
+   * @generated from oneof protocol.Triple.value
    */
-  object: {
+  value: {
     /**
      * @generated from field: string string = 3;
      */
