@@ -7,5 +7,5 @@ pub async fn new_test_database_connection() -> Result<Connection, turso::Error> 
     connection
         .execute_batch(include_str!("../../sql/schema.sql"))
         .await?;
-    return Ok(connection);
+    Ok(connection)
 }

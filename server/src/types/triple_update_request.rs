@@ -3,15 +3,9 @@ use crate::{
     types::{ProtoDeserializable, triple::Triple},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TripleUpdateRequest {
-    triples: Vec<Triple>,
-}
-
-impl TripleUpdateRequest {
-    pub fn triples(&self) -> &[Triple] {
-        &self.triples
-    }
+    pub triples: Vec<Triple>,
 }
 
 impl ProtoDeserializable<proto::TripleUpdateRequest> for TripleUpdateRequest {
@@ -23,7 +17,7 @@ impl ProtoDeserializable<proto::TripleUpdateRequest> for TripleUpdateRequest {
             match result {
                 Ok(triple) => triples.push(triple),
                 Err(err) => return Err(format!("Failed to parse triple #{index}: {err}")),
-            };
+            }
         }
 
         Ok(Self { triples })

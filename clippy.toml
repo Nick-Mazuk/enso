@@ -1,0 +1,5 @@
+disallowed-methods = [
+    { path = "std::clone::Clone::clone", reason = "Cloning is disallowed in this project. Consider passing references or using `Copy` types." },
+]
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

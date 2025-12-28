@@ -13,7 +13,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
-    pub fn new(database_connection: turso::Connection) -> Self {
+    pub const fn new(database_connection: turso::Connection) -> Self {
         Self {
             database_connection,
         }
@@ -43,13 +43,13 @@ impl ClientConnection {
             ClientMessagePayload::TripleUpdateRequest(request) => self.update(request).await,
         };
         response.request_id = request_id;
-        return proto::ServerMessage {
+        proto::ServerMessage {
             response: Some(response),
-        };
+        }
     }
 
     async fn update(&self, request: TripleUpdateRequest) -> proto::ServerResponse {
-        let triples = request.triples();
+        let triples = request.triples;
         if triples.is_empty() {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
@@ -60,33 +60,37 @@ impl ClientConnection {
             };
         }
 
-        let mut query = "INSERT INTO triples (entity_id, attribute_id, number_value, string_value, boolean_value) VALUES ".to_string();
+        let base_insert_query = "INSERT INTO triples (entity_id, attribute_id, number_value, string_value, boolean_value) VALUES ";
+        let query_params = "(?, ?, ?, ?, ?)";
+        let mut query =
+            String::with_capacity(base_insert_query.len() + triples.len() * query_params.len());
+        query.push_str(base_insert_query);
         let mut params = Vec::with_capacity(triples.len() * 5);
 
-        for (i, triple) in triples.iter().enumerate() {
+        for (i, triple) in triples.into_iter().enumerate() {
             if i > 0 {
                 query.push_str(", ");
             }
-            query.push_str("(?, ?, ?, ?, ?)");
+            query.push_str(query_params);
 
-            params.push(turso::Value::Blob(triple.entity_id().to_vec()));
-            params.push(turso::Value::Blob(triple.attribute_id().to_vec()));
+            params.push(turso::Value::Blob(triple.entity_id.to_vec()));
+            params.push(turso::Value::Blob(triple.attribute_id.to_vec()));
 
-            match triple.value() {
+            match triple.value {
                 TripleValue::Number(n) => {
-                    params.push(turso::Value::Real(*n));
+                    params.push(turso::Value::Real(n));
                     params.push(turso::Value::Null);
                     params.push(turso::Value::Null);
                 }
                 TripleValue::String(s) => {
                     params.push(turso::Value::Null);
-                    params.push(turso::Value::Text(s.clone()));
+                    params.push(turso::Value::Text(s));
                     params.push(turso::Value::Null);
                 }
                 TripleValue::Boolean(b) => {
                     params.push(turso::Value::Null);
                     params.push(turso::Value::Null);
-                    params.push(turso::Value::Integer(if *b { 1 } else { 0 }));
+                    params.push(turso::Value::Integer(b.into()));
                 }
             }
         }
@@ -103,7 +107,7 @@ impl ClientConnection {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
                     // TODO: do not expose database error
-                    message: format!("Database error: {}", e),
+                    message: format!("Database error: {e}"),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -129,8 +133,8 @@ mod tests {
         let attribute_id = vec![2u8; 16];
 
         let triple = proto::Triple {
-            entity_id: Some(entity_id.clone()),
-            attribute_id: Some(attribute_id.clone()),
+            entity_id: Some(entity_id),
+            attribute_id: Some(attribute_id),
             value: Some(proto::triple::Value::String("test_value".to_string())),
         };
 
@@ -170,8 +174,8 @@ mod tests {
         let attribute_id = vec![4u8; 16];
 
         let triple = proto::Triple {
-            entity_id: Some(entity_id.clone()),
-            attribute_id: Some(attribute_id.clone()),
+            entity_id: Some(entity_id),
+            attribute_id: Some(attribute_id),
             value: Some(proto::triple::Value::Boolean(true)),
         };
 
@@ -208,8 +212,8 @@ mod tests {
         let attribute_id = vec![6u8; 16];
 
         let triple = proto::Triple {
-            entity_id: Some(entity_id.clone()),
-            attribute_id: Some(attribute_id.clone()),
+            entity_id: Some(entity_id),
+            attribute_id: Some(attribute_id),
             value: Some(proto::triple::Value::Number(123.456)),
         };
 

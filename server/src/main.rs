@@ -22,7 +22,9 @@ async fn main() {
     // Connect to the websocket on ws://127.0.0.1:3000/ws
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
+    #[allow(clippy::unwrap_used)]
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    #[allow(clippy::unwrap_used)]
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -33,6 +35,7 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 
 async fn handle_socket(mut socket: WebSocket) {
     while let Some(msg) = socket.recv().await {
+        #[allow(clippy::manual_let_else)]
         let msg = if let Ok(msg) = msg {
             msg
         } else {

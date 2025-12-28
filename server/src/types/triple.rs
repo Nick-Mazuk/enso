@@ -7,35 +7,21 @@ use crate::{
 const ID_LENGTH: usize = 16;
 type ID = [u8; ID_LENGTH];
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TripleValue {
     String(String),
     Boolean(bool),
     Number(f64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// A triple, readonly.
 ///
 /// INVARIANT: the Triple struct must always represent a well-formed triple.
 pub struct Triple {
-    entity_id: ID,
-    attribute_id: ID,
-    value: TripleValue,
-}
-
-impl Triple {
-    pub fn entity_id(&self) -> &[u8] {
-        &self.entity_id
-    }
-
-    pub fn attribute_id(&self) -> &[u8] {
-        &self.attribute_id
-    }
-
-    pub fn value(&self) -> &TripleValue {
-        &self.value
-    }
+    pub entity_id: ID,
+    pub attribute_id: ID,
+    pub value: TripleValue,
 }
 
 fn validate_proto_string<S: Into<Option<prost::alloc::string::String>>>(
@@ -56,8 +42,8 @@ fn validate_proto_string<S: Into<Option<prost::alloc::string::String>>>(
         return Err(format!(
             "{proto_name} proto {field_name} was empty. Expected to have some content."
         ));
-    };
-    return Ok(validated_string);
+    }
+    Ok(validated_string)
 }
 
 fn validate_proto_id<B: Into<Option<Vec<u8>>>>(
@@ -68,20 +54,22 @@ fn validate_proto_id<B: Into<Option<Vec<u8>>>>(
     let Some(bytes) = maybe_bytes.into() else {
         return Err(format!("{proto_name} proto did not contain a {field_name}"));
     };
+    let bytes_length = bytes.len();
     if bytes.len() != ID_LENGTH {
-        let bytes_length = bytes.len();
+        return Err(format!(
+            "{proto_name} field {field_name} did not contain the correct number of bytes. Expected {ID_LENGTH}, got {bytes_length}"
+        ));
+    }
+    let Ok(id) = bytes.try_into() else {
         return Err(format!(
             "{proto_name} field {field_name} did not contain the correct number of bytes. Expected {ID_LENGTH}, got {bytes_length}"
         ));
     };
-    let id: ID = bytes
-        .try_into()
-        .expect("Panic because the bounds check should have already been performed");
     Ok(id)
 }
 
 impl ProtoDeserializable<proto::Triple> for Triple {
-    fn from_proto(proto_triple: proto::Triple) -> Result<Triple, String> {
+    fn from_proto(proto_triple: proto::Triple) -> Result<Self, String> {
         let entity_id = validate_proto_id(proto_triple.entity_id, "Triple", "subject")?;
         let attribute_id = validate_proto_id(proto_triple.attribute_id, "Triple", "predicate")?;
         let value = match proto_triple.value {
@@ -97,11 +85,11 @@ impl ProtoDeserializable<proto::Triple> for Triple {
             Some(proto::triple::Value::Number(number)) => TripleValue::Number(number),
             None => return Err("Triple proto did not contain an object.".into()),
         };
-        return Ok(Triple {
+        Ok(Self {
             entity_id,
             attribute_id,
             value,
-        });
+        })
     }
 }
 
