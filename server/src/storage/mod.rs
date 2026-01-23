@@ -31,6 +31,7 @@
 //! ```
 
 mod allocator;
+pub mod btree;
 mod file;
 mod page;
 mod superblock;
