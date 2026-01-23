@@ -41,6 +41,14 @@ impl ClientConnection {
         };
         let mut response = match message.payload {
             ClientMessagePayload::TripleUpdateRequest(request) => self.update(request).await,
+            ClientMessagePayload::Query(_request) => proto::ServerResponse {
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Unimplemented.into(),
+                    message: "Query not yet implemented".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
         };
         response.request_id = request_id;
         proto::ServerMessage {
@@ -135,7 +143,9 @@ mod tests {
         let triple = proto::Triple {
             entity_id: Some(entity_id),
             attribute_id: Some(attribute_id),
-            value: Some(proto::triple::Value::String("test_value".to_string())),
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::String("test_value".to_string())),
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -176,7 +186,9 @@ mod tests {
         let triple = proto::Triple {
             entity_id: Some(entity_id),
             attribute_id: Some(attribute_id),
-            value: Some(proto::triple::Value::Boolean(true)),
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::Boolean(true)),
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -214,7 +226,9 @@ mod tests {
         let triple = proto::Triple {
             entity_id: Some(entity_id),
             attribute_id: Some(attribute_id),
-            value: Some(proto::triple::Value::Number(123.456)),
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::Number(123.456)),
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {

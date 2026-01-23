@@ -72,7 +72,10 @@ impl ProtoDeserializable<proto::Triple> for Triple {
     fn from_proto(proto_triple: proto::Triple) -> Result<Self, String> {
         let entity_id = validate_proto_id(proto_triple.entity_id, "Triple", "subject")?;
         let attribute_id = validate_proto_id(proto_triple.attribute_id, "Triple", "predicate")?;
-        let value = match proto_triple.value {
+        let triple_value = proto_triple
+            .value
+            .ok_or("Triple proto did not contain a value.")?;
+        let value = match triple_value.value {
             Some(proto::triple_value::Value::String(string)) => {
                 TripleValue::String(validate_proto_string(
                     string,
@@ -81,8 +84,8 @@ impl ProtoDeserializable<proto::Triple> for Triple {
                     "string",
                 )?)
             }
-            Some(proto::triple::Value::Boolean(boolean)) => TripleValue::Boolean(boolean),
-            Some(proto::triple::Value::Number(number)) => TripleValue::Number(number),
+            Some(proto::triple_value::Value::Boolean(boolean)) => TripleValue::Boolean(boolean),
+            Some(proto::triple_value::Value::Number(number)) => TripleValue::Number(number),
             None => return Err("Triple proto did not contain an object.".into()),
         };
         Ok(Self {
@@ -98,11 +101,19 @@ impl ProtoSerializable<proto::Triple> for Triple {
         proto::Triple {
             entity_id: Some(self.entity_id.to_vec()),
             attribute_id: Some(self.attribute_id.to_vec()),
-            value: match self.value {
-                TripleValue::String(string) => Some(proto::triple::Value::String(string)),
-                TripleValue::Boolean(boolean) => Some(proto::triple::Value::Boolean(boolean)),
-                TripleValue::Number(number) => Some(proto::triple::Value::Number(number)),
-            },
+            value: Some(proto::TripleValue {
+                value: match self.value {
+                    TripleValue::String(string) => {
+                        Some(proto::triple_value::Value::String(string))
+                    }
+                    TripleValue::Boolean(boolean) => {
+                        Some(proto::triple_value::Value::Boolean(boolean))
+                    }
+                    TripleValue::Number(number) => {
+                        Some(proto::triple_value::Value::Number(number))
+                    }
+                },
+            }),
         }
     }
 }
