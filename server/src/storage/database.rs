@@ -105,8 +105,12 @@ mod tests {
 
             let entity_id = [1u8; 16];
             let attribute_id = [2u8; 16];
-            txn.insert(entity_id, attribute_id, TripleValue::String("hello".to_string()))
-                .expect("insert");
+            txn.insert(
+                entity_id,
+                attribute_id,
+                TripleValue::String("hello".to_string()),
+            )
+            .expect("insert");
             txn.commit().expect("commit");
         }
 
@@ -119,7 +123,10 @@ mod tests {
             let attribute_id = [2u8; 16];
             let record = txn.get(&entity_id, &attribute_id).expect("get");
             assert!(record.is_some());
-            assert_eq!(record.unwrap().value, TripleValue::String("hello".to_string()));
+            assert_eq!(
+                record.unwrap().value,
+                TripleValue::String("hello".to_string())
+            );
             txn.abort();
         }
     }

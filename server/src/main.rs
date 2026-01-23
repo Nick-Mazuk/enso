@@ -49,10 +49,12 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| {
-        tracing::error!("Failed to bind: {e}");
-        std::process::exit(1);
-    });
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to bind: {e}");
+            std::process::exit(1);
+        });
 
     axum::serve(listener, app).await.unwrap_or_else(|e| {
         tracing::error!("Server error: {e}");
@@ -113,21 +115,32 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                     }),
                 };
                 let response_bytes = error_response.encode_to_vec();
-                if socket.send(Message::Binary(response_bytes.into())).await.is_err() {
+                if socket
+                    .send(Message::Binary(response_bytes.into()))
+                    .await
+                    .is_err()
+                {
                     return;
                 }
                 continue;
             }
         };
 
-        tracing::debug!("received ClientMessage with request_id: {:?}", client_message.request_id);
+        tracing::debug!(
+            "received ClientMessage with request_id: {:?}",
+            client_message.request_id
+        );
 
         // Handle the message
         let server_message = state.client_connection.handle_message(client_message).await;
 
         // Encode and send the response
         let response_bytes = server_message.encode_to_vec();
-        if socket.send(Message::Binary(response_bytes.into())).await.is_err() {
+        if socket
+            .send(Message::Binary(response_bytes.into()))
+            .await
+            .is_err()
+        {
             tracing::debug!("client disconnected");
             return;
         }

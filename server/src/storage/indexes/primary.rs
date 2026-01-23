@@ -3,7 +3,7 @@
 //! The primary index maps (`entity_id`, `attribute_id`) to the full triple record.
 //! It is backed by a B-tree and provides efficient point lookups and entity scans.
 
-use crate::storage::btree::{make_key, split_key, BTree, BTreeError, Key};
+use crate::storage::btree::{BTree, BTreeError, make_key, split_key};
 use crate::storage::file::DatabaseFile;
 use crate::storage::page::PageId;
 use crate::storage::triple::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
@@ -71,7 +71,10 @@ impl<'a> PrimaryIndex<'a> {
     /// Insert a new triple record.
     ///
     /// Returns the old record if updating an existing triple.
-    pub fn insert(&mut self, record: &TripleRecord) -> Result<Option<TripleRecord>, PrimaryIndexError> {
+    pub fn insert(
+        &mut self,
+        record: &TripleRecord,
+    ) -> Result<Option<TripleRecord>, PrimaryIndexError> {
         let key = make_key(&record.entity_id, &record.attribute_id);
         let value = record.to_bytes();
 
@@ -300,8 +303,13 @@ mod tests {
         assert_eq!(old.unwrap().value, TripleValue::String("hello".to_string()));
 
         // Verify update
-        let fetched = index.get(&entity_id, &attribute_id).expect("get after update");
-        assert_eq!(fetched.unwrap().value, TripleValue::String("world".to_string()));
+        let fetched = index
+            .get(&entity_id, &attribute_id)
+            .expect("get after update");
+        assert_eq!(
+            fetched.unwrap().value,
+            TripleValue::String("world".to_string())
+        );
     }
 
     #[test]
@@ -325,18 +333,55 @@ mod tests {
         index.insert(&record).expect("insert");
 
         // Visible to txn 10 and later
-        assert!(index.get_visible(&entity_id, &attribute_id, 9).expect("get").is_none());
-        assert!(index.get_visible(&entity_id, &attribute_id, 10).expect("get").is_some());
-        assert!(index.get_visible(&entity_id, &attribute_id, 100).expect("get").is_some());
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 9)
+                .expect("get")
+                .is_none()
+        );
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 10)
+                .expect("get")
+                .is_some()
+        );
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 100)
+                .expect("get")
+                .is_some()
+        );
 
         // Mark deleted at txn 50
-        index.mark_deleted(&entity_id, &attribute_id, 50).expect("mark deleted");
+        index
+            .mark_deleted(&entity_id, &attribute_id, 50)
+            .expect("mark deleted");
 
         // Now visible only in range [10, 50)
-        assert!(index.get_visible(&entity_id, &attribute_id, 9).expect("get").is_none());
-        assert!(index.get_visible(&entity_id, &attribute_id, 10).expect("get").is_some());
-        assert!(index.get_visible(&entity_id, &attribute_id, 49).expect("get").is_some());
-        assert!(index.get_visible(&entity_id, &attribute_id, 50).expect("get").is_none());
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 9)
+                .expect("get")
+                .is_none()
+        );
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 10)
+                .expect("get")
+                .is_some()
+        );
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 49)
+                .expect("get")
+                .is_some()
+        );
+        assert!(
+            index
+                .get_visible(&entity_id, &attribute_id, 50)
+                .expect("get")
+                .is_none()
+        );
     }
 
     #[test]
@@ -421,7 +466,12 @@ mod tests {
         assert!(removed.is_some());
         assert_eq!(removed.unwrap().value, TripleValue::Boolean(true));
 
-        assert!(index.get(&entity_id, &attribute_id).expect("get after remove").is_none());
+        assert!(
+            index
+                .get(&entity_id, &attribute_id)
+                .expect("get after remove")
+                .is_none()
+        );
     }
 
     #[test]

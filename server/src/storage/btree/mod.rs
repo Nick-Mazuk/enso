@@ -39,7 +39,7 @@ mod node;
 mod tree;
 
 pub use node::{
-    compare_keys, make_key, split_key, InternalNode, Key, LeafEntry, LeafNode, NodeError,
-    NodeHeader, NodeType, KEY_SIZE, MAX_INLINE_VALUE_SIZE,
+    InternalNode, KEY_SIZE, Key, LeafEntry, LeafNode, MAX_INLINE_VALUE_SIZE, NodeError, NodeHeader,
+    NodeType, compare_keys, make_key, split_key,
 };
 pub use tree::{BTree, BTreeError, BTreeIterator};

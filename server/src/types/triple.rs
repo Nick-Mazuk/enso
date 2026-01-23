@@ -103,15 +103,11 @@ impl ProtoSerializable<proto::Triple> for Triple {
             attribute_id: Some(self.attribute_id.to_vec()),
             value: Some(proto::TripleValue {
                 value: match self.value {
-                    TripleValue::String(string) => {
-                        Some(proto::triple_value::Value::String(string))
-                    }
+                    TripleValue::String(string) => Some(proto::triple_value::Value::String(string)),
                     TripleValue::Boolean(boolean) => {
                         Some(proto::triple_value::Value::Boolean(boolean))
                     }
-                    TripleValue::Number(number) => {
-                        Some(proto::triple_value::Value::Number(number))
-                    }
+                    TripleValue::Number(number) => Some(proto::triple_value::Value::Number(number)),
                 },
             }),
         }

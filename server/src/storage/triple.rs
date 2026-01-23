@@ -13,9 +13,6 @@ pub type AttributeId = [u8; 16];
 /// Transaction ID.
 pub type TxnId = u64;
 
-/// Special transaction ID indicating the triple is visible to all transactions.
-pub const TXN_ID_MAX: TxnId = u64::MAX;
-
 /// Value type discriminants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

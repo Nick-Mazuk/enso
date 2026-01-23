@@ -232,44 +232,40 @@ impl ClientConnection {
                     }
                 }
                 // Entity scan: only entity_id specified
-                (Some(eid), None) => {
-                    match txn.scan_entity(&eid) {
-                        Ok(mut iter) => {
-                            loop {
-                                match iter.next_record() {
-                                    Ok(Some(record)) => {
-                                        if !record.is_deleted() {
-                                            results.push(record_to_proto(&record));
-                                        }
-                                    }
-                                    Ok(None) => break,
-                                    Err(e) => {
-                                        txn.abort();
-                                        return proto::ServerResponse {
-                                            status: Some(proto::google::rpc::Status {
-                                                code: proto::google::rpc::Code::Internal.into(),
-                                                message: format!("Query failed: {e}"),
-                                                ..Default::default()
-                                            }),
-                                            ..Default::default()
-                                        };
-                                    }
+                (Some(eid), None) => match txn.scan_entity(&eid) {
+                    Ok(mut iter) => loop {
+                        match iter.next_record() {
+                            Ok(Some(record)) => {
+                                if !record.is_deleted() {
+                                    results.push(record_to_proto(&record));
                                 }
                             }
-                        }
-                        Err(e) => {
-                            txn.abort();
-                            return proto::ServerResponse {
-                                status: Some(proto::google::rpc::Status {
-                                    code: proto::google::rpc::Code::Internal.into(),
-                                    message: format!("Query failed: {e}"),
+                            Ok(None) => break,
+                            Err(e) => {
+                                txn.abort();
+                                return proto::ServerResponse {
+                                    status: Some(proto::google::rpc::Status {
+                                        code: proto::google::rpc::Code::Internal.into(),
+                                        message: format!("Query failed: {e}"),
+                                        ..Default::default()
+                                    }),
                                     ..Default::default()
-                                }),
-                                ..Default::default()
-                            };
+                                };
+                            }
                         }
+                    },
+                    Err(e) => {
+                        txn.abort();
+                        return proto::ServerResponse {
+                            status: Some(proto::google::rpc::Status {
+                                code: proto::google::rpc::Code::Internal.into(),
+                                message: format!("Query failed: {e}"),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        };
                     }
-                }
+                },
                 // No entity_id specified - not supported yet
                 (None, _) => {
                     txn.abort();
@@ -513,7 +509,9 @@ mod tests {
 
         // Query the triple back using point lookup (entity_id + attribute_id)
         let query_pattern = proto::QueryPattern {
+            #[allow(clippy::disallowed_methods)]
             entity: Some(proto::query_pattern::Entity::EntityId(entity_id.clone())),
+            #[allow(clippy::disallowed_methods)]
             attribute: Some(proto::query_pattern::Attribute::AttributeId(
                 attribute_id.clone(),
             )),

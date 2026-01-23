@@ -11,7 +11,9 @@ use crate::storage::indexes::primary::{
     EntityScanIterator, PrimaryIndex, PrimaryIndexCursor, PrimaryIndexError,
 };
 use crate::storage::superblock::HlcTimestamp;
-use crate::storage::triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};
+use crate::storage::triple::{
+    AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
+};
 
 /// A simple transaction for Phase 1.
 ///
@@ -135,7 +137,8 @@ impl<'a> Transaction<'a> {
             return Err(TransactionError::NotFound);
         }
 
-        self.index.mark_deleted(entity_id, attribute_id, self.txn_id)?;
+        self.index
+            .mark_deleted(entity_id, attribute_id, self.txn_id)?;
         Ok(())
     }
 
@@ -255,12 +258,19 @@ mod tests {
             let entity_id = [1u8; 16];
             let attribute_id = [2u8; 16];
 
-            txn.insert(entity_id, attribute_id, TripleValue::String("hello".to_string()))
-                .expect("insert");
+            txn.insert(
+                entity_id,
+                attribute_id,
+                TripleValue::String("hello".to_string()),
+            )
+            .expect("insert");
 
             let record = txn.get(&entity_id, &attribute_id).expect("get");
             assert!(record.is_some());
-            assert_eq!(record.unwrap().value, TripleValue::String("hello".to_string()));
+            assert_eq!(
+                record.unwrap().value,
+                TripleValue::String("hello".to_string())
+            );
 
             txn.commit().expect("commit");
         }
@@ -273,9 +283,14 @@ mod tests {
             let entity_id = [1u8; 16];
             let attribute_id = [2u8; 16];
 
-            let record = txn.get(&entity_id, &attribute_id).expect("get after reopen");
+            let record = txn
+                .get(&entity_id, &attribute_id)
+                .expect("get after reopen");
             assert!(record.is_some());
-            assert_eq!(record.unwrap().value, TripleValue::String("hello".to_string()));
+            assert_eq!(
+                record.unwrap().value,
+                TripleValue::String("hello".to_string())
+            );
 
             txn.abort();
         }
@@ -325,7 +340,9 @@ mod tests {
         txn.delete(&entity_id, &attribute_id).expect("delete");
 
         // Verify deleted (not visible)
-        let record = txn.get(&entity_id, &attribute_id).expect("get after delete");
+        let record = txn
+            .get(&entity_id, &attribute_id)
+            .expect("get after delete");
         assert!(record.is_none());
 
         txn.commit().expect("commit");

@@ -5,7 +5,7 @@
 // PAGE_SIZE is a compile-time constant that fits in u32.
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::storage::page::{Page, PageId, PAGE_SIZE};
+use crate::storage::page::{PAGE_SIZE, Page, PageId};
 
 /// Magic number identifying an Enso database file: "ENSOTRPL"
 pub const MAGIC: [u8; 8] = *b"ENSOTRPL";
@@ -169,7 +169,10 @@ impl Superblock {
         page.write_u64(offsets::ATTRIBUTE_INDEX_ROOT, self.attribute_index_root);
         page.write_u64(offsets::FREE_LIST_HEAD, self.free_list_head);
         page.write_u64(offsets::LAST_CHECKPOINT_LSN, self.last_checkpoint_lsn);
-        page.write_bytes(offsets::LAST_CHECKPOINT_HLC, &self.last_checkpoint_hlc.to_bytes());
+        page.write_bytes(
+            offsets::LAST_CHECKPOINT_HLC,
+            &self.last_checkpoint_hlc.to_bytes(),
+        );
         page.write_u64(offsets::TXN_LOG_START, self.txn_log_start);
         page.write_u64(offsets::TXN_LOG_END, self.txn_log_end);
         page.write_u64(offsets::TXN_LOG_CAPACITY, self.txn_log_capacity);
@@ -245,7 +248,11 @@ impl std::fmt::Display for SuperblockError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidMagic(magic) => {
-                write!(f, "invalid magic number: {:?}", String::from_utf8_lossy(magic))
+                write!(
+                    f,
+                    "invalid magic number: {:?}",
+                    String::from_utf8_lossy(magic)
+                )
             }
             Self::UnsupportedVersion(v) => write!(f, "unsupported format version: {v}"),
             Self::InvalidPageSize(s) => write!(f, "invalid page size: {s}"),

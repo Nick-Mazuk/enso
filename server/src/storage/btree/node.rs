@@ -6,7 +6,7 @@
 
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::storage::page::{Page, PageHeader, PageId, PageType, PAGE_SIZE};
+use crate::storage::page::{PAGE_SIZE, Page, PageHeader, PageId, PageType};
 
 /// Size of a key in bytes (`entity_id` + `attribute_id` = 16 + 16).
 pub const KEY_SIZE: usize = 32;
@@ -147,7 +147,12 @@ impl InternalNode {
 
     /// Create an internal node with initial children.
     #[must_use]
-    pub fn with_children(parent_page: PageId, left_child: PageId, key: Key, right_child: PageId) -> Self {
+    pub fn with_children(
+        parent_page: PageId,
+        left_child: PageId,
+        key: Key,
+        right_child: PageId,
+    ) -> Self {
         Self {
             header: NodeHeader {
                 node_type: NodeType::Internal,
@@ -406,7 +411,6 @@ impl LeafNode {
     }
 
     /// Find the index where a key should be inserted (or exists).
-    #[must_use]
     pub fn find_index(&self, key: &Key) -> Result<usize, usize> {
         self.entries.binary_search_by(|e| e.key.cmp(key))
     }
@@ -441,7 +445,9 @@ impl LeafNode {
     ///
     /// Returns the removed value if found.
     pub fn remove(&mut self, key: &Key) -> Option<Vec<u8>> {
-        self.find_index(key).ok().map(|i| self.entries.remove(i).value)
+        self.find_index(key)
+            .ok()
+            .map(|i| self.entries.remove(i).value)
     }
 
     /// Split the node, returning the split key and the new right node.
@@ -458,7 +464,7 @@ impl LeafNode {
                 node_type: NodeType::Leaf,
                 key_count: right_entries.len() as u16,
                 parent_page: self.header.parent_page,
-                prev_leaf: 0,  // Will be set by caller
+                prev_leaf: 0, // Will be set by caller
                 next_leaf: self.header.next_leaf,
             },
             entries: right_entries,
@@ -487,7 +493,10 @@ impl std::fmt::Display for NodeError {
             Self::InvalidHeader => write!(f, "invalid node header"),
             Self::WrongNodeType => write!(f, "wrong node type for operation"),
             Self::ValueTooLarge(size) => {
-                write!(f, "value too large: {size} bytes (max {MAX_INLINE_VALUE_SIZE})")
+                write!(
+                    f,
+                    "value too large: {size} bytes (max {MAX_INLINE_VALUE_SIZE})"
+                )
             }
             Self::NodeFull => write!(f, "node is full"),
         }

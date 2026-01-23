@@ -7,8 +7,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::storage::btree::node::{
-    InternalNode, Key, LeafEntry, LeafNode, NodeError, NodeHeader, NodeType,
-    MAX_INLINE_VALUE_SIZE,
+    InternalNode, Key, LeafEntry, LeafNode, MAX_INLINE_VALUE_SIZE, NodeError, NodeHeader, NodeType,
 };
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::page::{Page, PageId};
@@ -122,7 +121,8 @@ impl<'a> BTree<'a> {
 
         loop {
             let page = self.file.read_page(current_page_id)?;
-            let header = NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
 
             match header.node_type {
                 NodeType::Leaf => return Ok(current_page_id),
@@ -173,11 +173,17 @@ impl<'a> BTree<'a> {
             next_leaf.header.prev_leaf = right_page_id;
             let mut next_page = Page::new();
             next_leaf.write_to_page(&mut next_page);
-            self.file.write_page(right_leaf.header.next_leaf, &next_page)?;
+            self.file
+                .write_page(right_leaf.header.next_leaf, &next_page)?;
         }
 
         // Propagate the split up the tree
-        self.insert_into_parent(leaf_page_id, split_key, right_page_id, leaf.header.parent_page)?;
+        self.insert_into_parent(
+            leaf_page_id,
+            split_key,
+            right_page_id,
+            leaf.header.parent_page,
+        )?;
 
         Ok(old_value)
     }
@@ -266,9 +272,14 @@ impl<'a> BTree<'a> {
     }
 
     /// Update a node's parent pointer.
-    fn update_parent_pointer(&mut self, page_id: PageId, new_parent: PageId) -> Result<(), BTreeError> {
+    fn update_parent_pointer(
+        &mut self,
+        page_id: PageId,
+        new_parent: PageId,
+    ) -> Result<(), BTreeError> {
         let page = self.file.read_page(page_id)?;
-        let header = NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+        let header =
+            NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
 
         match header.node_type {
             NodeType::Leaf => {
@@ -297,7 +308,8 @@ impl<'a> BTree<'a> {
 
         loop {
             let page = self.file.read_page(current_page_id)?;
-            let header = NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
 
             match header.node_type {
                 NodeType::Leaf => {
@@ -341,7 +353,8 @@ impl<'a> BTree<'a> {
         // Find leftmost leaf
         loop {
             let page = self.file.read_page(current_page_id)?;
-            let header = NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
 
             match header.node_type {
                 NodeType::Leaf => break,

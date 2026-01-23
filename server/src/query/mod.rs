@@ -6,6 +6,6 @@
 mod executor;
 
 // QueryError and QueryExecutor will be used when QueryRequest is implemented
+pub use executor::value_to_storage;
 #[allow(unused_imports)]
 pub use executor::{QueryError, QueryExecutor};
-pub use executor::value_to_storage;
