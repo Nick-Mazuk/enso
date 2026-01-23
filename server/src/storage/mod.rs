@@ -13,30 +13,36 @@
 //! # Usage
 //!
 //! ```ignore
-//! use storage::{DatabaseFile, PageAllocator};
+//! use storage::{DatabaseFile, Transaction, TripleValue};
 //!
 //! // Create a new database
 //! let mut db = DatabaseFile::create(path)?;
 //!
-//! // Allocate pages for data
-//! let page_id = db.allocate_pages(1)?;
+//! // Begin a transaction
+//! let mut txn = Transaction::begin(&mut db)?;
 //!
-//! // Write data to a page
-//! let mut page = Page::new();
-//! page.write_bytes(0, b"hello");
-//! db.write_page(page_id, &page)?;
+//! // Insert a triple
+//! let entity_id = [1u8; 16];
+//! let attribute_id = [2u8; 16];
+//! txn.insert(entity_id, attribute_id, TripleValue::String("hello".into()))?;
 //!
-//! // Sync to disk
-//! db.sync()?;
+//! // Commit with durability
+//! txn.commit()?;
 //! ```
 
 mod allocator;
 pub mod btree;
 mod file;
+pub mod indexes;
 mod page;
 mod superblock;
+mod transaction;
+mod triple;
 
 pub use allocator::PageAllocator;
 pub use file::{DatabaseFile, FileError};
-pub use page::{Page, PageError, PageHeader, PageId, PageType, PAGE_SIZE};
+pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
+pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
 pub use superblock::{HlcTimestamp, Superblock, SuperblockError};
+pub use transaction::{Transaction, TransactionError};
+pub use triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};

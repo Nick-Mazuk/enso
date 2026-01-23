@@ -48,6 +48,12 @@ impl<'a> BTree<'a> {
         self.root_page
     }
 
+    /// Get mutable access to the underlying database file.
+    #[allow(clippy::missing_const_for_fn)] // mutable references can't be const
+    pub fn file_mut(&mut self) -> &mut DatabaseFile {
+        self.file
+    }
+
     /// Look up a value by key.
     pub fn get(&mut self, key: &Key) -> Result<Option<Vec<u8>>, BTreeError> {
         let leaf_page_id = self.find_leaf(key)?;

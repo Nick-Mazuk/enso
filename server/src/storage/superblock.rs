@@ -58,6 +58,16 @@ impl HlcTimestamp {
     /// Size in bytes.
     pub const SIZE: usize = 16;
 
+    /// Create a new HLC timestamp.
+    #[must_use]
+    pub const fn new(physical_time: u64, logical_counter: u32) -> Self {
+        Self {
+            physical_time,
+            logical_counter,
+            node_id: 0,
+        }
+    }
+
     /// Serialize to bytes.
     #[must_use]
     pub const fn to_bytes(self) -> [u8; Self::SIZE] {
