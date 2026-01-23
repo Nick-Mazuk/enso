@@ -39,6 +39,7 @@ mod page;
 mod superblock;
 mod transaction;
 mod triple;
+pub mod wal;
 
 pub use allocator::PageAllocator;
 pub use database::{Database, DatabaseError};
@@ -48,3 +49,4 @@ pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
 pub use superblock::{HlcTimestamp, Superblock, SuperblockError};
 pub use transaction::{Transaction, TransactionError};
 pub use triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};
+pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};

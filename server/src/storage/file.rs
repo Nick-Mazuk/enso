@@ -8,6 +8,7 @@ use std::path::Path;
 
 use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
 use crate::storage::superblock::{Superblock, SuperblockError};
+use crate::storage::wal::{self, Lsn, Wal, WalError};
 
 /// A database file handle with low-level page I/O operations.
 pub struct DatabaseFile {
@@ -151,6 +152,101 @@ impl DatabaseFile {
     #[must_use]
     pub const fn total_pages(&self) -> u64 {
         self.superblock.total_page_count
+    }
+
+    /// Initialize the WAL region in the database file.
+    ///
+    /// This allocates pages for the WAL and updates the superblock.
+    /// Should only be called once when creating a new database.
+    ///
+    /// # Arguments
+    /// - `capacity`: The desired WAL capacity in bytes (will be rounded up to page size)
+    pub fn init_wal(&mut self, capacity: u64) -> Result<(), FileError> {
+        let capacity = capacity.max(wal::MIN_WAL_CAPACITY);
+        let wal_pages = wal::pages_for_capacity(capacity);
+        let actual_capacity = wal_pages * PAGE_SIZE_U64;
+
+        // Allocate pages for the WAL
+        let first_wal_page = self.allocate_pages(wal_pages)?;
+
+        // Calculate the byte offset where WAL region starts
+        let wal_start_offset = first_wal_page * PAGE_SIZE_U64;
+
+        // Update superblock with WAL information
+        self.superblock.txn_log_start = wal_start_offset;
+        self.superblock.txn_log_end = wal_start_offset; // head = start initially
+        self.superblock.txn_log_capacity = actual_capacity;
+        self.superblock.last_checkpoint_lsn = 0;
+
+        // Write updated superblock
+        self.write_superblock()?;
+        self.sync()?;
+
+        Ok(())
+    }
+
+    /// Check if the WAL has been initialized.
+    #[must_use]
+    pub const fn has_wal(&self) -> bool {
+        self.superblock.txn_log_capacity > 0
+    }
+
+    /// Get the WAL capacity in bytes.
+    #[must_use]
+    pub const fn wal_capacity(&self) -> u64 {
+        self.superblock.txn_log_capacity
+    }
+
+    /// Get a WAL handle for writing log records.
+    ///
+    /// Returns an error if the WAL has not been initialized.
+    #[allow(clippy::missing_const_for_fn)] // Cannot be const due to early return with ?
+    pub fn wal(&mut self) -> Result<Wal<'_, File>, WalError> {
+        if !self.has_wal() {
+            return Err(WalError::NotInitialized);
+        }
+
+        let region_start = self.superblock.txn_log_start;
+        let capacity = self.superblock.txn_log_capacity;
+
+        // head is stored as absolute file offset, convert to relative
+        let head = self.superblock.txn_log_end - region_start;
+
+        // For now, tail starts at 0 (we'll add proper tail tracking later)
+        // In a full implementation, we'd track this in the superblock or scan on open
+        let tail = 0;
+
+        // Next LSN is checkpoint LSN + 1 (or 1 if no checkpoint)
+        let next_lsn = if self.superblock.last_checkpoint_lsn > 0 {
+            self.superblock.last_checkpoint_lsn + 1
+        } else {
+            1
+        };
+
+        Ok(Wal::new(
+            &mut self.file,
+            region_start,
+            capacity,
+            head,
+            tail,
+            next_lsn,
+        ))
+    }
+
+    /// Update the WAL head position in the superblock.
+    ///
+    /// This should be called after appending records to persist the new head position.
+    pub const fn update_wal_head(&mut self, relative_head: u64, last_lsn: Lsn) {
+        let absolute_head = self.superblock.txn_log_start + relative_head;
+        self.superblock.txn_log_end = absolute_head;
+        self.superblock.last_checkpoint_lsn = last_lsn;
+    }
+
+    /// Get mutable access to the underlying file handle.
+    ///
+    /// This is needed for WAL operations that need direct file access.
+    pub const fn file_mut(&mut self) -> &mut File {
+        &mut self.file
     }
 }
 
