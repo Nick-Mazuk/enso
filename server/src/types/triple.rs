@@ -73,7 +73,7 @@ impl ProtoDeserializable<proto::Triple> for Triple {
         let entity_id = validate_proto_id(proto_triple.entity_id, "Triple", "subject")?;
         let attribute_id = validate_proto_id(proto_triple.attribute_id, "Triple", "predicate")?;
         let value = match proto_triple.value {
-            Some(proto::triple::Value::String(string)) => {
+            Some(proto::triple_value::Value::String(string)) => {
                 TripleValue::String(validate_proto_string(
                     string,
                     MAX_TRIPLE_STRING_VALUE_LENGTH,

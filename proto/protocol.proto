@@ -8,6 +8,10 @@ message Triple {
   optional bytes entity_id = 1;
   // TODO: describe the hashing algorithm used to get this id
   optional bytes attribute_id = 2;
+  TripleValue value = 3;
+}
+
+message TripleValue {
   oneof value {
     string string = 3;
     double number = 4;
@@ -21,16 +25,37 @@ message ClientMessage {
   optional uint32 request_id = 1;
   oneof payload {
     TripleUpdateRequest triple_update_request = 2;
-    // QueryRequest query = 2; // One-time query
+    QueryRequest query = 3;
     // SubscribeRequest subscribe = 3; // Reactive subscription
     // uint32 unsubscribe_id = 4; // subscription_id to stop
   }
 }
 
-// message QueryRequest {
-// repeated Pattern patterns = 1; // e.g., ["id-123", "user/*", ?]
-// repeated Filter filters = 2; // e.g., "age > 30"
-// }
+message QueryRequest {
+  // These are the fields to return
+  repeated QueryPatternVariable find = 1;
+}
+
+message QueryPattern {
+  oneof entity {
+    bytes entity_id = 1;
+    QueryPatternVariable entity_variable = 2;
+  }
+
+  oneof attribute {
+    bytes attribute_id = 3;
+    QueryPatternVariable attribute_variable = 4;
+  }
+
+  oneof value_group {
+    TripleValue value = 5;
+    QueryPatternVariable value_variable = 6;
+  }
+}
+
+message QueryPatternVariable {
+  optional string label = 1;
+}
 
 // message SubscribeRequest {
 //   uint32 subscription_id = 1;

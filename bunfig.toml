@@ -1,0 +1,4 @@
+[test]
+# Require 100% code coverage
+# See https://bits.logic.inc/i/182812243/percent-code-coverage
+coverageThreshold = 1
