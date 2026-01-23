@@ -33,10 +33,20 @@ async fn main() {
 
     // Create or open the database
     let db_path = PathBuf::from("enso.db");
-    let database = Database::open_or_create(&db_path).unwrap_or_else(|e| {
+    let (database, recovery_result) = Database::open_or_create(&db_path).unwrap_or_else(|e| {
         tracing::error!("Failed to open database: {e}");
         std::process::exit(1);
     });
+
+    // Log recovery info if recovery was performed
+    if let Some(result) = recovery_result {
+        tracing::info!(
+            "Database recovery completed: {} records scanned, {} transactions replayed, {} discarded",
+            result.records_scanned,
+            result.transactions_replayed,
+            result.transactions_discarded
+        );
+    }
 
     let client_connection = Arc::new(ClientConnection::new(database));
     let state = AppState { client_connection };

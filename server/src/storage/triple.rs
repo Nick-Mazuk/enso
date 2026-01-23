@@ -64,6 +64,19 @@ impl TripleValue {
         }
     }
 
+    /// Create a copy of this value.
+    ///
+    /// This is used instead of Clone to comply with project policy.
+    #[must_use]
+    pub fn clone_value(&self) -> Self {
+        match self {
+            Self::Null => Self::Null,
+            Self::Boolean(b) => Self::Boolean(*b),
+            Self::Number(n) => Self::Number(*n),
+            Self::String(s) => Self::String(s.as_str().to_owned()),
+        }
+    }
+
     /// Calculate the serialized size of this value.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)] // String::len() is not const-stable

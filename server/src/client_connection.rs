@@ -96,17 +96,7 @@ impl ClientConnection {
         // Insert all triples
         for triple in triples {
             let value = value_to_storage(triple.value);
-            if let Err(e) = txn.insert(triple.entity_id, triple.attribute_id, value) {
-                txn.abort();
-                return proto::ServerResponse {
-                    status: Some(proto::google::rpc::Status {
-                        code: proto::google::rpc::Code::Internal.into(),
-                        message: format!("Failed to insert triple: {e}"),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
-            }
+            txn.insert(triple.entity_id, triple.attribute_id, value);
         }
 
         // Commit the transaction
@@ -233,27 +223,11 @@ impl ClientConnection {
                 }
                 // Entity scan: only entity_id specified
                 (Some(eid), None) => match txn.scan_entity(&eid) {
-                    Ok(mut iter) => loop {
-                        match iter.next_record() {
-                            Ok(Some(record)) => {
-                                if !record.is_deleted() {
-                                    results.push(record_to_proto(&record));
-                                }
-                            }
-                            Ok(None) => break,
-                            Err(e) => {
-                                txn.abort();
-                                return proto::ServerResponse {
-                                    status: Some(proto::google::rpc::Status {
-                                        code: proto::google::rpc::Code::Internal.into(),
-                                        message: format!("Query failed: {e}"),
-                                        ..Default::default()
-                                    }),
-                                    ..Default::default()
-                                };
-                            }
+                    Ok(records) => {
+                        for record in &records {
+                            results.push(record_to_proto(record));
                         }
-                    },
+                    }
                     Err(e) => {
                         txn.abort();
                         return proto::ServerResponse {

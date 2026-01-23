@@ -216,9 +216,9 @@ impl DatabaseFile {
         // In a full implementation, we'd track this in the superblock or scan on open
         let tail = 0;
 
-        // Next LSN is checkpoint LSN + 1 (or 1 if no checkpoint)
-        let next_lsn = if self.superblock.last_checkpoint_lsn > 0 {
-            self.superblock.last_checkpoint_lsn + 1
+        // Next LSN is last WAL LSN + 1 (or 1 if no writes yet)
+        let next_lsn = if self.superblock.last_wal_lsn > 0 {
+            self.superblock.last_wal_lsn + 1
         } else {
             1
         };
@@ -239,7 +239,7 @@ impl DatabaseFile {
     pub const fn update_wal_head(&mut self, relative_head: u64, last_lsn: Lsn) {
         let absolute_head = self.superblock.txn_log_start + relative_head;
         self.superblock.txn_log_end = absolute_head;
-        self.superblock.last_checkpoint_lsn = last_lsn;
+        self.superblock.last_wal_lsn = last_lsn;
     }
 
     /// Get mutable access to the underlying file handle.

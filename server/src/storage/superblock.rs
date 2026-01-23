@@ -28,13 +28,14 @@ mod offsets {
     pub const FREE_LIST_HEAD: usize = 48;
     pub const LAST_CHECKPOINT_LSN: usize = 56;
     pub const LAST_CHECKPOINT_HLC: usize = 64;
-    pub const TXN_LOG_START: usize = 80;
-    pub const TXN_LOG_END: usize = 88;
-    pub const TXN_LOG_CAPACITY: usize = 96;
-    pub const ACTIVE_TXN_COUNT: usize = 104;
-    pub const NEXT_TXN_ID: usize = 112;
-    pub const SCHEMA_VERSION: usize = 120;
-    // 128-1023: reserved
+    pub const LAST_WAL_LSN: usize = 80;
+    pub const TXN_LOG_START: usize = 88;
+    pub const TXN_LOG_END: usize = 96;
+    pub const TXN_LOG_CAPACITY: usize = 104;
+    pub const ACTIVE_TXN_COUNT: usize = 112;
+    pub const NEXT_TXN_ID: usize = 120;
+    pub const SCHEMA_VERSION: usize = 128;
+    // 136-1023: reserved
     // 1024-8191: checkpoint metadata
 }
 
@@ -114,6 +115,8 @@ pub struct Superblock {
     pub last_checkpoint_lsn: u64,
     /// HLC timestamp of the last checkpoint.
     pub last_checkpoint_hlc: HlcTimestamp,
+    /// Highest LSN written to the WAL (for continuing writes after restart).
+    pub last_wal_lsn: u64,
     /// Transaction log region start offset in file.
     pub txn_log_start: u64,
     /// Transaction log region end offset (write position).
@@ -146,6 +149,7 @@ impl Superblock {
                 logical_counter: 0,
                 node_id: 0,
             },
+            last_wal_lsn: 0,
             txn_log_start: 0,
             txn_log_end: 0,
             txn_log_capacity: 0,
@@ -173,6 +177,7 @@ impl Superblock {
             offsets::LAST_CHECKPOINT_HLC,
             &self.last_checkpoint_hlc.to_bytes(),
         );
+        page.write_u64(offsets::LAST_WAL_LSN, self.last_wal_lsn);
         page.write_u64(offsets::TXN_LOG_START, self.txn_log_start);
         page.write_u64(offsets::TXN_LOG_END, self.txn_log_end);
         page.write_u64(offsets::TXN_LOG_CAPACITY, self.txn_log_capacity);
@@ -217,6 +222,7 @@ impl Superblock {
             free_list_head: page.read_u64(offsets::FREE_LIST_HEAD),
             last_checkpoint_lsn: page.read_u64(offsets::LAST_CHECKPOINT_LSN),
             last_checkpoint_hlc: HlcTimestamp::from_bytes(&hlc_bytes),
+            last_wal_lsn: page.read_u64(offsets::LAST_WAL_LSN),
             txn_log_start: page.read_u64(offsets::TXN_LOG_START),
             txn_log_end: page.read_u64(offsets::TXN_LOG_END),
             txn_log_capacity: page.read_u64(offsets::TXN_LOG_CAPACITY),
