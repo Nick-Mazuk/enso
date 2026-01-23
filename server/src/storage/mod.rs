@@ -32,6 +32,7 @@
 
 mod allocator;
 pub mod btree;
+pub mod checkpoint;
 mod database;
 mod file;
 pub mod indexes;
@@ -42,6 +43,10 @@ mod triple;
 pub mod wal;
 
 pub use allocator::PageAllocator;
+pub use checkpoint::{
+    CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState,
+    force_checkpoint, maybe_checkpoint, perform_checkpoint,
+};
 pub use database::{Database, DatabaseError};
 pub use file::{DatabaseFile, FileError};
 pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
