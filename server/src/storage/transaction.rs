@@ -67,8 +67,12 @@ impl<'a> Transaction<'a> {
         entity_id: &EntityId,
         attribute_id: &AttributeId,
     ) -> Result<Option<TripleRecord>, TransactionError> {
-        // In Phase 1, we do simple visibility check against our txn_id
-        Ok(self.index.get_visible(entity_id, attribute_id, self.txn_id)?)
+        // Phase 1: simple get without MVCC visibility checks
+        // We filter out deleted records (deleted_txn != 0) since we still track deletion
+        match self.index.get(entity_id, attribute_id)? {
+            Some(record) if !record.is_deleted() => Ok(Some(record)),
+            _ => Ok(None),
+        }
     }
 
     /// Scan all triples for an entity.
@@ -84,9 +88,10 @@ impl<'a> Transaction<'a> {
         Ok(self.index.cursor()?)
     }
 
-    /// Insert a new triple.
+    /// Insert or update a triple.
     ///
     /// The triple will be created with the transaction's ID and HLC timestamp.
+    /// If a triple already exists for this (entity, attribute), it will be overwritten.
     pub fn insert(
         &mut self,
         entity_id: EntityId,
@@ -94,28 +99,22 @@ impl<'a> Transaction<'a> {
         value: TripleValue,
     ) -> Result<(), TransactionError> {
         let record = TripleRecord::new(entity_id, attribute_id, self.txn_id, self.hlc, value);
-
-        // Check if a visible version already exists
-        if let Some(existing) = self.index.get_visible(&entity_id, &attribute_id, self.txn_id)? {
-            // Mark the old version as deleted
-            self.index.mark_deleted(&existing.entity_id, &existing.attribute_id, self.txn_id)?;
-        }
-
+        // Phase 1: simple insert/overwrite without MVCC versioning
         self.index.insert(&record)?;
         Ok(())
     }
 
     /// Update an existing triple.
     ///
-    /// This is semantically equivalent to delete + insert, but checks that the triple exists.
+    /// Returns an error if the triple does not exist.
     pub fn update(
         &mut self,
         entity_id: EntityId,
         attribute_id: AttributeId,
         value: TripleValue,
     ) -> Result<(), TransactionError> {
-        // Check that the triple exists
-        if self.index.get_visible(&entity_id, &attribute_id, self.txn_id)?.is_none() {
+        // Check that the triple exists and is not deleted
+        if self.get(&entity_id, &attribute_id)?.is_none() {
             return Err(TransactionError::NotFound);
         }
 
@@ -124,14 +123,15 @@ impl<'a> Transaction<'a> {
 
     /// Delete a triple.
     ///
-    /// This marks the triple as deleted (MVCC tombstone).
+    /// Returns an error if the triple does not exist.
+    /// The triple is marked as deleted rather than removed, preparing for MVCC in Phase 3.
     pub fn delete(
         &mut self,
         entity_id: &EntityId,
         attribute_id: &AttributeId,
     ) -> Result<(), TransactionError> {
-        // Check that the triple exists
-        if self.index.get_visible(entity_id, attribute_id, self.txn_id)?.is_none() {
+        // Check that the triple exists and is not already deleted
+        if self.get(entity_id, attribute_id)?.is_none() {
             return Err(TransactionError::NotFound);
         }
 

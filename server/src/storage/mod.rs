@@ -32,6 +32,7 @@
 
 mod allocator;
 pub mod btree;
+mod database;
 mod file;
 pub mod indexes;
 mod page;
@@ -40,6 +41,7 @@ mod transaction;
 mod triple;
 
 pub use allocator::PageAllocator;
+pub use database::{Database, DatabaseError};
 pub use file::{DatabaseFile, FileError};
 pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
 pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};

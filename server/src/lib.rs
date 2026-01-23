@@ -18,6 +18,7 @@
 mod client_connection;
 mod constants;
 mod proto;
+mod query;
 mod storage;
 #[cfg(test)]
 mod testing;

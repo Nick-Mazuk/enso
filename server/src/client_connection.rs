@@ -1,21 +1,25 @@
+use std::sync::Mutex;
+
 use crate::{
     proto,
+    query::value_to_storage,
+    storage::Database,
     types::{
         ProtoDeserializable,
         client_message::{ClientMessage, ClientMessagePayload},
-        triple::TripleValue,
         triple_update_request::TripleUpdateRequest,
     },
 };
 
 pub struct ClientConnection {
-    database_connection: turso::Connection,
+    database: Mutex<Database>,
 }
 
 impl ClientConnection {
-    pub const fn new(database_connection: turso::Connection) -> Self {
+    #[must_use]
+    pub const fn new(database: Database) -> Self {
         Self {
-            database_connection,
+            database: Mutex::new(database),
         }
     }
 
@@ -40,7 +44,7 @@ impl ClientConnection {
             }
         };
         let mut response = match message.payload {
-            ClientMessagePayload::TripleUpdateRequest(request) => self.update(request).await,
+            ClientMessagePayload::TripleUpdateRequest(request) => self.update(request),
             ClientMessagePayload::Query(_request) => proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Unimplemented.into(),
@@ -56,7 +60,7 @@ impl ClientConnection {
         }
     }
 
-    async fn update(&self, request: TripleUpdateRequest) -> proto::ServerResponse {
+    fn update(&self, request: TripleUpdateRequest) -> proto::ServerResponse {
         let triples = request.triples;
         if triples.is_empty() {
             return proto::ServerResponse {
@@ -68,58 +72,67 @@ impl ClientConnection {
             };
         }
 
-        let base_insert_query = "INSERT INTO triples (entity_id, attribute_id, number_value, string_value, boolean_value) VALUES ";
-        let query_params = "(?, ?, ?, ?, ?)";
-        let mut query =
-            String::with_capacity(base_insert_query.len() + triples.len() * query_params.len());
-        query.push_str(base_insert_query);
-        let mut params = Vec::with_capacity(triples.len() * 5);
+        // Lock the database for the duration of the transaction
+        let Ok(mut db) = self.database.lock() else {
+            return proto::ServerResponse {
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Internal.into(),
+                    message: "Database lock poisoned".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+        };
 
-        for (i, triple) in triples.into_iter().enumerate() {
-            if i > 0 {
-                query.push_str(", ");
+        // Begin a transaction
+        let mut txn = match db.begin() {
+            Ok(txn) => txn,
+            Err(e) => {
+                return proto::ServerResponse {
+                    status: Some(proto::google::rpc::Status {
+                        code: proto::google::rpc::Code::Internal.into(),
+                        message: format!("Failed to begin transaction: {e}"),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
             }
-            query.push_str(query_params);
+        };
 
-            params.push(turso::Value::Blob(triple.entity_id.to_vec()));
-            params.push(turso::Value::Blob(triple.attribute_id.to_vec()));
-
-            match triple.value {
-                TripleValue::Number(n) => {
-                    params.push(turso::Value::Real(n));
-                    params.push(turso::Value::Null);
-                    params.push(turso::Value::Null);
-                }
-                TripleValue::String(s) => {
-                    params.push(turso::Value::Null);
-                    params.push(turso::Value::Text(s));
-                    params.push(turso::Value::Null);
-                }
-                TripleValue::Boolean(b) => {
-                    params.push(turso::Value::Null);
-                    params.push(turso::Value::Null);
-                    params.push(turso::Value::Integer(b.into()));
-                }
+        // Insert all triples
+        for triple in triples {
+            let value = value_to_storage(triple.value);
+            if let Err(e) = txn.insert(triple.entity_id, triple.attribute_id, value) {
+                txn.abort();
+                return proto::ServerResponse {
+                    status: Some(proto::google::rpc::Status {
+                        code: proto::google::rpc::Code::Internal.into(),
+                        message: format!("Failed to insert triple: {e}"),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
             }
         }
 
-        match self.database_connection.execute(&query, params).await {
-            Ok(_) => proto::ServerResponse {
-                status: Some(proto::google::rpc::Status {
-                    code: proto::google::rpc::Code::Ok.into(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            Err(e) => proto::ServerResponse {
+        // Commit the transaction
+        if let Err(e) = txn.commit() {
+            return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
-                    // TODO: do not expose database error
-                    message: format!("Database error: {e}"),
+                    message: format!("Failed to commit transaction: {e}"),
                     ..Default::default()
                 }),
                 ..Default::default()
-            },
+            };
+        }
+
+        proto::ServerResponse {
+            status: Some(proto::google::rpc::Status {
+                code: proto::google::rpc::Code::Ok.into(),
+                ..Default::default()
+            }),
+            ..Default::default()
         }
     }
 }
@@ -128,21 +141,19 @@ impl ClientConnection {
 mod tests {
     use super::*;
     use crate::proto;
-    use crate::testing::new_test_database_connection;
+    use crate::testing::new_test_database;
 
     #[tokio::test]
     async fn test_handle_message_insert_string_triple() {
-        let database_connection = new_test_database_connection()
-            .await
-            .expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database_connection);
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
 
         let entity_id = vec![1u8; 16];
         let attribute_id = vec![2u8; 16];
 
         let triple = proto::Triple {
-            entity_id: Some(entity_id),
-            attribute_id: Some(attribute_id),
+            entity_id: Some(entity_id.clone()),
+            attribute_id: Some(attribute_id.clone()),
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test_value".to_string())),
             }),
@@ -170,15 +181,25 @@ mod tests {
             proto::google::rpc::Code::Ok as i32
         );
 
-        // TODO: run a query to verify the triple was inserted
+        // Verify the triple was inserted by reading it back
+
+        let mut db = client_conn.database.lock().unwrap();
+        let mut txn = db.begin().expect("begin txn");
+        let entity_arr: [u8; 16] = entity_id.try_into().unwrap();
+        let attr_arr: [u8; 16] = attribute_id.try_into().unwrap();
+        let record = txn.get(&entity_arr, &attr_arr).expect("get");
+        assert!(record.is_some());
+        assert_eq!(
+            record.unwrap().value,
+            crate::storage::TripleValue::String("test_value".to_string())
+        );
+        txn.abort();
     }
 
     #[tokio::test]
     async fn test_handle_message_insert_boolean_triple() {
-        let database_connection = new_test_database_connection()
-            .await
-            .expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database_connection);
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
 
         let entity_id = vec![3u8; 16];
         let attribute_id = vec![4u8; 16];
@@ -209,16 +230,12 @@ mod tests {
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
-
-        // TODO: run a query to verify the triple was inserted
     }
 
     #[tokio::test]
     async fn test_handle_message_insert_number_triple() {
-        let database_connection = new_test_database_connection()
-            .await
-            .expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database_connection);
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
 
         let entity_id = vec![5u8; 16];
         let attribute_id = vec![6u8; 16];
@@ -249,16 +266,12 @@ mod tests {
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
-
-        // TODO: run a query to verify the triple was inserted
     }
 
     #[tokio::test]
     async fn test_handle_message_empty_triples() {
-        let database_connection = new_test_database_connection()
-            .await
-            .expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database_connection);
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
 
         let update_request = proto::TripleUpdateRequest { triples: vec![] };
 
