@@ -17,9 +17,9 @@
 
 mod client_connection;
 mod constants;
-mod proto;
+pub mod proto;
 mod query;
-mod storage;
+pub mod storage;
 #[cfg(test)]
 mod testing;
 mod types;

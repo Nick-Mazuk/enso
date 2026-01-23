@@ -34,6 +34,8 @@ message ClientMessage {
 message QueryRequest {
   // These are the fields to return
   repeated QueryPatternVariable find = 1;
+  // The patterns to match against
+  repeated QueryPattern where = 2;
 }
 
 message QueryPattern {
@@ -79,4 +81,6 @@ message ServerMessage {
 message ServerResponse {
   optional uint32 request_id = 1;
   optional google.rpc.Status status = 2;
+  // Query results (populated for QueryRequest responses)
+  repeated Triple triples = 3;
 }
