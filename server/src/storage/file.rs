@@ -6,7 +6,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::storage::page::{Page, PageId, PAGE_SIZE, PAGE_SIZE_U64};
+use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
 use crate::storage::superblock::{Superblock, SuperblockError};
 
 /// A database file handle with low-level page I/O operations.
@@ -104,7 +104,9 @@ impl DatabaseFile {
             .seek(SeekFrom::Start(offset))
             .map_err(FileError::Io)?;
 
-        self.file.write_all(page.as_bytes()).map_err(FileError::Io)?;
+        self.file
+            .write_all(page.as_bytes())
+            .map_err(FileError::Io)?;
 
         Ok(())
     }
@@ -114,7 +116,9 @@ impl DatabaseFile {
         let page = self.superblock.to_page();
 
         self.file.seek(SeekFrom::Start(0)).map_err(FileError::Io)?;
-        self.file.write_all(page.as_bytes()).map_err(FileError::Io)?;
+        self.file
+            .write_all(page.as_bytes())
+            .map_err(FileError::Io)?;
 
         Ok(())
     }
@@ -139,7 +143,7 @@ impl DatabaseFile {
     }
 
     /// Sync all pending writes to disk.
-    pub fn sync(&mut self) -> Result<(), FileError> {
+    pub fn sync(&self) -> Result<(), FileError> {
         self.file.sync_all().map_err(FileError::Io)
     }
 

@@ -83,7 +83,7 @@ impl PageHeader {
     }
 
     /// Deserialize a header from bytes.
-    pub fn from_bytes(bytes: &[u8; Self::SIZE]) -> Result<Self, PageError> {
+    pub fn from_bytes(bytes: [u8; Self::SIZE]) -> Result<Self, PageError> {
         let page_type = PageType::try_from(bytes[0]).map_err(PageError::InvalidPageType)?;
         let flags = bytes[1];
         let checksum = u32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
@@ -112,6 +112,7 @@ impl Page {
 
     /// Create a page from raw bytes.
     #[must_use]
+    #[allow(clippy::large_types_passed_by_value)]
     pub fn from_bytes(bytes: [u8; PAGE_SIZE]) -> Self {
         Self {
             data: Box::new(bytes),
@@ -249,7 +250,7 @@ mod tests {
         };
 
         let bytes = header.to_bytes();
-        let restored = PageHeader::from_bytes(&bytes).expect("should parse");
+        let restored = PageHeader::from_bytes(bytes).expect("should parse");
 
         assert_eq!(restored.page_type, PageType::BTreeLeaf);
         assert_eq!(restored.flags, 0x42);
