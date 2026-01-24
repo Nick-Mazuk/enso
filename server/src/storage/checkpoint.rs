@@ -536,7 +536,7 @@ mod tests {
         let mut file = DatabaseFile::create(&path).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
-        let config = CheckpointConfig::new(1000, 1000000); // High thresholds
+        let config = CheckpointConfig::new(1000, 1_000_000); // High thresholds
         let mut state = CheckpointState::from_database(&file, config);
 
         // Even though thresholds aren't met, force_checkpoint should work
