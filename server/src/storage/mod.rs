@@ -37,6 +37,7 @@ mod database;
 mod file;
 pub mod hlc;
 pub mod indexes;
+pub mod overflow;
 mod page;
 pub mod recovery;
 mod superblock;

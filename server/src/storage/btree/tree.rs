@@ -3,6 +3,10 @@
 //! This is a disk-based B-tree that stores key-value pairs where:
 //! - Key: (`entity_id`, `attribute_id`) = 32 bytes
 //! - Value: serialized triple value (variable length)
+//!
+//! Values larger than `MAX_INLINE_VALUE_SIZE` (1024 bytes) are stored in
+//! overflow pages. The B-tree leaf stores a 13-byte overflow reference
+//! instead of the actual value.
 
 #![allow(clippy::cast_possible_truncation)]
 
@@ -10,6 +14,9 @@ use crate::storage::btree::node::{
     InternalNode, Key, LeafEntry, LeafNode, MAX_INLINE_VALUE_SIZE, NodeError, NodeHeader, NodeType,
 };
 use crate::storage::file::{DatabaseFile, FileError};
+use crate::storage::overflow::{
+    OverflowError, OverflowRef, free_overflow, read_overflow, write_overflow,
+};
 use crate::storage::page::{Page, PageId};
 
 /// A B-tree backed by a database file.
@@ -54,21 +61,41 @@ impl<'a> BTree<'a> {
     }
 
     /// Look up a value by key.
+    ///
+    /// If the value is stored in overflow pages, it will be read and returned.
     pub fn get(&mut self, key: &Key) -> Result<Option<Vec<u8>>, BTreeError> {
         let leaf_page_id = self.find_leaf(key)?;
         let page = self.file.read_page(leaf_page_id)?;
         let leaf = LeafNode::from_page(&page)?;
 
-        Ok(leaf.get(key).map(<[_]>::to_vec))
+        match leaf.get(key) {
+            Some(stored_value) => {
+                // Check if this is an overflow reference
+                if let Some(overflow_ref) = OverflowRef::from_bytes(stored_value) {
+                    // Read from overflow pages
+                    let value = read_overflow(self.file, &overflow_ref)?;
+                    Ok(Some(value))
+                } else {
+                    // Inline value
+                    Ok(Some(stored_value.to_vec()))
+                }
+            }
+            None => Ok(None),
+        }
     }
 
     /// Insert or update a key-value pair.
     ///
+    /// Values larger than `MAX_INLINE_VALUE_SIZE` are stored in overflow pages.
     /// Returns the old value if updating, None if inserting.
     pub fn insert(&mut self, key: Key, value: Vec<u8>) -> Result<Option<Vec<u8>>, BTreeError> {
-        if value.len() > MAX_INLINE_VALUE_SIZE {
-            return Err(BTreeError::Node(NodeError::ValueTooLarge(value.len())));
-        }
+        // For large values, write to overflow pages and store a reference
+        let stored_value = if value.len() > MAX_INLINE_VALUE_SIZE {
+            let overflow_ref = write_overflow(self.file, &value)?;
+            overflow_ref.to_bytes().to_vec()
+        } else {
+            value
+        };
 
         // Find the leaf node
         let leaf_page_id = self.find_leaf(&key)?;
@@ -76,33 +103,48 @@ impl<'a> BTree<'a> {
         let mut leaf = LeafNode::from_page(&page)?;
 
         // Check if we can fit the new entry
-        if !leaf.can_fit(value.len()) && leaf.get(&key).is_none() {
+        if !leaf.can_fit(stored_value.len()) && leaf.get(&key).is_none() {
             // Need to split before inserting
-            return self.insert_with_split(leaf_page_id, leaf, key, value);
+            return self.insert_with_split_internal(leaf_page_id, leaf, key, stored_value);
         }
 
+        // Get the old value before inserting
+        let old_stored = leaf.get(&key).map(<[_]>::to_vec);
+
         // Insert into the leaf
-        let old_value = leaf.insert(key, value);
+        leaf.insert(key, stored_value);
 
         // Write back
         let mut page = Page::new();
         leaf.write_to_page(&mut page);
         self.file.write_page(leaf_page_id, &page)?;
 
-        Ok(old_value)
+        // If there was an old value and it was an overflow reference, free those pages
+        // and return the actual old value
+        if let Some(old_bytes) = old_stored {
+            if let Some(overflow_ref) = OverflowRef::from_bytes(&old_bytes) {
+                let old_value = read_overflow(self.file, &overflow_ref)?;
+                free_overflow(self.file, &overflow_ref)?;
+                return Ok(Some(old_value));
+            }
+            return Ok(Some(old_bytes));
+        }
+
+        Ok(None)
     }
 
     /// Remove a key-value pair.
     ///
+    /// If the value was stored in overflow pages, those pages are freed.
     /// Returns the removed value if found.
     pub fn remove(&mut self, key: &Key) -> Result<Option<Vec<u8>>, BTreeError> {
         let leaf_page_id = self.find_leaf(key)?;
         let page = self.file.read_page(leaf_page_id)?;
         let mut leaf = LeafNode::from_page(&page)?;
 
-        let old_value = leaf.remove(key);
+        let old_stored = leaf.remove(key);
 
-        if old_value.is_some() {
+        if let Some(stored_bytes) = old_stored {
             // Write back the modified leaf
             let mut page = Page::new();
             leaf.write_to_page(&mut page);
@@ -110,9 +152,19 @@ impl<'a> BTree<'a> {
 
             // Note: We don't handle underflow/merging in Phase 1
             // This is acceptable for append-heavy workloads
+
+            // If the removed value was an overflow reference, free those pages
+            // and return the actual value
+            if let Some(overflow_ref) = OverflowRef::from_bytes(&stored_bytes) {
+                let actual_value = read_overflow(self.file, &overflow_ref)?;
+                free_overflow(self.file, &overflow_ref)?;
+                return Ok(Some(actual_value));
+            }
+
+            return Ok(Some(stored_bytes));
         }
 
-        Ok(old_value)
+        Ok(None)
     }
 
     /// Find the leaf page that should contain the given key.
@@ -135,16 +187,16 @@ impl<'a> BTree<'a> {
         }
     }
 
-    /// Insert with node splitting.
-    fn insert_with_split(
+    /// Insert with node splitting (internal - handles stored values).
+    fn insert_with_split_internal(
         &mut self,
         leaf_page_id: PageId,
         mut leaf: LeafNode,
         key: Key,
-        value: Vec<u8>,
+        stored_value: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, BTreeError> {
         // Insert into the leaf first (it may overflow temporarily)
-        let old_value = leaf.insert(key, value);
+        let old_value = leaf.insert(key, stored_value);
 
         // Split the leaf
         let (split_key, mut right_leaf) = leaf.split();
@@ -437,6 +489,8 @@ pub enum BTreeError {
     File(FileError),
     /// Node error.
     Node(NodeError),
+    /// Overflow page error.
+    Overflow(OverflowError),
 }
 
 impl std::fmt::Display for BTreeError {
@@ -444,6 +498,7 @@ impl std::fmt::Display for BTreeError {
         match self {
             Self::File(e) => write!(f, "file error: {e}"),
             Self::Node(e) => write!(f, "node error: {e}"),
+            Self::Overflow(e) => write!(f, "overflow error: {e}"),
         }
     }
 }
@@ -453,6 +508,7 @@ impl std::error::Error for BTreeError {
         match self {
             Self::File(e) => Some(e),
             Self::Node(e) => Some(e),
+            Self::Overflow(e) => Some(e),
         }
     }
 }
@@ -466,6 +522,12 @@ impl From<FileError> for BTreeError {
 impl From<NodeError> for BTreeError {
     fn from(e: NodeError) -> Self {
         Self::Node(e)
+    }
+}
+
+impl From<OverflowError> for BTreeError {
+    fn from(e: OverflowError) -> Self {
+        Self::Overflow(e)
     }
 }
 
@@ -672,5 +734,95 @@ mod tests {
                 assert_eq!(value, Some(vec![i]));
             }
         }
+    }
+
+    #[test]
+    fn test_btree_overflow_value() {
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+
+        let mut tree = BTree::new(&mut file, 0).expect("create tree");
+
+        let key = make_key(&[1u8; 16], &[1u8; 16]);
+
+        // Create a value larger than MAX_INLINE_VALUE_SIZE (1024 bytes)
+        let large_value = vec![0xABu8; 2000];
+
+        // Insert should succeed with overflow
+        let old = tree.insert(key, large_value.clone()).expect("insert large");
+        assert!(old.is_none());
+
+        // Get should return the full value
+        let retrieved = tree.get(&key).expect("get large");
+        assert_eq!(retrieved, Some(large_value.clone()));
+
+        // Update with another large value
+        let new_value = vec![0xCDu8; 3000];
+        let old = tree.insert(key, new_value.clone()).expect("update large");
+        assert_eq!(old, Some(large_value));
+
+        // Verify update
+        let retrieved = tree.get(&key).expect("get updated");
+        assert_eq!(retrieved, Some(new_value.clone()));
+
+        // Remove should return the large value
+        let removed = tree.remove(&key).expect("remove large");
+        assert_eq!(removed, Some(new_value));
+
+        // Should be gone
+        assert!(tree.get(&key).expect("get after remove").is_none());
+    }
+
+    #[test]
+    fn test_btree_mixed_inline_and_overflow() {
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+
+        let mut tree = BTree::new(&mut file, 0).expect("create tree");
+
+        // Insert mix of small and large values
+        for i in 0..10u8 {
+            let key = make_key(&[i; 16], &[0u8; 16]);
+            let value = if i % 2 == 0 {
+                vec![i; 100] // Small inline value
+            } else {
+                vec![i; 2000] // Large overflow value
+            };
+            tree.insert(key, value).expect("insert");
+        }
+
+        // Verify count
+        assert_eq!(tree.count().expect("count"), 10);
+
+        // Verify all values can be retrieved correctly
+        for i in 0..10u8 {
+            let key = make_key(&[i; 16], &[0u8; 16]);
+            let expected = if i % 2 == 0 {
+                vec![i; 100]
+            } else {
+                vec![i; 2000]
+            };
+            let actual = tree.get(&key).expect("get");
+            assert_eq!(actual, Some(expected), "mismatch at {i}");
+        }
+    }
+
+    #[test]
+    fn test_btree_very_large_overflow() {
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+
+        let mut tree = BTree::new(&mut file, 0).expect("create tree");
+
+        let key = make_key(&[1u8; 16], &[1u8; 16]);
+
+        // Create a value that spans multiple overflow pages (~20KB)
+        let very_large_value: Vec<u8> = (0..20000u32).map(|i| (i % 256) as u8).collect();
+
+        tree.insert(key, very_large_value.clone())
+            .expect("insert very large");
+
+        let retrieved = tree.get(&key).expect("get very large");
+        assert_eq!(retrieved, Some(very_large_value));
     }
 }
