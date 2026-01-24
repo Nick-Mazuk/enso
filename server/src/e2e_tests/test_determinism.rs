@@ -3,6 +3,7 @@
 use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, status_code};
 use crate::proto;
 
+#[allow(clippy::too_many_lines)]
 fn run_sequence() -> Vec<proto::ServerResponse> {
     let test = TestClient::new();
     let mut responses = Vec::new();
