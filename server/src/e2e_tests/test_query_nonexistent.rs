@@ -1,6 +1,6 @@
 //! Test querying a nonexistent entity returns no results.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, is_ok};
 use crate::proto;
 
 #[test]

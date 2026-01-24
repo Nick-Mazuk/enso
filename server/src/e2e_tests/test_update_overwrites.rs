@@ -1,6 +1,6 @@
 //! Test that updating a triple overwrites the previous value.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, get_string_value, is_ok};
 use crate::proto;
 
 #[test]

@@ -1,6 +1,6 @@
 //! Test that request IDs are correctly echoed in responses.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::TestClient;
 use crate::proto;
 
 #[test]

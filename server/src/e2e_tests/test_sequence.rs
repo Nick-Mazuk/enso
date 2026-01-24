@@ -1,6 +1,6 @@
 //! Test a sequence of operations: insert, query, update, query.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, get_number_value, is_ok};
 use crate::proto;
 
 #[test]

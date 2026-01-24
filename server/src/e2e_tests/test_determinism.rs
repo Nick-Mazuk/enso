@@ -1,6 +1,6 @@
 //! Test that the same sequence of operations produces identical results.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, status_code};
 use crate::proto;
 
 fn run_sequence() -> Vec<proto::ServerResponse> {

@@ -1,6 +1,6 @@
 //! Test that invalid attribute IDs are rejected.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, status_code};
 use crate::proto;
 
 #[test]

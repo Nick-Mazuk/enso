@@ -1,6 +1,6 @@
 //! Test that an empty triples request is accepted.
 
-use crate::e2e_tests::helpers::*;
+use crate::e2e_tests::helpers::{TestClient, is_ok};
 use crate::proto;
 
 #[test]
