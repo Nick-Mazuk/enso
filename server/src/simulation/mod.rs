@@ -30,6 +30,7 @@
 //! assert!(result.invariant_violations.is_empty());
 //! ```
 
+mod e2e_tests;
 mod invariants;
 mod message_gen;
 mod simulator;
