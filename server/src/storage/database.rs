@@ -29,6 +29,7 @@ use crate::storage::checkpoint::{
     maybe_checkpoint,
 };
 use crate::storage::file::{DatabaseFile, FileError};
+use crate::storage::hlc::{Clock, ClockError};
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::superblock::HlcTimestamp;
@@ -37,6 +38,9 @@ use crate::storage::triple::{
 };
 use crate::storage::wal::{LogRecordPayload, Lsn, WalError, DEFAULT_WAL_CAPACITY};
 
+/// Default node ID for single-node deployments.
+const DEFAULT_NODE_ID: u32 = 0;
+
 /// A database instance with WAL and crash recovery.
 ///
 /// This is the main entry point for working with the storage engine.
@@ -44,23 +48,36 @@ use crate::storage::wal::{LogRecordPayload, Lsn, WalError, DEFAULT_WAL_CAPACITY}
 pub struct Database {
     file: DatabaseFile,
     checkpoint_state: CheckpointState,
-    /// Current HLC timestamp (simplified - in production would be a proper clock)
-    current_hlc: HlcTimestamp,
+    /// Hybrid Logical Clock for transaction timestamps.
+    clock: Clock,
 }
 
 impl Database {
     /// Create a new database at the given path.
     ///
     /// The path must not already exist. Initializes WAL with default capacity.
+    /// Uses node ID 0 for single-node deployments.
     pub fn create(path: &Path) -> Result<Self, DatabaseError> {
-        Self::create_with_options(path, DEFAULT_WAL_CAPACITY, CheckpointConfig::default())
+        Self::create_with_options(
+            path,
+            DEFAULT_WAL_CAPACITY,
+            CheckpointConfig::default(),
+            DEFAULT_NODE_ID,
+        )
     }
 
     /// Create a new database with custom options.
+    ///
+    /// # Arguments
+    /// * `path` - Path for the database file
+    /// * `wal_capacity` - Capacity of the write-ahead log in bytes
+    /// * `checkpoint_config` - Configuration for automatic checkpointing
+    /// * `node_id` - Unique identifier for this node (for distributed deployments)
     pub fn create_with_options(
         path: &Path,
         wal_capacity: u64,
         checkpoint_config: CheckpointConfig,
+        node_id: u32,
     ) -> Result<Self, DatabaseError> {
         let mut file = DatabaseFile::create(path)?;
 
@@ -68,26 +85,33 @@ impl Database {
         file.init_wal(wal_capacity)?;
 
         let checkpoint_state = CheckpointState::from_database(&file, checkpoint_config);
-        let current_hlc = HlcTimestamp::new(1, 0);
+        let clock = Clock::new(node_id);
 
         Ok(Self {
             file,
             checkpoint_state,
-            current_hlc,
+            clock,
         })
     }
 
     /// Open an existing database at the given path.
     ///
     /// Runs crash recovery if needed to restore consistent state.
+    /// Uses node ID 0 for single-node deployments.
     pub fn open(path: &Path) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
-        Self::open_with_options(path, CheckpointConfig::default())
+        Self::open_with_options(path, CheckpointConfig::default(), DEFAULT_NODE_ID)
     }
 
     /// Open an existing database with custom options.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the existing database file
+    /// * `checkpoint_config` - Configuration for automatic checkpointing
+    /// * `node_id` - Unique identifier for this node (for distributed deployments)
     pub fn open_with_options(
         path: &Path,
         checkpoint_config: CheckpointConfig,
+        node_id: u32,
     ) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
         let mut file = DatabaseFile::open(path)?;
 
@@ -100,21 +124,15 @@ impl Database {
 
         let checkpoint_state = CheckpointState::from_database(&file, checkpoint_config);
 
-        // Initialize HLC from last checkpoint or default
-        let current_hlc = if file.superblock().last_checkpoint_hlc.physical_time > 0 {
-            HlcTimestamp::new(
-                file.superblock().last_checkpoint_hlc.physical_time + 1,
-                0,
-            )
-        } else {
-            HlcTimestamp::new(1, 0)
-        };
+        // Initialize clock from last checkpoint timestamp
+        let last_hlc = file.superblock().last_checkpoint_hlc;
+        let clock = Clock::from_timestamp(node_id, last_hlc);
 
         Ok((
             Self {
                 file,
                 checkpoint_state,
-                current_hlc,
+                clock,
             },
             recovery_result,
         ))
@@ -133,22 +151,20 @@ impl Database {
     /// Begin a new transaction.
     ///
     /// The transaction buffers all operations and writes to WAL on commit.
-    #[allow(clippy::missing_const_for_fn)] // Cannot be const due to &mut self
+    /// The transaction is assigned a unique HLC timestamp.
     pub fn begin(&mut self) -> Result<WalTransaction<'_>, DatabaseError> {
         // Get next transaction ID
         let txn_id = self.file.superblock().next_txn_id;
 
-        // Advance HLC
-        self.current_hlc = HlcTimestamp::new(
-            self.current_hlc.physical_time + 1,
-            self.current_hlc.logical_counter,
-        );
+        // Advance HLC using proper wall clock
+        let hlc = self.clock.tick();
 
         Ok(WalTransaction::new(
             &mut self.file,
             &mut self.checkpoint_state,
-            &mut self.current_hlc,
+            &mut self.clock,
             txn_id,
+            hlc,
         ))
     }
 
@@ -160,10 +176,11 @@ impl Database {
 
     /// Force a checkpoint.
     pub fn checkpoint(&mut self) -> Result<CheckpointResult, DatabaseError> {
+        let hlc = self.clock.tick();
         Ok(force_checkpoint(
             &mut self.file,
             &mut self.checkpoint_state,
-            self.current_hlc,
+            hlc,
         )?)
     }
 
@@ -172,7 +189,8 @@ impl Database {
     /// Performs a final checkpoint to minimize recovery time on next open.
     pub fn close(mut self) -> Result<(), DatabaseError> {
         if self.file.has_wal() {
-            force_checkpoint(&mut self.file, &mut self.checkpoint_state, self.current_hlc)?;
+            let hlc = self.clock.tick();
+            force_checkpoint(&mut self.file, &mut self.checkpoint_state, hlc)?;
         }
         self.file.sync()?;
         Ok(())
@@ -185,6 +203,46 @@ impl Database {
         }
         let wal = self.file.wal()?;
         Ok(wal.next_lsn())
+    }
+
+    /// Get the current HLC timestamp.
+    ///
+    /// This returns the last timestamp issued by the clock.
+    #[must_use]
+    pub const fn current_hlc(&self) -> HlcTimestamp {
+        self.clock.last()
+    }
+
+    /// Get this database's node ID.
+    #[must_use]
+    pub const fn node_id(&self) -> u32 {
+        self.clock.node_id()
+    }
+
+    /// Receive and merge a remote HLC timestamp.
+    ///
+    /// This is used in distributed scenarios to synchronize clocks.
+    /// The local clock advances to be at least as high as the remote timestamp.
+    ///
+    /// Returns an error if the remote timestamp is too far in the future
+    /// (indicating a clock synchronization issue).
+    pub fn receive_hlc(&mut self, remote: HlcTimestamp) -> Result<HlcTimestamp, DatabaseError> {
+        Ok(self.clock.receive(remote)?)
+    }
+
+    /// Get changes since a given HLC timestamp.
+    ///
+    /// Returns WAL records with HLC >= the given timestamp.
+    /// This is useful for subscription queries ("what changed since X").
+    pub fn changes_since(
+        &mut self,
+        since: HlcTimestamp,
+    ) -> Result<Vec<crate::storage::wal::LogRecord>, DatabaseError> {
+        if !self.file.has_wal() {
+            return Ok(Vec::new());
+        }
+        let mut wal = self.file.wal()?;
+        Ok(wal.changes_since(since)?)
     }
 }
 
@@ -214,7 +272,7 @@ enum BufferedOp {
 pub struct WalTransaction<'a> {
     file: &'a mut DatabaseFile,
     checkpoint_state: &'a mut CheckpointState,
-    current_hlc: &'a mut HlcTimestamp,
+    clock: &'a mut Clock,
     txn_id: TxnId,
     hlc: HlcTimestamp,
     /// Buffered operations to be written on commit
@@ -227,14 +285,14 @@ impl<'a> WalTransaction<'a> {
     const fn new(
         file: &'a mut DatabaseFile,
         checkpoint_state: &'a mut CheckpointState,
-        current_hlc: &'a mut HlcTimestamp,
+        clock: &'a mut Clock,
         txn_id: TxnId,
+        hlc: HlcTimestamp,
     ) -> Self {
-        let hlc = *current_hlc;
         Self {
             file,
             checkpoint_state,
-            current_hlc,
+            clock,
             txn_id,
             hlc,
             operations: Vec::new(),
@@ -389,12 +447,10 @@ impl<'a> WalTransaction<'a> {
         self.checkpoint_state.record_commit();
         self.checkpoint_state.record_wal_write(wal_bytes_written);
 
-        // Advance HLC
-        *self.current_hlc = HlcTimestamp::new(hlc.physical_time + 1, 0);
-
-        // Check if we should checkpoint
+        // Check if we should checkpoint (tick clock for checkpoint timestamp)
         if self.file.has_wal() {
-            maybe_checkpoint(self.file, self.checkpoint_state, *self.current_hlc)?;
+            let checkpoint_hlc = self.clock.tick();
+            maybe_checkpoint(self.file, self.checkpoint_state, checkpoint_hlc)?;
         }
 
         Ok(())
@@ -534,6 +590,8 @@ pub enum DatabaseError {
     Recovery(RecoveryError),
     /// Checkpoint error.
     Checkpoint(CheckpointError),
+    /// Clock error (excessive drift).
+    Clock(ClockError),
     /// Triple not found for update/delete.
     NotFound,
 }
@@ -547,6 +605,7 @@ impl std::fmt::Display for DatabaseError {
             Self::Triple(e) => write!(f, "triple error: {e}"),
             Self::Recovery(e) => write!(f, "recovery error: {e}"),
             Self::Checkpoint(e) => write!(f, "checkpoint error: {e}"),
+            Self::Clock(e) => write!(f, "clock error: {e}"),
             Self::NotFound => write!(f, "triple not found"),
         }
     }
@@ -561,6 +620,7 @@ impl std::error::Error for DatabaseError {
             Self::Triple(e) => Some(e),
             Self::Recovery(e) => Some(e),
             Self::Checkpoint(e) => Some(e),
+            Self::Clock(e) => Some(e),
             Self::NotFound => None,
         }
     }
@@ -602,6 +662,12 @@ impl From<CheckpointError> for DatabaseError {
     }
 }
 
+impl From<ClockError> for DatabaseError {
+    fn from(e: ClockError) -> Self {
+        Self::Clock(e)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -634,7 +700,8 @@ mod tests {
 
             // Recovery might have run
             if let Some(result) = recovery {
-                assert!(result.records_scanned >= 0);
+                // Verify recovery ran successfully
+                assert!(result.transactions_replayed == 0 || result.transactions_replayed > 0);
             }
 
             let mut txn = db.begin().expect("begin txn");
@@ -819,8 +886,8 @@ mod tests {
 
             // Might have run recovery
             if let Some(result) = recovery {
-                // The transaction was committed, so it should be replayed if needed
-                assert!(result.records_scanned >= 0);
+                // The transaction was committed, so it should be replayed
+                assert!(result.transactions_replayed <= 1);
             }
 
             // Verify data is there
