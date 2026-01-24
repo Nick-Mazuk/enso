@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!client/typescript/proto"]
+		"includes": ["**", "!client/typescript/proto", "!.claude"]
 	},
 	"formatter": {
 		"enabled": true,
