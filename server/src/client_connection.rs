@@ -194,6 +194,7 @@ mod tests {
     use crate::testing::new_test_database;
 
     #[tokio::test]
+    #[allow(clippy::significant_drop_tightening)]
     async fn test_handle_message_insert_string_triple() {
         let database = new_test_database().expect("Failed to create test db");
         let client_conn = ClientConnection::new(database);

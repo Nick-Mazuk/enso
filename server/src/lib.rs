@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
 // Life of a request:
 // 1. Protobuf comes in
 // 2. Convert / validate proto into internal request format

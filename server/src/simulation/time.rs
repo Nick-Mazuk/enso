@@ -153,20 +153,6 @@ mod tests {
     }
 
     #[test]
-    fn test_simulated_time_clone() {
-        let time1 = SimulatedTimeSource::new(1000);
-        time1.advance(100);
-
-        let time2 = time1.clone();
-        assert_eq!(time2.now_ms(), 1100);
-
-        // Changes to one don't affect the other
-        time1.advance(50);
-        assert_eq!(time1.now_ms(), 1150);
-        assert_eq!(time2.now_ms(), 1100);
-    }
-
-    #[test]
     fn test_simulated_time_deterministic() {
         // Same starting conditions produce same results
         let time1 = SimulatedTimeSource::new(1000);

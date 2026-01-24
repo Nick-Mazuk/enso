@@ -390,6 +390,7 @@ mod tests {
         // Value with varying byte patterns
         let mut value = Vec::with_capacity(15000);
         for i in 0..15000u32 {
+            #[allow(clippy::cast_possible_truncation)]
             value.push((i % 256) as u8);
         }
 

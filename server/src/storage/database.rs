@@ -1215,7 +1215,7 @@ mod tests {
             // Recovery might have run
             if let Some(result) = recovery {
                 // Verify recovery ran successfully
-                assert!(result.transactions_replayed == 0 || result.transactions_replayed > 0);
+                assert!(result.transactions_replayed > 0);
             }
 
             let mut txn = db.begin().expect("begin txn");
@@ -1964,20 +1964,20 @@ mod tests {
         // Query attributes for entity1 via transaction
         {
             let mut txn = db.begin().expect("begin");
-            let attrs = txn.get_attributes_for_entity(&entity1).expect("query");
-            assert_eq!(attrs.len(), 3);
-            assert!(attrs.contains(&attr1));
-            assert!(attrs.contains(&attr2));
-            assert!(attrs.contains(&attr3));
+            let attributes = txn.get_attributes_for_entity(&entity1).expect("query");
+            assert_eq!(attributes.len(), 3);
+            assert!(attributes.contains(&attr1));
+            assert!(attributes.contains(&attr2));
+            assert!(attributes.contains(&attr3));
             txn.abort();
         }
 
         // Query attributes for entity2 via snapshot
         let txn_id = {
             let mut snapshot = db.begin_readonly();
-            let attrs = snapshot.get_attributes_for_entity(&entity2).expect("query");
-            assert_eq!(attrs.len(), 1);
-            assert!(attrs.contains(&attr1));
+            let attributes = snapshot.get_attributes_for_entity(&entity2).expect("query");
+            assert_eq!(attributes.len(), 1);
+            assert!(attributes.contains(&attr1));
             snapshot.close()
         };
         db.release_snapshot(txn_id);
@@ -2022,9 +2022,9 @@ mod tests {
         // Current snapshot should see only attr2
         let current_txn = {
             let mut snapshot = db.begin_readonly();
-            let attrs = snapshot.get_attributes_for_entity(&entity).expect("query");
-            assert_eq!(attrs.len(), 1);
-            assert!(attrs.contains(&attr2));
+            let attributes = snapshot.get_attributes_for_entity(&entity).expect("query");
+            assert_eq!(attributes.len(), 1);
+            assert!(attributes.contains(&attr2));
             snapshot.close()
         };
         db.release_snapshot(current_txn);

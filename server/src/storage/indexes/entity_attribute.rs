@@ -456,19 +456,19 @@ mod tests {
 
         // Scan at snapshot 15 - should only see attr1
         let mut scan = index.scan_entity_visible(&entity, 15).expect("scan");
-        let mut attrs = Vec::new();
+        let mut attributes = Vec::new();
         while let Some(a) = scan.next_attribute().expect("next") {
-            attrs.push(a);
+            attributes.push(a);
         }
-        assert_eq!(attrs.len(), 1);
-        assert_eq!(attrs[0], attr1);
+        assert_eq!(attributes.len(), 1);
+        assert_eq!(attributes[0], attr1);
 
         // Scan at snapshot 25 - should see attr1 and attr2
         let mut scan = index.scan_entity_visible(&entity, 25).expect("scan");
-        let mut attrs = Vec::new();
+        let mut attributes = Vec::new();
         while let Some(a) = scan.next_attribute().expect("next") {
-            attrs.push(a);
+            attributes.push(a);
         }
-        assert_eq!(attrs.len(), 2);
+        assert_eq!(attributes.len(), 2);
     }
 }

@@ -1,6 +1,8 @@
 //! Test inserting triples for multiple entities.
 
-use crate::e2e_tests::helpers::{TestClient, new_attribute_id, get_string_value, is_ok, new_entity_id};
+use crate::e2e_tests::helpers::{
+    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id,
+};
 use crate::proto;
 
 #[test]

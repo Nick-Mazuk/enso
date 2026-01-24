@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
