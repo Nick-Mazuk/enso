@@ -14,7 +14,7 @@ fn test_empty_triples_request() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert!(is_ok(&resp));
     assert_eq!(resp.request_id, Some(1));
 }

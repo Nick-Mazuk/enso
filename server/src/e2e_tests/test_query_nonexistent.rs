@@ -12,16 +12,42 @@ fn test_query_nonexistent_entity() {
     let aid = attribute_id(40);
 
     // Insert some data
-    let resp = test.send(update_request(
-        1,
-        eid,
-        aid,
-        proto::triple_value::Value::String("exists".to_string()),
-    ));
+    let resp = test.handle_message(proto::ClientMessage {
+        request_id: Some(1),
+        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+            proto::TripleUpdateRequest {
+                triples: vec![proto::Triple {
+                    entity_id: Some(eid.to_vec()),
+                    attribute_id: Some(aid.to_vec()),
+                    value: Some(proto::TripleValue {
+                        value: Some(proto::triple_value::Value::String("exists".to_string())),
+                    }),
+                }],
+            },
+        )),
+    });
     assert!(is_ok(&resp));
 
     // Query for a different entity
-    let query_resp = test.send(point_query(2, other_eid, aid));
+    let query_resp = test.handle_message(proto::ClientMessage {
+        request_id: Some(2),
+        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
+            find: vec![proto::QueryPatternVariable {
+                label: Some("v".to_string()),
+            }],
+            r#where: vec![proto::QueryPattern {
+                entity: Some(proto::query_pattern::Entity::EntityId(other_eid.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("v".to_string()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
+        })),
+    });
 
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 0);

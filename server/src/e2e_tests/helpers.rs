@@ -43,7 +43,7 @@ impl TestClient {
     }
 
     /// Send a message and return the response.
-    pub fn send(&self, message: proto::ClientMessage) -> proto::ServerResponse {
+    pub fn handle_message(&self, message: proto::ClientMessage) -> proto::ServerResponse {
         let response = self
             .runtime
             .block_on(async { self.client.handle_message(message).await });
@@ -111,118 +111,6 @@ pub const fn attribute_id(seed: u8) -> [u8; 16] {
         0,
         seed ^ 0xAA, // Simple checksum
     ]
-}
-
-// =============================================================================
-// Request Builders
-// =============================================================================
-
-/// Build an update request with a single triple.
-#[must_use]
-pub fn update_request(
-    request_id: u32,
-    entity: [u8; 16],
-    attribute: [u8; 16],
-    value: proto::triple_value::Value,
-) -> proto::ClientMessage {
-    proto::ClientMessage {
-        request_id: Some(request_id),
-        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
-            proto::TripleUpdateRequest {
-                triples: vec![proto::Triple {
-                    entity_id: Some(entity.to_vec()),
-                    attribute_id: Some(attribute.to_vec()),
-                    value: Some(proto::TripleValue { value: Some(value) }),
-                }],
-            },
-        )),
-    }
-}
-
-/// Build an update request with multiple triples.
-#[must_use]
-pub fn update_request_multi(
-    request_id: u32,
-    triples: Vec<(
-        impl Into<Vec<u8>>,
-        impl Into<Vec<u8>>,
-        proto::triple_value::Value,
-    )>,
-) -> proto::ClientMessage {
-    proto::ClientMessage {
-        request_id: Some(request_id),
-        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
-            proto::TripleUpdateRequest {
-                triples: triples
-                    .into_iter()
-                    .map(|(e, a, v)| proto::Triple {
-                        entity_id: Some(e.into()),
-                        attribute_id: Some(a.into()),
-                        value: Some(proto::TripleValue { value: Some(v) }),
-                    })
-                    .collect(),
-            },
-        )),
-    }
-}
-
-/// Build a point query request (entity + attribute -> value).
-#[must_use]
-pub fn point_query(request_id: u32, entity: [u8; 16], attribute: [u8; 16]) -> proto::ClientMessage {
-    proto::ClientMessage {
-        request_id: Some(request_id),
-        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
-            find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
-            }],
-            r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(entity.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(
-                    attribute.to_vec(),
-                )),
-                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
-                    proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
-                    },
-                )),
-            }],
-            optional: vec![],
-            where_not: vec![],
-        })),
-    }
-}
-
-/// Build an entity scan query (all attributes for an entity).
-#[must_use]
-pub fn entity_scan_query(request_id: u32, entity: [u8; 16]) -> proto::ClientMessage {
-    proto::ClientMessage {
-        request_id: Some(request_id),
-        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
-            find: vec![
-                proto::QueryPatternVariable {
-                    label: Some("a".to_string()),
-                },
-                proto::QueryPatternVariable {
-                    label: Some("v".to_string()),
-                },
-            ],
-            r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(entity.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
-                    proto::QueryPatternVariable {
-                        label: Some("a".to_string()),
-                    },
-                )),
-                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
-                    proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
-                    },
-                )),
-            }],
-            optional: vec![],
-            where_not: vec![],
-        })),
-    }
 }
 
 // =============================================================================

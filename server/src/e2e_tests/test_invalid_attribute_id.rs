@@ -23,7 +23,7 @@ fn test_invalid_attribute_id_length() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32

@@ -13,17 +13,52 @@ fn test_many_sequential_inserts() {
     for i in 0..100u8 {
         let aid = attribute_id(i);
 
-        let resp = test.send(update_request(
-            u32::from(i) + 1,
-            eid,
-            aid,
-            proto::triple_value::Value::Number(f64::from(i)),
-        ));
+        let resp = test.handle_message(proto::ClientMessage {
+            request_id: Some(u32::from(i) + 1),
+            payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+                proto::TripleUpdateRequest {
+                    triples: vec![proto::Triple {
+                        entity_id: Some(eid.to_vec()),
+                        attribute_id: Some(aid.to_vec()),
+                        value: Some(proto::TripleValue {
+                            value: Some(proto::triple_value::Value::Number(f64::from(i))),
+                        }),
+                    }],
+                },
+            )),
+        });
         assert!(is_ok(&resp));
     }
 
     // Query all attributes
-    let query_resp = test.send(entity_scan_query(101, eid));
+    let query_resp = test.handle_message(proto::ClientMessage {
+        request_id: Some(101),
+        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
+            find: vec![
+                proto::QueryPatternVariable {
+                    label: Some("a".to_string()),
+                },
+                proto::QueryPatternVariable {
+                    label: Some("v".to_string()),
+                },
+            ],
+            r#where: vec![proto::QueryPattern {
+                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("a".to_string()),
+                    },
+                )),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("v".to_string()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
+        })),
+    });
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 100);
 }

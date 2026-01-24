@@ -12,33 +12,111 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     let aid2 = attribute_id(82);
 
     // Insert
-    responses.push(test.send(update_request(
-        1,
-        eid,
-        aid1,
-        proto::triple_value::Value::String("first".to_string()),
-    )));
+    responses.push(test.handle_message(proto::ClientMessage {
+        request_id: Some(1),
+        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+            proto::TripleUpdateRequest {
+                triples: vec![proto::Triple {
+                    entity_id: Some(eid.to_vec()),
+                    attribute_id: Some(aid1.to_vec()),
+                    value: Some(proto::TripleValue {
+                        value: Some(proto::triple_value::Value::String("first".to_string())),
+                    }),
+                }],
+            },
+        )),
+    }));
 
-    responses.push(test.send(update_request(
-        2,
-        eid,
-        aid2,
-        proto::triple_value::Value::Number(42.0),
-    )));
+    responses.push(test.handle_message(proto::ClientMessage {
+        request_id: Some(2),
+        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+            proto::TripleUpdateRequest {
+                triples: vec![proto::Triple {
+                    entity_id: Some(eid.to_vec()),
+                    attribute_id: Some(aid2.to_vec()),
+                    value: Some(proto::TripleValue {
+                        value: Some(proto::triple_value::Value::Number(42.0)),
+                    }),
+                }],
+            },
+        )),
+    }));
 
     // Query
-    responses.push(test.send(entity_scan_query(3, eid)));
+    responses.push(test.handle_message(proto::ClientMessage {
+        request_id: Some(3),
+        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
+            find: vec![
+                proto::QueryPatternVariable {
+                    label: Some("a".to_string()),
+                },
+                proto::QueryPatternVariable {
+                    label: Some("v".to_string()),
+                },
+            ],
+            r#where: vec![proto::QueryPattern {
+                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("a".to_string()),
+                    },
+                )),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("v".to_string()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
+        })),
+    }));
 
     // Update
-    responses.push(test.send(update_request(
-        4,
-        eid,
-        aid1,
-        proto::triple_value::Value::String("updated".to_string()),
-    )));
+    responses.push(test.handle_message(proto::ClientMessage {
+        request_id: Some(4),
+        payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+            proto::TripleUpdateRequest {
+                triples: vec![proto::Triple {
+                    entity_id: Some(eid.to_vec()),
+                    attribute_id: Some(aid1.to_vec()),
+                    value: Some(proto::TripleValue {
+                        value: Some(proto::triple_value::Value::String("updated".to_string())),
+                    }),
+                }],
+            },
+        )),
+    }));
 
     // Query again
-    responses.push(test.send(entity_scan_query(5, eid)));
+    responses.push(test.handle_message(proto::ClientMessage {
+        request_id: Some(5),
+        payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
+            find: vec![
+                proto::QueryPatternVariable {
+                    label: Some("a".to_string()),
+                },
+                proto::QueryPatternVariable {
+                    label: Some("v".to_string()),
+                },
+            ],
+            r#where: vec![proto::QueryPattern {
+                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("a".to_string()),
+                    },
+                )),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("v".to_string()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
+        })),
+    }));
 
     responses
 }

@@ -22,7 +22,7 @@ fn test_missing_entity_id() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -48,7 +48,7 @@ fn test_missing_attribute_id() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -72,7 +72,7 @@ fn test_missing_value() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -88,7 +88,7 @@ fn test_no_payload() {
         payload: None,
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32

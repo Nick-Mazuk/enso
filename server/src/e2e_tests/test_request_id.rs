@@ -15,7 +15,7 @@ fn test_request_id_preserved() {
             )),
         };
 
-        let resp = test.send(req);
+        let resp = test.handle_message(req);
         assert_eq!(resp.request_id, Some(request_id));
     }
 }
@@ -31,6 +31,6 @@ fn test_request_id_none() {
         )),
     };
 
-    let resp = test.send(req);
+    let resp = test.handle_message(req);
     assert_eq!(resp.request_id, None);
 }
