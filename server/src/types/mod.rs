@@ -8,6 +8,7 @@ pub trait ProtoDeserializable<T> {
         Self: Sized;
 }
 
+#[allow(dead_code)]
 pub trait ProtoSerializable<T> {
     fn to_proto(self) -> T;
 }
