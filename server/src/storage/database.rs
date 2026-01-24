@@ -22,6 +22,7 @@
 //! txn.commit()?;  // Writes to WAL, then applies to index
 //! ```
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::storage::checkpoint::{
@@ -38,6 +39,43 @@ use crate::storage::triple::{
 };
 use crate::storage::wal::{LogRecordPayload, Lsn, WalError, DEFAULT_WAL_CAPACITY};
 
+/// Tracks active read-only snapshots for garbage collection.
+///
+/// When a snapshot is created, its transaction ID is added to this set.
+/// When the snapshot is released, its ID is removed.
+/// The minimum ID in this set determines which deleted records can be garbage collected.
+#[derive(Debug, Default)]
+struct ActiveSnapshots {
+    /// Set of transaction IDs for active snapshots.
+    /// Uses a `BTreeSet` for efficient `min()` operation.
+    active: BTreeSet<TxnId>,
+}
+
+impl ActiveSnapshots {
+    /// Register a new active snapshot.
+    fn register(&mut self, txn_id: TxnId) {
+        self.active.insert(txn_id);
+    }
+
+    /// Unregister a snapshot when it's released.
+    fn unregister(&mut self, txn_id: TxnId) {
+        self.active.remove(&txn_id);
+    }
+
+    /// Get the minimum active snapshot transaction ID.
+    ///
+    /// Returns None if there are no active snapshots.
+    /// Deleted records with `deleted_txn` < this value can be garbage collected.
+    fn min_active(&self) -> Option<TxnId> {
+        self.active.first().copied()
+    }
+
+    /// Get the count of active snapshots.
+    fn count(&self) -> usize {
+        self.active.len()
+    }
+}
+
 /// Default node ID for single-node deployments.
 const DEFAULT_NODE_ID: u32 = 0;
 
@@ -45,11 +83,19 @@ const DEFAULT_NODE_ID: u32 = 0;
 ///
 /// This is the main entry point for working with the storage engine.
 /// It manages the underlying database file, WAL, and checkpointing.
+///
+/// # Multi-Reader Support
+///
+/// The database supports multiple concurrent read-only snapshots via `begin_readonly()`.
+/// Each snapshot sees a consistent view of the database at its creation time.
+/// Write transactions via `begin()` are still single-threaded.
 pub struct Database {
     file: DatabaseFile,
     checkpoint_state: CheckpointState,
     /// Hybrid Logical Clock for transaction timestamps.
     clock: Clock,
+    /// Tracks active read-only snapshots for garbage collection.
+    active_snapshots: ActiveSnapshots,
 }
 
 impl Database {
@@ -91,6 +137,7 @@ impl Database {
             file,
             checkpoint_state,
             clock,
+            active_snapshots: ActiveSnapshots::default(),
         })
     }
 
@@ -133,6 +180,7 @@ impl Database {
                 file,
                 checkpoint_state,
                 clock,
+                active_snapshots: ActiveSnapshots::default(),
             },
             recovery_result,
         ))
@@ -148,10 +196,12 @@ impl Database {
         }
     }
 
-    /// Begin a new transaction.
+    /// Begin a new write transaction.
     ///
     /// The transaction buffers all operations and writes to WAL on commit.
     /// The transaction is assigned a unique HLC timestamp.
+    ///
+    /// Only one write transaction can be active at a time (enforced by borrow checker).
     pub fn begin(&mut self) -> Result<WalTransaction<'_>, DatabaseError> {
         // Get next transaction ID
         let txn_id = self.file.superblock().next_txn_id;
@@ -166,6 +216,60 @@ impl Database {
             txn_id,
             hlc,
         ))
+    }
+
+    /// Begin a read-only snapshot.
+    ///
+    /// Returns a snapshot that sees a consistent view of the database
+    /// at the current committed transaction ID. The snapshot can read data
+    /// but cannot modify it.
+    ///
+    /// The snapshot is tracked for garbage collection purposes - deleted records
+    /// visible to any active snapshot cannot be physically removed. Call
+    /// `release_snapshot()` when done to allow garbage collection.
+    ///
+    /// # Usage
+    ///
+    /// ```ignore
+    /// let mut snapshot = db.begin_readonly();
+    /// let record = snapshot.get(&entity, &attr)?;
+    /// let txn_id = snapshot.close(); // Returns the snapshot's txn_id
+    /// db.release_snapshot(txn_id);   // Allow garbage collection
+    /// ```
+    pub fn begin_readonly(&mut self) -> Snapshot<'_> {
+        // Snapshot sees all committed transactions (next_txn_id - 1)
+        let txn_id = self.file.superblock().next_txn_id.saturating_sub(1);
+        let hlc = self.clock.last();
+
+        // Register the snapshot for garbage collection tracking
+        self.active_snapshots.register(txn_id);
+
+        Snapshot::new(&mut self.file, txn_id, hlc)
+    }
+
+    /// Release a snapshot and allow garbage collection.
+    ///
+    /// Call this after closing a snapshot to remove it from the active
+    /// snapshot list. This allows deleted records that were visible to
+    /// this snapshot to be garbage collected.
+    pub fn release_snapshot(&mut self, txn_id: TxnId) {
+        self.active_snapshots.unregister(txn_id);
+    }
+
+    /// Get the minimum active snapshot transaction ID.
+    ///
+    /// Returns None if there are no active snapshots.
+    /// This is used for garbage collection - deleted records with
+    /// `deleted_txn` less than this value can be physically removed.
+    #[must_use]
+    pub fn min_active_snapshot(&self) -> Option<TxnId> {
+        self.active_snapshots.min_active()
+    }
+
+    /// Get the count of active read-only snapshots.
+    #[must_use]
+    pub fn active_snapshot_count(&self) -> usize {
+        self.active_snapshots.count()
     }
 
     /// Get the current checkpoint state.
@@ -575,6 +679,122 @@ impl Drop for WalTransaction<'_> {
     }
 }
 
+/// A read-only snapshot of the database.
+///
+/// Provides a consistent view of the database at a specific transaction ID.
+/// All reads see the state as of when the snapshot was created, even if
+/// other transactions commit afterwards.
+///
+/// # Snapshot Isolation
+///
+/// - Sees all records with `created_txn <= snapshot_txn`
+/// - Does not see records with `created_txn > snapshot_txn`
+/// - Does not see records with `deleted_txn <= snapshot_txn`
+///
+/// # Lifecycle
+///
+/// The snapshot is tracked for garbage collection. Deleted records
+/// visible to any active snapshot cannot be physically removed.
+/// Always close snapshots when done to allow garbage collection.
+pub struct Snapshot<'a> {
+    file: &'a mut DatabaseFile,
+    /// The transaction ID this snapshot sees.
+    txn_id: TxnId,
+    /// HLC timestamp when the snapshot was created.
+    hlc: HlcTimestamp,
+}
+
+impl<'a> Snapshot<'a> {
+    const fn new(file: &'a mut DatabaseFile, txn_id: TxnId, hlc: HlcTimestamp) -> Self {
+        Self { file, txn_id, hlc }
+    }
+
+    /// Get the snapshot's transaction ID.
+    ///
+    /// This is the highest committed transaction visible to this snapshot.
+    #[must_use]
+    pub const fn snapshot_txn(&self) -> TxnId {
+        self.txn_id
+    }
+
+    /// Get the HLC timestamp when this snapshot was created.
+    #[must_use]
+    pub const fn hlc(&self) -> HlcTimestamp {
+        self.hlc
+    }
+
+    /// Look up a single triple by entity and attribute ID.
+    ///
+    /// Returns the record only if it's visible at this snapshot.
+    pub fn get(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+    ) -> Result<Option<TripleRecord>, DatabaseError> {
+        let root_page = self.file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(self.file, root_page)?;
+
+        Ok(index.get_visible(entity_id, attribute_id, self.txn_id)?)
+    }
+
+    /// Scan all triples for an entity.
+    ///
+    /// Returns only triples visible at this snapshot.
+    pub fn scan_entity(&mut self, entity_id: &EntityId) -> Result<Vec<TripleRecord>, DatabaseError> {
+        let root_page = self.file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let mut scan = index.scan_entity_visible(entity_id, self.txn_id)?;
+
+        let mut results = Vec::new();
+        while let Some(record) = scan.next_record()? {
+            results.push(record);
+        }
+
+        Ok(results)
+    }
+
+    /// Count all visible triples in the index.
+    ///
+    /// Note: This counts records visible at this snapshot.
+    pub fn count(&mut self) -> Result<usize, DatabaseError> {
+        let root_page = self.file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let mut cursor = index.cursor_visible(self.txn_id)?;
+
+        let mut count = 0;
+        while cursor.next_record()?.is_some() {
+            count += 1;
+        }
+
+        Ok(count)
+    }
+
+    /// Collect all visible triples in key order.
+    ///
+    /// Returns records visible at this snapshot.
+    pub fn collect_all(&mut self) -> Result<Vec<TripleRecord>, DatabaseError> {
+        let root_page = self.file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let mut cursor = index.cursor_visible(self.txn_id)?;
+
+        let mut results = Vec::new();
+        while let Some(record) = cursor.next_record()? {
+            results.push(record);
+        }
+
+        Ok(results)
+    }
+
+    /// Close the snapshot and return its transaction ID.
+    ///
+    /// After closing, call `db.release_snapshot(txn_id)` to allow
+    /// garbage collection of deleted records visible to this snapshot.
+    #[must_use]
+    pub const fn close(self) -> TxnId {
+        self.txn_id
+    }
+}
+
 /// Errors that can occur during database operations.
 #[derive(Debug)]
 pub enum DatabaseError {
@@ -914,5 +1134,237 @@ mod tests {
         txn.commit().expect("commit empty");
 
         db.close().expect("close");
+    }
+
+    #[test]
+    fn test_snapshot_basic_read() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert data
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(42.0));
+            txn.commit().expect("commit");
+        }
+
+        // Read via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let record = snapshot.get(&[1u8; 16], &[1u8; 16]).expect("get");
+            assert!(record.is_some());
+            assert_eq!(record.unwrap().value, TripleValue::Number(42.0));
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+
+        assert_eq!(db.active_snapshot_count(), 0);
+    }
+
+    #[test]
+    fn test_snapshot_isolation() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert initial data (txn_id = 1)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
+            txn.commit().expect("commit");
+        }
+
+        // Create a snapshot that sees txn_id = 1
+        let mut snapshot = db.begin_readonly();
+        let snapshot_txn = snapshot.snapshot_txn();
+        assert_eq!(snapshot_txn, 1);
+
+        // Verify snapshot sees the initial data
+        let record = snapshot.get(&[1u8; 16], &[1u8; 16]).expect("get");
+        assert!(record.is_some());
+        assert_eq!(record.unwrap().value, TripleValue::Number(1.0));
+
+        // Close snapshot so we can do a write
+        let txn_id = snapshot.close();
+        db.release_snapshot(txn_id);
+
+        // Update the data (txn_id = 2)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.update([1u8; 16], [1u8; 16], TripleValue::Number(2.0))
+                .expect("update");
+            txn.commit().expect("commit");
+        }
+
+        // New snapshot sees updated data
+        let txn_id = {
+            let mut snapshot2 = db.begin_readonly();
+            assert_eq!(snapshot2.snapshot_txn(), 2);
+            let record = snapshot2.get(&[1u8; 16], &[1u8; 16]).expect("get");
+            assert!(record.is_some());
+            assert_eq!(record.unwrap().value, TripleValue::Number(2.0));
+            snapshot2.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_snapshot_sees_deleted_records() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert data (txn_id = 1)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::String("hello".to_string()));
+            txn.commit().expect("commit");
+        }
+
+        // Delete the data (txn_id = 2)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // Current snapshot (at txn=2) should not see the deleted record
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            assert_eq!(snapshot.snapshot_txn(), 2);
+            let record = snapshot.get(&[1u8; 16], &[1u8; 16]).expect("get");
+            assert!(record.is_none(), "snapshot at delete txn should not see record");
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_snapshot_entity_scan() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        let entity = [1u8; 16];
+
+        // Insert multiple attributes
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..5u8 {
+                let mut attr = [0u8; 16];
+                attr[0] = i;
+                txn.insert(entity, attr, TripleValue::Number(f64::from(i)));
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Scan via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let records = snapshot.scan_entity(&entity).expect("scan");
+            assert_eq!(records.len(), 5);
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_snapshot_count() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert 10 records
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..10u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.insert(entity, [1u8; 16], TripleValue::Number(f64::from(i)));
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Count via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let count = snapshot.count().expect("count");
+            assert_eq!(count, 10);
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+
+        // Delete some records
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..5u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.delete(&entity, &[1u8; 16]).expect("delete");
+            }
+            txn.commit().expect("commit");
+        }
+
+        // New snapshot should see only 5 records
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let count = snapshot.count().expect("count");
+            assert_eq!(count, 5);
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_active_snapshot_tracking() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert data
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::Boolean(true));
+            txn.commit().expect("commit");
+        }
+
+        assert_eq!(db.active_snapshot_count(), 0);
+        assert!(db.min_active_snapshot().is_none());
+
+        // Create and use snapshot
+        let txn_id = {
+            let snapshot = db.begin_readonly();
+            snapshot.close()
+        };
+
+        // Still registered until release
+        assert_eq!(db.active_snapshot_count(), 1);
+        assert_eq!(db.min_active_snapshot(), Some(1));
+
+        // Release snapshot
+        db.release_snapshot(txn_id);
+        assert_eq!(db.active_snapshot_count(), 0);
+        assert!(db.min_active_snapshot().is_none());
+    }
+
+    #[test]
+    fn test_snapshot_collect_all() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert records
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..5u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.insert(entity, [1u8; 16], TripleValue::Number(f64::from(i)));
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Collect all via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let records = snapshot.collect_all().expect("collect_all");
+            assert_eq!(records.len(), 5);
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
     }
 }

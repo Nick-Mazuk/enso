@@ -129,6 +129,7 @@ impl<'a> PrimaryIndex<'a> {
     /// Scan all triples for an entity.
     ///
     /// Returns an iterator over all triples where `entity_id` matches.
+    /// This returns all versions including deleted records.
     pub fn scan_entity(
         &mut self,
         entity_id: &EntityId,
@@ -140,6 +141,27 @@ impl<'a> PrimaryIndex<'a> {
         Ok(EntityScanIterator {
             cursor,
             entity_id: *entity_id,
+            snapshot_txn: None,
+            done: false,
+        })
+    }
+
+    /// Scan all visible triples for an entity at a given snapshot.
+    ///
+    /// Returns an iterator over triples visible to `snapshot_txn`.
+    /// Filters out records created after the snapshot or deleted before it.
+    pub fn scan_entity_visible(
+        &mut self,
+        entity_id: &EntityId,
+        snapshot_txn: TxnId,
+    ) -> Result<EntityScanIterator<'_>, PrimaryIndexError> {
+        let start_key = make_key(entity_id, &[0u8; 16]);
+        let cursor = self.tree.iter_from(&start_key)?;
+
+        Ok(EntityScanIterator {
+            cursor,
+            entity_id: *entity_id,
+            snapshot_txn: Some(snapshot_txn),
             done: false,
         })
     }
@@ -150,45 +172,91 @@ impl<'a> PrimaryIndex<'a> {
     }
 
     /// Create a cursor over all triples in key order.
+    ///
+    /// Returns all versions including deleted records.
     pub fn cursor(&mut self) -> Result<PrimaryIndexCursor<'_>, PrimaryIndexError> {
         let cursor = self.tree.cursor()?;
-        Ok(PrimaryIndexCursor { cursor })
+        Ok(PrimaryIndexCursor {
+            cursor,
+            snapshot_txn: None,
+        })
+    }
+
+    /// Create a cursor over all visible triples at a given snapshot.
+    ///
+    /// Filters out records not visible to `snapshot_txn`.
+    pub fn cursor_visible(
+        &mut self,
+        snapshot_txn: TxnId,
+    ) -> Result<PrimaryIndexCursor<'_>, PrimaryIndexError> {
+        let cursor = self.tree.cursor()?;
+        Ok(PrimaryIndexCursor {
+            cursor,
+            snapshot_txn: Some(snapshot_txn),
+        })
     }
 }
 
 /// Cursor over all triples in the primary index.
+///
+/// Optionally filters by snapshot visibility.
 pub struct PrimaryIndexCursor<'a> {
     cursor: crate::storage::btree::BTreeIterator<'a>,
+    /// If set, only return records visible to this transaction.
+    snapshot_txn: Option<TxnId>,
 }
 
 impl PrimaryIndexCursor<'_> {
     /// Get the next triple record.
+    ///
+    /// If a snapshot is set, skips records not visible to that snapshot.
     pub fn next_record(&mut self) -> Result<Option<TripleRecord>, PrimaryIndexError> {
-        match self.cursor.next_entry()? {
-            Some((_, value)) => {
-                let record = TripleRecord::from_bytes(&value)?;
-                Ok(Some(record))
+        loop {
+            let Some((_, value)) = self.cursor.next_entry()? else {
+                return Ok(None);
+            };
+
+            let record = TripleRecord::from_bytes(&value)?;
+
+            // Apply snapshot filter if set
+            if let Some(snapshot_txn) = self.snapshot_txn {
+                if record.is_visible_to(snapshot_txn) {
+                    return Ok(Some(record));
+                }
+                // Skip this record, continue to next
+            } else {
+                return Ok(Some(record));
             }
-            None => Ok(None),
         }
     }
 }
 
 /// Iterator over triples for a specific entity.
+///
+/// Optionally filters by snapshot visibility.
 pub struct EntityScanIterator<'a> {
     cursor: crate::storage::btree::BTreeIterator<'a>,
     entity_id: EntityId,
+    /// If set, only return records visible to this transaction.
+    snapshot_txn: Option<TxnId>,
     done: bool,
 }
 
 impl EntityScanIterator<'_> {
     /// Get the next triple for this entity.
+    ///
+    /// If a snapshot is set, skips records not visible to that snapshot.
     pub fn next_record(&mut self) -> Result<Option<TripleRecord>, PrimaryIndexError> {
         if self.done {
             return Ok(None);
         }
 
-        if let Some((key, value)) = self.cursor.next_entry()? {
+        loop {
+            let Some((key, value)) = self.cursor.next_entry()? else {
+                self.done = true;
+                return Ok(None);
+            };
+
             let (entity_id, _) = split_key(&key);
 
             // Check if we're still on the same entity
@@ -198,10 +266,16 @@ impl EntityScanIterator<'_> {
             }
 
             let record = TripleRecord::from_bytes(&value)?;
-            Ok(Some(record))
-        } else {
-            self.done = true;
-            Ok(None)
+
+            // Apply snapshot filter if set
+            if let Some(snapshot_txn) = self.snapshot_txn {
+                if record.is_visible_to(snapshot_txn) {
+                    return Ok(Some(record));
+                }
+                // Skip this record, continue to next
+            } else {
+                return Ok(Some(record));
+            }
         }
     }
 }
