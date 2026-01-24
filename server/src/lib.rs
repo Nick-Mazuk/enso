@@ -17,6 +17,7 @@
 
 mod client_connection;
 mod constants;
+mod e2e_tests;
 pub mod proto;
 mod query;
 pub mod simulation;
