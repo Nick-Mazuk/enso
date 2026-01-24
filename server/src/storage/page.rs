@@ -215,6 +215,15 @@ impl std::fmt::Debug for Page {
     }
 }
 
+impl Clone for Page {
+    #[allow(clippy::disallowed_methods)] // Clone needed for simulation testing
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+        }
+    }
+}
+
 /// Errors related to page operations.
 #[derive(Debug)]
 pub enum PageError {

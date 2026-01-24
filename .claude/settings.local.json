@@ -7,7 +7,8 @@
       "Bash(cargo clean:*)",
       "Bash(grep:*)",
       "Bash(cargo fmt:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "WebSearch"
     ]
   }
 }

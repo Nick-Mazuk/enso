@@ -4,7 +4,9 @@
 
 use crate::{
     proto,
-    query::{Datom, EntityId, FieldId, Pattern, PatternElement, Query, QueryResult, Value, Variable},
+    query::{
+        Datom, EntityId, FieldId, Pattern, PatternElement, Query, QueryResult, Value, Variable,
+    },
     types::{ProtoDeserializable, ProtoSerializable},
 };
 

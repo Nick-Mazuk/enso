@@ -9,9 +9,10 @@
 //!
 //! ```ignore
 //! use storage::hlc::Clock;
+//! use storage::time::SystemTimeSource;
 //!
-//! // Create a clock for node 1
-//! let mut clock = Clock::new(1);
+//! // Create a clock for node 1 with system time
+//! let mut clock = Clock::new(1, SystemTimeSource);
 //!
 //! // Get timestamp for a local event
 //! let ts1 = clock.tick();
@@ -26,9 +27,8 @@
 //! - Causally ordered: if A happens-before B, then ts(A) < ts(B)
 //! - Bounded drift from physical time (configurable)
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::storage::superblock::HlcTimestamp;
+use crate::storage::time::TimeSource;
 
 /// Maximum allowed drift between physical time and HLC physical component.
 /// If the clock drifts more than this, we'll wait or error.
@@ -39,8 +39,13 @@ const MAX_DRIFT_MS: u64 = 60_000; // 1 minute
 /// The clock maintains state and generates timestamps that are:
 /// - Monotonically increasing for local events
 /// - Causally consistent when merged with remote timestamps
+///
+/// The clock is generic over a `TimeSource` to allow for deterministic
+/// simulation testing with controlled time.
 #[derive(Debug)]
-pub struct Clock {
+pub struct Clock<T: TimeSource> {
+    /// The time source for getting current wall clock time.
+    time_source: T,
     /// The last timestamp issued by this clock.
     last: HlcTimestamp,
     /// This node's unique identifier.
@@ -49,14 +54,15 @@ pub struct Clock {
     max_drift_ms: u64,
 }
 
-impl Clock {
-    /// Create a new clock for the given node ID.
+impl<T: TimeSource> Clock<T> {
+    /// Create a new clock for the given node ID with the specified time source.
     ///
-    /// The clock starts at the current wall clock time.
+    /// The clock starts at the current wall clock time from the time source.
     #[must_use]
-    pub fn new(node_id: u32) -> Self {
-        let now = Self::wall_clock_ms();
+    pub fn new(node_id: u32, time_source: T) -> Self {
+        let now = time_source.now_ms();
         Self {
+            time_source,
             last: HlcTimestamp {
                 physical_time: now,
                 logical_counter: 0,
@@ -71,12 +77,13 @@ impl Clock {
     ///
     /// This is useful when reopening a database and restoring clock state.
     #[must_use]
-    pub fn from_timestamp(node_id: u32, last: HlcTimestamp) -> Self {
+    pub fn from_timestamp(node_id: u32, last: HlcTimestamp, time_source: T) -> Self {
         // Ensure we don't go backwards from the saved timestamp
-        let now = Self::wall_clock_ms();
+        let now = time_source.now_ms();
         let physical_time = now.max(last.physical_time);
 
         Self {
+            time_source,
             last: HlcTimestamp {
                 physical_time,
                 logical_counter: if physical_time == last.physical_time {
@@ -96,25 +103,12 @@ impl Clock {
         self.max_drift_ms = max_drift_ms;
     }
 
-    /// Get the current wall clock time in milliseconds since Unix epoch.
-    #[must_use]
-    #[allow(clippy::cast_possible_truncation)] // Milliseconds won't overflow u64 for billions of years
-    fn wall_clock_ms() -> u64 {
-        // SystemTime::now() can't fail on any supported platform.
-        // duration_since(UNIX_EPOCH) only fails if system time is before 1970.
-        #[allow(clippy::expect_used)]
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before Unix epoch");
-        duration.as_millis() as u64
-    }
-
     /// Generate a new timestamp for a local event.
     ///
     /// This advances the clock and returns the new timestamp.
     /// The timestamp is guaranteed to be greater than any previously issued.
     pub fn tick(&mut self) -> HlcTimestamp {
-        let now = Self::wall_clock_ms();
+        let now = self.time_source.now_ms();
 
         if now > self.last.physical_time {
             // Physical time advanced, reset logical counter
@@ -140,7 +134,7 @@ impl Clock {
     ///
     /// Returns the merged timestamp and an error if the drift is too large.
     pub fn receive(&mut self, remote: HlcTimestamp) -> Result<HlcTimestamp, ClockError> {
-        let now = Self::wall_clock_ms();
+        let now = self.time_source.now_ms();
 
         // Check for excessive drift
         if remote.physical_time > now + self.max_drift_ms {
@@ -192,6 +186,12 @@ impl Clock {
         self.node_id
     }
 
+    /// Get a reference to the time source.
+    #[must_use]
+    pub const fn time_source(&self) -> &T {
+        &self.time_source
+    }
+
     /// Check if one timestamp happened before another.
     ///
     /// Returns true if `a` is causally before `b`.
@@ -219,9 +219,9 @@ impl Clock {
     }
 }
 
-impl Default for Clock {
+impl Default for Clock<crate::storage::time::SystemTimeSource> {
     fn default() -> Self {
-        Self::new(0)
+        Self::new(0, crate::storage::time::SystemTimeSource)
     }
 }
 
@@ -258,12 +258,13 @@ impl std::error::Error for ClockError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::time::SystemTimeSource;
     use std::thread;
     use std::time::Duration;
 
     #[test]
     fn test_clock_new() {
-        let clock = Clock::new(42);
+        let clock = Clock::new(42, SystemTimeSource);
         assert_eq!(clock.node_id(), 42);
         assert!(clock.last().physical_time > 0);
         assert_eq!(clock.last().logical_counter, 0);
@@ -272,13 +273,13 @@ mod tests {
 
     #[test]
     fn test_clock_tick_monotonic() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
 
         let mut prev = clock.tick();
         for _ in 0..100 {
             let curr = clock.tick();
             assert!(
-                Clock::happens_before(prev, curr),
+                Clock::<SystemTimeSource>::happens_before(prev, curr),
                 "timestamps should be monotonically increasing"
             );
             prev = curr;
@@ -287,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_clock_tick_same_physical_time() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
 
         // Tick rapidly to stay in same physical millisecond
         let ts1 = clock.tick();
@@ -306,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_clock_tick_physical_time_advances() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
 
         let ts1 = clock.tick();
 
@@ -323,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_clock_receive_merge() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
         clock.tick();
 
         // Create a remote timestamp in the past
@@ -336,12 +337,12 @@ mod tests {
         let result = clock.receive(remote).expect("receive should succeed");
 
         // Should be greater than both local and remote
-        assert!(Clock::happens_before(remote, result));
+        assert!(Clock::<SystemTimeSource>::happens_before(remote, result));
     }
 
     #[test]
     fn test_clock_receive_from_future() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
         clock.tick();
 
         // Create a remote timestamp slightly in the future
@@ -359,12 +360,12 @@ mod tests {
 
     #[test]
     fn test_clock_receive_excessive_drift() {
-        let mut clock = Clock::new(1);
+        let mut clock = Clock::new(1, SystemTimeSource);
         clock.set_max_drift_ms(1000); // 1 second max drift
 
         // Create a remote timestamp far in the future
         let remote = HlcTimestamp {
-            physical_time: Clock::wall_clock_ms() + 10_000, // 10 seconds in future
+            physical_time: SystemTimeSource.now_ms() + 10_000, // 10 seconds in future
             logical_counter: 0,
             node_id: 2,
         };
@@ -376,26 +377,26 @@ mod tests {
     #[test]
     fn test_clock_from_timestamp() {
         let saved = HlcTimestamp {
-            physical_time: Clock::wall_clock_ms() - 1000, // 1 second ago
+            physical_time: SystemTimeSource.now_ms() - 1000, // 1 second ago
             logical_counter: 42,
             node_id: 1,
         };
 
-        let clock = Clock::from_timestamp(1, saved);
+        let clock = Clock::from_timestamp(1, saved, SystemTimeSource);
 
         // Clock should be at current time (not in the past)
-        assert!(clock.last().physical_time >= Clock::wall_clock_ms() - 10);
+        assert!(clock.last().physical_time >= SystemTimeSource.now_ms() - 10);
     }
 
     #[test]
     fn test_clock_from_future_timestamp() {
         let saved = HlcTimestamp {
-            physical_time: Clock::wall_clock_ms() + 1000, // 1 second in future
+            physical_time: SystemTimeSource.now_ms() + 1000, // 1 second in future
             logical_counter: 42,
             node_id: 1,
         };
 
-        let clock = Clock::from_timestamp(1, saved);
+        let clock = Clock::from_timestamp(1, saved, SystemTimeSource);
 
         // Clock should preserve the future timestamp
         assert!(clock.last().physical_time >= saved.physical_time);
@@ -422,13 +423,13 @@ mod tests {
             node_id: 1,
         };
 
-        assert!(Clock::happens_before(a, b));
-        assert!(Clock::happens_before(b, c));
-        assert!(Clock::happens_before(a, c));
+        assert!(Clock::<SystemTimeSource>::happens_before(a, b));
+        assert!(Clock::<SystemTimeSource>::happens_before(b, c));
+        assert!(Clock::<SystemTimeSource>::happens_before(a, c));
 
-        assert!(!Clock::happens_before(b, a));
-        assert!(!Clock::happens_before(c, b));
-        assert!(!Clock::happens_before(a, a));
+        assert!(!Clock::<SystemTimeSource>::happens_before(b, a));
+        assert!(!Clock::<SystemTimeSource>::happens_before(c, b));
+        assert!(!Clock::<SystemTimeSource>::happens_before(a, a));
     }
 
     #[test]
@@ -453,16 +454,16 @@ mod tests {
             node_id: 1,
         };
 
-        assert_eq!(Clock::compare(a, b), Ordering::Less); // same time, node_id decides
-        assert_eq!(Clock::compare(a, c), Ordering::Equal); // exactly equal
-        assert_eq!(Clock::compare(b, a), Ordering::Greater);
+        assert_eq!(Clock::<SystemTimeSource>::compare(a, b), Ordering::Less); // same time, node_id decides
+        assert_eq!(Clock::<SystemTimeSource>::compare(a, c), Ordering::Equal); // exactly equal
+        assert_eq!(Clock::<SystemTimeSource>::compare(b, a), Ordering::Greater);
     }
 
     #[test]
     fn test_clock_concurrent_simulation() {
         // Simulate two nodes generating timestamps
-        let mut clock1 = Clock::new(1);
-        let mut clock2 = Clock::new(2);
+        let mut clock1 = Clock::new(1, SystemTimeSource);
+        let mut clock2 = Clock::new(2, SystemTimeSource);
 
         let ts1_1 = clock1.tick();
         let _ts2_1 = clock2.tick();
@@ -475,9 +476,15 @@ mod tests {
 
         // All timestamps should be comparable
         // ts2_2 should be after ts1_1 (it was merged)
-        assert!(Clock::happens_before(ts1_1, ts2_2) || ts1_1.physical_time == ts2_2.physical_time);
+        assert!(
+            Clock::<SystemTimeSource>::happens_before(ts1_1, ts2_2)
+                || ts1_1.physical_time == ts2_2.physical_time
+        );
 
         // ts1_2 should be after ts2_2 (it was merged)
-        assert!(Clock::happens_before(ts2_2, ts1_2) || ts2_2.physical_time == ts1_2.physical_time);
+        assert!(
+            Clock::<SystemTimeSource>::happens_before(ts2_2, ts1_2)
+                || ts2_2.physical_time == ts1_2.physical_time
+        );
     }
 }

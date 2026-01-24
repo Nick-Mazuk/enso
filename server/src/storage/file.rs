@@ -6,9 +6,10 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+use crate::storage::io::{Storage, StorageError};
 use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
-use crate::storage::superblock::{Superblock, SuperblockError};
-use crate::storage::wal::{self, Lsn, Wal, WalError};
+use crate::storage::superblock::{HlcTimestamp, Superblock, SuperblockError};
+use crate::storage::wal::{self, LogRecord, LogRecordPayload, Lsn, Wal, WalError};
 
 /// A database file handle with low-level page I/O operations.
 pub struct DatabaseFile {
@@ -179,8 +180,8 @@ impl DatabaseFile {
         self.superblock.last_checkpoint_lsn = 0;
 
         // Write updated superblock
-        self.write_superblock()?;
-        self.sync()?;
+        Self::write_superblock(self)?;
+        Self::sync(self)?;
 
         Ok(())
     }
@@ -289,6 +290,131 @@ impl std::error::Error for FileError {
             Self::Superblock(e) => Some(e),
             Self::AlreadyExists(_) | Self::PageOutOfBounds { .. } => None,
         }
+    }
+}
+
+impl From<FileError> for StorageError {
+    fn from(e: FileError) -> Self {
+        match e {
+            FileError::Io(io_err) => Self::Io(io_err),
+            FileError::PageOutOfBounds {
+                page_id,
+                total_pages,
+            } => Self::PageOutOfBounds {
+                page_id,
+                total_pages,
+            },
+            FileError::AlreadyExists(path) => Self::Io(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("file already exists: {}", path.display()),
+            )),
+            FileError::Superblock(e) => Self::Superblock(e.to_string()),
+        }
+    }
+}
+
+impl Storage for DatabaseFile {
+    fn read_page(&mut self, page_id: PageId) -> Result<Page, StorageError> {
+        Self::read_page(self, page_id).map_err(StorageError::from)
+    }
+
+    fn write_page(&mut self, page_id: PageId, page: &Page) -> Result<(), StorageError> {
+        Self::write_page(self, page_id, page).map_err(StorageError::from)
+    }
+
+    fn sync(&mut self) -> Result<(), StorageError> {
+        Self::sync(self).map_err(StorageError::from)
+    }
+
+    fn allocate_pages(&mut self, count: u64) -> Result<PageId, StorageError> {
+        Self::allocate_pages(self, count).map_err(StorageError::from)
+    }
+
+    fn total_pages(&self) -> u64 {
+        Self::total_pages(self)
+    }
+
+    fn superblock(&self) -> &Superblock {
+        Self::superblock(self)
+    }
+
+    fn superblock_mut(&mut self) -> &mut Superblock {
+        Self::superblock_mut(self)
+    }
+
+    fn write_superblock(&mut self) -> Result<(), StorageError> {
+        Self::write_superblock(self).map_err(StorageError::from)
+    }
+
+    fn has_wal(&self) -> bool {
+        Self::has_wal(self)
+    }
+
+    fn init_wal(&mut self, capacity: u64) -> Result<(), StorageError> {
+        Self::init_wal(self, capacity).map_err(StorageError::from)
+    }
+
+    fn wal_append(
+        &mut self,
+        txn_id: u64,
+        hlc: HlcTimestamp,
+        payload: LogRecordPayload,
+    ) -> Result<Lsn, StorageError> {
+        let (lsn, head, last_lsn) = {
+            let mut wal = self.wal()?;
+            let lsn = wal.append(txn_id, hlc, payload)?;
+            (lsn, wal.head(), wal.last_lsn())
+        };
+        self.update_wal_head(head, last_lsn);
+        Ok(lsn)
+    }
+
+    fn wal_sync(&mut self) -> Result<(), StorageError> {
+        let mut wal = self.wal()?;
+        wal.sync()?;
+        Ok(())
+    }
+
+    fn wal_read_all(&mut self) -> Result<Vec<LogRecord>, StorageError> {
+        let mut wal = self.wal()?;
+        Ok(wal.read_all()?)
+    }
+
+    fn wal_changes_since(&mut self, since: HlcTimestamp) -> Result<Vec<LogRecord>, StorageError> {
+        let mut wal = self.wal()?;
+        Ok(wal.changes_since(since)?)
+    }
+
+    fn wal_next_lsn(&self) -> Result<Lsn, StorageError> {
+        if !self.has_wal() {
+            return Err(StorageError::WalNotInitialized);
+        }
+        // Next LSN is last WAL LSN + 1 (or 1 if no writes yet)
+        if self.superblock.last_wal_lsn > 0 {
+            Ok(self.superblock.last_wal_lsn + 1)
+        } else {
+            Ok(1)
+        }
+    }
+
+    fn wal_head(&self) -> u64 {
+        if self.superblock.txn_log_capacity == 0 {
+            0
+        } else {
+            self.superblock.txn_log_end - self.superblock.txn_log_start
+        }
+    }
+
+    fn wal_last_lsn(&self) -> Lsn {
+        self.superblock.last_wal_lsn
+    }
+
+    fn set_checkpoint_lsn(&mut self, lsn: Lsn) {
+        self.superblock.last_checkpoint_lsn = lsn;
+    }
+
+    fn set_checkpoint_hlc(&mut self, hlc: HlcTimestamp) {
+        self.superblock.last_checkpoint_hlc = hlc;
     }
 }
 

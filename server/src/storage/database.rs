@@ -36,6 +36,7 @@ use crate::storage::indexes::entity_attribute::{EntityAttributeIndex, EntityAttr
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::superblock::HlcTimestamp;
+use crate::storage::time::SystemTimeSource;
 use crate::storage::triple::{
     AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
 };
@@ -95,7 +96,7 @@ pub struct Database {
     file: DatabaseFile,
     checkpoint_state: CheckpointState,
     /// Hybrid Logical Clock for transaction timestamps.
-    clock: Clock,
+    clock: Clock<SystemTimeSource>,
     /// Tracks active read-only snapshots for garbage collection.
     active_snapshots: ActiveSnapshots,
 }
@@ -133,7 +134,7 @@ impl Database {
         file.init_wal(wal_capacity)?;
 
         let checkpoint_state = CheckpointState::from_database(&file, checkpoint_config);
-        let clock = Clock::new(node_id);
+        let clock = Clock::new(node_id, SystemTimeSource);
 
         Ok(Self {
             file,
@@ -175,7 +176,7 @@ impl Database {
 
         // Initialize clock from last checkpoint timestamp
         let last_hlc = file.superblock().last_checkpoint_hlc;
-        let clock = Clock::from_timestamp(node_id, last_hlc);
+        let clock = Clock::from_timestamp(node_id, last_hlc, SystemTimeSource);
 
         Ok((
             Self {
@@ -467,7 +468,7 @@ enum BufferedOp {
 pub struct WalTransaction<'a> {
     file: &'a mut DatabaseFile,
     checkpoint_state: &'a mut CheckpointState,
-    clock: &'a mut Clock,
+    clock: &'a mut Clock<SystemTimeSource>,
     txn_id: TxnId,
     hlc: HlcTimestamp,
     /// Buffered operations to be written on commit
@@ -480,7 +481,7 @@ impl<'a> WalTransaction<'a> {
     const fn new(
         file: &'a mut DatabaseFile,
         checkpoint_state: &'a mut CheckpointState,
-        clock: &'a mut Clock,
+        clock: &'a mut Clock<SystemTimeSource>,
         txn_id: TxnId,
         hlc: HlcTimestamp,
     ) -> Self {

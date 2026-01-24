@@ -90,7 +90,8 @@ impl TryFrom<u8> for LogRecordType {
 /// Payload for different log record types.
 ///
 /// This stores serialized bytes to avoid requiring Clone on complex types.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[allow(clippy::disallowed_methods)] // Clone needed for simulation testing
 pub enum LogRecordPayload {
     /// Begin transaction - no additional data.
     Begin,

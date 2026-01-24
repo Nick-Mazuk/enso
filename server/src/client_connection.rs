@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use crate::{
     proto,
-    query::{value_to_storage, Query, QueryEngine},
+    query::{Query, QueryEngine, value_to_storage},
     storage::Database,
     types::{
         ProtoDeserializable, ProtoSerializable,
