@@ -36,6 +36,10 @@ message QueryRequest {
   repeated QueryPatternVariable find = 1;
   // The patterns to match against
   repeated QueryPattern where = 2;
+  // Optional patterns (left join semantics)
+  repeated QueryPattern optional = 3;
+  // Negation patterns (anti-join)
+  repeated QueryPattern where_not = 4;
 }
 
 message QueryPattern {
@@ -78,9 +82,26 @@ message ServerMessage {
   // }
 }
 
+// A single value in a query result row
+message QueryResultValue {
+  oneof value {
+    string id = 1;           // Entity or Field ID as string
+    TripleValue triple_value = 2;  // Actual value (string, number, boolean)
+  }
+  bool is_undefined = 3;  // True if value is missing (for optional patterns)
+}
+
+// A row of query results
+message QueryResultRow {
+  repeated QueryResultValue values = 1;
+}
+
 message ServerResponse {
   optional uint32 request_id = 1;
   optional google.rpc.Status status = 2;
   // Query results (populated for QueryRequest responses)
   repeated Triple triples = 3;
+  // Columnar query results
+  repeated string columns = 4;
+  repeated QueryResultRow rows = 5;
 }

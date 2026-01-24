@@ -1,4 +1,5 @@
 pub mod client_message;
+pub mod query;
 pub mod triple;
 pub mod triple_update_request;
 

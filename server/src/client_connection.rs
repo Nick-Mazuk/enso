@@ -2,10 +2,10 @@ use std::sync::Mutex;
 
 use crate::{
     proto,
-    query::value_to_storage,
-    storage::{Database, TripleRecord},
+    query::{value_to_storage, Query, QueryEngine},
+    storage::Database,
     types::{
-        ProtoDeserializable,
+        ProtoDeserializable, ProtoSerializable,
         client_message::{ClientMessage, ClientMessagePayload},
         triple_update_request::TripleUpdateRequest,
     },
@@ -120,28 +120,27 @@ impl ClientConnection {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     fn query(&self, request: &proto::QueryRequest) -> proto::ServerResponse {
         // Lock the database
         let Ok(mut db) = self.database.lock() else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
-                    message: "Database lock poisoned".to_string(),
+                    message: "Database lock poisoned".to_owned(),
                     ..Default::default()
                 }),
                 ..Default::default()
             };
         };
 
-        // Begin a read-only transaction
-        let mut txn = match db.begin() {
-            Ok(txn) => txn,
+        // Convert proto request to internal query using the trait
+        let query = match Query::from_proto(request) {
+            Ok(q) => q,
             Err(e) => {
                 return proto::ServerResponse {
                     status: Some(proto::google::rpc::Status {
-                        code: proto::google::rpc::Code::Internal.into(),
-                        message: format!("Failed to begin transaction: {e}"),
+                        code: proto::google::rpc::Code::InvalidArgument.into(),
+                        message: e,
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -149,147 +148,42 @@ impl ClientConnection {
             }
         };
 
-        // Process the query patterns
-        let mut results = Vec::new();
+        // Begin a read-only snapshot
+        let mut snapshot = db.begin_readonly();
 
-        for pattern in &request.r#where {
-            // Extract entity_id if specified
-            let entity_id: Option<[u8; 16]> = match &pattern.entity {
-                Some(proto::query_pattern::Entity::EntityId(bytes)) => {
-                    if bytes.len() == 16 {
-                        let mut arr = [0u8; 16];
-                        arr.copy_from_slice(bytes);
-                        Some(arr)
-                    } else {
-                        txn.abort();
-                        return proto::ServerResponse {
-                            status: Some(proto::google::rpc::Status {
-                                code: proto::google::rpc::Code::InvalidArgument.into(),
-                                message: "entity_id must be exactly 16 bytes".to_string(),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        };
-                    }
-                }
-                _ => None,
-            };
+        // Execute the query
+        let result = {
+            let mut engine = QueryEngine::new(&mut snapshot);
+            engine.execute(&query)
+        };
 
-            // Extract attribute_id if specified
-            let attribute_id: Option<[u8; 16]> = match &pattern.attribute {
-                Some(proto::query_pattern::Attribute::AttributeId(bytes)) => {
-                    if bytes.len() == 16 {
-                        let mut arr = [0u8; 16];
-                        arr.copy_from_slice(bytes);
-                        Some(arr)
-                    } else {
-                        txn.abort();
-                        return proto::ServerResponse {
-                            status: Some(proto::google::rpc::Status {
-                                code: proto::google::rpc::Code::InvalidArgument.into(),
-                                message: "attribute_id must be exactly 16 bytes".to_string(),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        };
-                    }
-                }
-                _ => None,
-            };
+        // Close the snapshot and release it
+        let txn_id = snapshot.close();
+        db.release_snapshot(txn_id);
 
-            // Execute the appropriate query based on what's specified
-            match (entity_id, attribute_id) {
-                // Point lookup: both entity_id and attribute_id specified
-                (Some(eid), Some(aid)) => {
-                    match txn.get(&eid, &aid) {
-                        Ok(Some(record)) => {
-                            results.push(record_to_proto(&record));
-                        }
-                        Ok(None) => {
-                            // No match, continue
-                        }
-                        Err(e) => {
-                            txn.abort();
-                            return proto::ServerResponse {
-                                status: Some(proto::google::rpc::Status {
-                                    code: proto::google::rpc::Code::Internal.into(),
-                                    message: format!("Query failed: {e}"),
-                                    ..Default::default()
-                                }),
-                                ..Default::default()
-                            };
-                        }
-                    }
-                }
-                // Entity scan: only entity_id specified
-                (Some(eid), None) => match txn.scan_entity(&eid) {
-                    Ok(records) => {
-                        for record in &records {
-                            results.push(record_to_proto(record));
-                        }
-                    }
-                    Err(e) => {
-                        txn.abort();
-                        return proto::ServerResponse {
-                            status: Some(proto::google::rpc::Status {
-                                code: proto::google::rpc::Code::Internal.into(),
-                                message: format!("Query failed: {e}"),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        };
-                    }
-                },
-                // No entity_id specified - not supported yet
-                (None, _) => {
-                    txn.abort();
-                    return proto::ServerResponse {
-                        status: Some(proto::google::rpc::Status {
-                            code: proto::google::rpc::Code::Unimplemented.into(),
-                            message: "Queries without entity_id are not yet supported".to_string(),
-                            ..Default::default()
-                        }),
+        // Handle the result
+        match result {
+            Ok(query_result) => {
+                let response = query_result.to_proto();
+                proto::ServerResponse {
+                    status: Some(proto::google::rpc::Status {
+                        code: proto::google::rpc::Code::Ok.into(),
                         ..Default::default()
-                    };
+                    }),
+                    columns: response.columns,
+                    rows: response.rows,
+                    ..Default::default()
                 }
             }
-        }
-
-        txn.abort(); // Read-only, nothing to commit
-
-        proto::ServerResponse {
-            status: Some(proto::google::rpc::Status {
-                code: proto::google::rpc::Code::Ok.into(),
+            Err(e) => proto::ServerResponse {
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Internal.into(),
+                    message: format!("Query failed: {e}"),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            triples: results,
-            ..Default::default()
+            },
         }
-    }
-}
-
-/// Convert a storage `TripleRecord` to a proto `Triple`.
-fn record_to_proto(record: &TripleRecord) -> proto::Triple {
-    proto::Triple {
-        entity_id: Some(record.entity_id.to_vec()),
-        attribute_id: Some(record.attribute_id.to_vec()),
-        value: Some(storage_value_to_proto(&record.value)),
-    }
-}
-
-/// Convert a storage `TripleValue` to a proto `TripleValue`.
-fn storage_value_to_proto(value: &crate::storage::TripleValue) -> proto::TripleValue {
-    proto::TripleValue {
-        value: match value {
-            crate::storage::TripleValue::Null => None,
-            crate::storage::TripleValue::Boolean(b) => {
-                Some(proto::triple_value::Value::Boolean(*b))
-            }
-            crate::storage::TripleValue::Number(n) => Some(proto::triple_value::Value::Number(*n)),
-            crate::storage::TripleValue::String(s) => {
-                Some(proto::triple_value::Value::String(s.to_string()))
-            }
-        },
     }
 }
 
@@ -481,20 +375,26 @@ mod tests {
             proto::google::rpc::Code::Ok as i32
         );
 
-        // Query the triple back using point lookup (entity_id + attribute_id)
-        let query_pattern = proto::QueryPattern {
-            #[allow(clippy::disallowed_methods)]
-            entity: Some(proto::query_pattern::Entity::EntityId(entity_id.clone())),
-            #[allow(clippy::disallowed_methods)]
-            attribute: Some(proto::query_pattern::Attribute::AttributeId(
-                attribute_id.clone(),
-            )),
-            value_group: None,
-        };
-
+        // Query the triple back using point lookup (entity_id + attribute_id) with variable for value
         let query_request = proto::QueryRequest {
-            find: vec![],
-            r#where: vec![query_pattern],
+            find: vec![proto::QueryPatternVariable {
+                label: Some("value".to_owned()),
+            }],
+            r#where: vec![proto::QueryPattern {
+                #[allow(clippy::disallowed_methods)]
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.clone())),
+                #[allow(clippy::disallowed_methods)]
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.clone(),
+                )),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("value".to_owned()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
         };
 
         let query_message = proto::ClientMessage {
@@ -509,17 +409,23 @@ mod tests {
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
-        assert_eq!(server_response.triples.len(), 1);
+        assert_eq!(server_response.columns, vec!["value"]);
+        assert_eq!(server_response.rows.len(), 1);
 
-        let result_triple = &server_response.triples[0];
-        assert_eq!(result_triple.entity_id, Some(entity_id));
-        assert_eq!(result_triple.attribute_id, Some(attribute_id));
-        assert_eq!(
-            result_triple.value,
-            Some(proto::TripleValue {
-                value: Some(proto::triple_value::Value::String("query_test".to_string())),
-            })
-        );
+        // Check the value in the first row
+        let row = &server_response.rows[0];
+        assert_eq!(row.values.len(), 1);
+        let result_value = &row.values[0];
+        assert!(!result_value.is_undefined);
+        match &result_value.value {
+            Some(proto::query_result_value::Value::TripleValue(tv)) => {
+                assert_eq!(
+                    tv.value,
+                    Some(proto::triple_value::Value::String("query_test".to_owned()))
+                );
+            }
+            _ => panic!("Expected a TripleValue"),
+        }
     }
 
     #[tokio::test]
@@ -558,16 +464,31 @@ mod tests {
             proto::google::rpc::Code::Ok as i32
         );
 
-        // Query all triples for the entity (entity scan)
-        let query_pattern = proto::QueryPattern {
-            entity: Some(proto::query_pattern::Entity::EntityId(entity_id)),
-            attribute: None,
-            value_group: None,
-        };
-
+        // Query all triples for the entity (entity scan) - using variables for attribute and value
         let query_request = proto::QueryRequest {
-            find: vec![],
-            r#where: vec![query_pattern],
+            find: vec![
+                proto::QueryPatternVariable {
+                    label: Some("attr".to_owned()),
+                },
+                proto::QueryPatternVariable {
+                    label: Some("value".to_owned()),
+                },
+            ],
+            r#where: vec![proto::QueryPattern {
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id)),
+                attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("attr".to_owned()),
+                    },
+                )),
+                value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
+                    proto::QueryPatternVariable {
+                        label: Some("value".to_owned()),
+                    },
+                )),
+            }],
+            optional: vec![],
+            where_not: vec![],
         };
 
         let query_message = proto::ClientMessage {
@@ -582,6 +503,7 @@ mod tests {
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
-        assert_eq!(server_response.triples.len(), 3);
+        assert_eq!(server_response.columns, vec!["attr", "value"]);
+        assert_eq!(server_response.rows.len(), 3);
     }
 }
