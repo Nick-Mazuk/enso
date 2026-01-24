@@ -1,15 +1,15 @@
 //! Test inserting triples for multiple entities.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, get_string_value, is_ok};
+use crate::e2e_tests::helpers::{TestClient, new_attribute_id, get_string_value, is_ok, new_entity_id};
 use crate::proto;
 
 #[test]
 fn test_insert_multiple_entities() {
     let test = TestClient::new();
 
-    let eid1 = entity_id(20);
-    let eid2 = entity_id(21);
-    let aid = attribute_id(22);
+    let entity_id_1 = new_entity_id(20);
+    let entity_id_2 = new_entity_id(21);
+    let attribute_id = new_attribute_id(22);
 
     // Insert for entity 1
     let resp1 = test.handle_message(proto::ClientMessage {
@@ -17,8 +17,8 @@ fn test_insert_multiple_entities() {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid1.to_vec()),
-                    attribute_id: Some(aid.to_vec()),
+                    entity_id: Some(entity_id_1.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("entity one".to_string())),
                     }),
@@ -34,8 +34,8 @@ fn test_insert_multiple_entities() {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid2.to_vec()),
-                    attribute_id: Some(aid.to_vec()),
+                    entity_id: Some(entity_id_2.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("entity two".to_string())),
                     }),
@@ -53,8 +53,10 @@ fn test_insert_multiple_entities() {
                 label: Some("v".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid1.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id_1.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.to_vec(),
+                )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("v".to_string()),
@@ -77,8 +79,10 @@ fn test_insert_multiple_entities() {
                 label: Some("v".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid2.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id_2.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.to_vec(),
+                )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("v".to_string()),

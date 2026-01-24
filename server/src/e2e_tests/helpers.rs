@@ -67,7 +67,7 @@ impl Drop for TestClient {
 ///
 /// Each unique seed produces a unique, valid 16-byte entity ID.
 #[must_use]
-pub const fn entity_id(seed: u8) -> [u8; 16] {
+pub const fn new_entity_id(seed: u8) -> [u8; 16] {
     [
         0xE0 | (seed >> 4), // Entity marker + high nibble
         seed,
@@ -92,7 +92,7 @@ pub const fn entity_id(seed: u8) -> [u8; 16] {
 ///
 /// Each unique seed produces a unique, valid 16-byte attribute ID.
 #[must_use]
-pub const fn attribute_id(seed: u8) -> [u8; 16] {
+pub const fn new_attribute_id(seed: u8) -> [u8; 16] {
     [
         0xA0 | (seed >> 4), // Attribute marker + high nibble
         seed,

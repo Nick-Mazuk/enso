@@ -1,6 +1,6 @@
 //! Test that the same sequence of operations produces identical results.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, status_code};
+use crate::e2e_tests::helpers::{TestClient, new_attribute_id, new_entity_id, status_code};
 use crate::proto;
 
 #[allow(clippy::too_many_lines)]
@@ -8,9 +8,9 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     let test = TestClient::new();
     let mut responses = Vec::new();
 
-    let eid = entity_id(80);
-    let aid1 = attribute_id(81);
-    let aid2 = attribute_id(82);
+    let entity_id = new_entity_id(80);
+    let attribute_id_1 = new_attribute_id(81);
+    let attribute_id_2 = new_attribute_id(82);
 
     // Insert
     responses.push(test.handle_message(proto::ClientMessage {
@@ -18,8 +18,8 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid1.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id_1.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("first".to_string())),
                     }),
@@ -33,8 +33,8 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid2.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id_2.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(42.0)),
                     }),
@@ -56,7 +56,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
                 },
             ],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
                         label: Some("a".to_string()),
@@ -79,8 +79,8 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid1.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id_1.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("updated".to_string())),
                     }),
@@ -102,7 +102,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
                 },
             ],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
                         label: Some("a".to_string()),

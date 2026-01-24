@@ -1,14 +1,14 @@
 //! Test querying an empty database returns no results.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, is_ok};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
 use crate::proto;
 
 #[test]
 fn test_query_empty_database() {
     let test = TestClient::new();
 
-    let eid = entity_id(99);
-    let aid = attribute_id(99);
+    let entity_id = new_entity_id(99);
+    let attribute_id = new_attribute_id(99);
 
     let resp = test.handle_message(proto::ClientMessage {
         request_id: Some(1),
@@ -17,8 +17,10 @@ fn test_query_empty_database() {
                 label: Some("v".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.to_vec(),
+                )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("v".to_string()),

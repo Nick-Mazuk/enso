@@ -1,25 +1,25 @@
 //! Test inserting many triples sequentially.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, is_ok};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
 use crate::proto;
 
 #[test]
 fn test_many_sequential_inserts() {
     let test = TestClient::new();
 
-    let eid = entity_id(60);
+    let entity_id = new_entity_id(60);
 
     // Insert 100 different attributes
     for i in 0..100u8 {
-        let aid = attribute_id(i);
+        let attribute_id = new_attribute_id(i);
 
         let resp = test.handle_message(proto::ClientMessage {
             request_id: Some(u32::from(i) + 1),
             payload: Some(proto::client_message::Payload::TripleUpdateRequest(
                 proto::TripleUpdateRequest {
                     triples: vec![proto::Triple {
-                        entity_id: Some(eid.to_vec()),
-                        attribute_id: Some(aid.to_vec()),
+                        entity_id: Some(entity_id.to_vec()),
+                        attribute_id: Some(attribute_id.to_vec()),
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Number(f64::from(i))),
                         }),
@@ -43,7 +43,7 @@ fn test_many_sequential_inserts() {
                 },
             ],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
                         label: Some("a".to_string()),

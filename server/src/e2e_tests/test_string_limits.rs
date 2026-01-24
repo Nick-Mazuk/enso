@@ -1,7 +1,7 @@
 //! Test string length limits.
 
 use crate::e2e_tests::helpers::{
-    TestClient, attribute_id, entity_id, get_string_value, is_ok, status_code,
+    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id, status_code,
 };
 use crate::proto;
 
@@ -9,8 +9,8 @@ use crate::proto;
 fn test_max_length_string_value() {
     let test = TestClient::new();
 
-    let eid = entity_id(70);
-    let aid = attribute_id(70);
+    let entity_id = new_entity_id(70);
+    let attribute_id = new_attribute_id(70);
 
     // Create a string at max length (1024 chars)
     let max_string: String = "x".repeat(1024);
@@ -20,8 +20,8 @@ fn test_max_length_string_value() {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(max_string.clone())),
                     }),
@@ -39,8 +39,10 @@ fn test_max_length_string_value() {
                 label: Some("v".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.to_vec(),
+                )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("v".to_string()),
@@ -60,8 +62,8 @@ fn test_max_length_string_value() {
 fn test_string_too_long_rejected() {
     let test = TestClient::new();
 
-    let eid = entity_id(71);
-    let aid = attribute_id(71);
+    let entity_id = new_entity_id(71);
+    let attribute_id = new_attribute_id(71);
 
     // Create a string exceeding max length (1025 chars)
     let too_long_string: String = "y".repeat(1025);
@@ -71,8 +73,8 @@ fn test_string_too_long_rejected() {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(too_long_string)),
                     }),

@@ -1,16 +1,16 @@
 //! Test inserting multiple triples in a single request.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, is_ok};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
 use crate::proto;
 
 #[test]
 fn test_insert_multiple_triples_single_request() {
     let test = TestClient::new();
 
-    let eid = entity_id(10);
-    let aid1 = attribute_id(11);
-    let aid2 = attribute_id(12);
-    let aid3 = attribute_id(13);
+    let entity_id = new_entity_id(10);
+    let attribute_id_1 = new_attribute_id(11);
+    let attribute_id_2 = new_attribute_id(12);
+    let attribute_id_3 = new_attribute_id(13);
 
     // Insert multiple triples in one request
     let insert_resp = test.handle_message(proto::ClientMessage {
@@ -19,22 +19,22 @@ fn test_insert_multiple_triples_single_request() {
             proto::TripleUpdateRequest {
                 triples: vec![
                     proto::Triple {
-                        entity_id: Some(eid.to_vec()),
-                        attribute_id: Some(aid1.to_vec()),
+                        entity_id: Some(entity_id.to_vec()),
+                        attribute_id: Some(attribute_id_1.to_vec()),
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::String("name".to_string())),
                         }),
                     },
                     proto::Triple {
-                        entity_id: Some(eid.to_vec()),
-                        attribute_id: Some(aid2.to_vec()),
+                        entity_id: Some(entity_id.to_vec()),
+                        attribute_id: Some(attribute_id_2.to_vec()),
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Number(25.0)),
                         }),
                     },
                     proto::Triple {
-                        entity_id: Some(eid.to_vec()),
-                        attribute_id: Some(aid3.to_vec()),
+                        entity_id: Some(entity_id.to_vec()),
+                        attribute_id: Some(attribute_id_3.to_vec()),
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Boolean(false)),
                         }),
@@ -59,7 +59,7 @@ fn test_insert_multiple_triples_single_request() {
                 },
             ],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(eid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
                         label: Some("a".to_string()),

@@ -1,15 +1,15 @@
 //! Test querying a nonexistent entity returns no results.
 
-use crate::e2e_tests::helpers::{TestClient, attribute_id, entity_id, is_ok};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
 use crate::proto;
 
 #[test]
 fn test_query_nonexistent_entity() {
     let test = TestClient::new();
 
-    let eid = entity_id(40);
-    let other_eid = entity_id(99);
-    let aid = attribute_id(40);
+    let other_entity_id = new_entity_id(99);
+    let entity_id = new_entity_id(40);
+    let attribute_id = new_attribute_id(40);
 
     // Insert some data
     let resp = test.handle_message(proto::ClientMessage {
@@ -17,8 +17,8 @@ fn test_query_nonexistent_entity() {
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![proto::Triple {
-                    entity_id: Some(eid.to_vec()),
-                    attribute_id: Some(aid.to_vec()),
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("exists".to_string())),
                     }),
@@ -36,8 +36,12 @@ fn test_query_nonexistent_entity() {
                 label: Some("v".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
-                entity: Some(proto::query_pattern::Entity::EntityId(other_eid.to_vec())),
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(aid.to_vec())),
+                entity: Some(proto::query_pattern::Entity::EntityId(
+                    other_entity_id.to_vec(),
+                )),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(
+                    attribute_id.to_vec(),
+                )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("v".to_string()),
