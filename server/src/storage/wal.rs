@@ -247,9 +247,7 @@ impl LogRecordPayload {
     /// Returns `None` if this is not an Insert or Update payload.
     pub fn triple_record(&self) -> Result<Option<TripleRecord>, TripleError> {
         match self {
-            Self::Insert(bytes) | Self::Update(bytes) => {
-                Ok(Some(TripleRecord::from_bytes(bytes)?))
-            }
+            Self::Insert(bytes) | Self::Update(bytes) => Ok(Some(TripleRecord::from_bytes(bytes)?)),
             _ => Ok(None),
         }
     }
@@ -271,7 +269,12 @@ pub struct LogRecord {
 impl LogRecord {
     /// Create a new log record.
     #[must_use]
-    pub const fn new(txn_id: TxnId, lsn: Lsn, hlc: HlcTimestamp, payload: LogRecordPayload) -> Self {
+    pub const fn new(
+        txn_id: TxnId,
+        lsn: Lsn,
+        hlc: HlcTimestamp,
+        payload: LogRecordPayload,
+    ) -> Self {
         Self {
             txn_id,
             lsn,
@@ -328,8 +331,7 @@ impl LogRecord {
         }
 
         // Read record length
-        let record_len =
-            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        let record_len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
 
         if record_len < RECORD_HEADER_SIZE + CHECKSUM_SIZE || record_len > bytes.len() {
             return Err(WalError::CorruptRecord);
@@ -658,7 +660,8 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
             offset = next_offset;
 
             // Safety limit to prevent infinite loops
-            if records.len() > (self.capacity / (RECORD_HEADER_SIZE + CHECKSUM_SIZE) as u64) as usize
+            if records.len()
+                > (self.capacity / (RECORD_HEADER_SIZE + CHECKSUM_SIZE) as u64) as usize
             {
                 break;
             }
@@ -734,7 +737,8 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
             offset = next_offset;
 
             // Safety limit
-            if records.len() > (self.capacity / (RECORD_HEADER_SIZE + CHECKSUM_SIZE) as u64) as usize
+            if records.len()
+                > (self.capacity / (RECORD_HEADER_SIZE + CHECKSUM_SIZE) as u64) as usize
             {
                 break;
             }
@@ -888,12 +892,7 @@ mod tests {
 
     #[test]
     fn test_log_record_roundtrip_begin() {
-        let record = LogRecord::new(
-            1,
-            100,
-            HlcTimestamp::new(1000, 1),
-            LogRecordPayload::Begin,
-        );
+        let record = LogRecord::new(1, 100, HlcTimestamp::new(1000, 1), LogRecordPayload::Begin);
 
         let bytes = record.to_bytes();
         let (decoded, consumed) = LogRecord::from_bytes(&bytes).unwrap();
@@ -1001,12 +1000,7 @@ mod tests {
 
     #[test]
     fn test_checksum_validation() {
-        let record = LogRecord::new(
-            1,
-            100,
-            HlcTimestamp::new(1000, 0),
-            LogRecordPayload::Begin,
-        );
+        let record = LogRecord::new(1, 100, HlcTimestamp::new(1000, 0), LogRecordPayload::Begin);
 
         let mut bytes = record.to_bytes();
         // Corrupt a byte
@@ -1104,10 +1098,7 @@ mod tests {
             LogRecordPayload::delete([0u8; 16], [0u8; 16]).serialized_size(),
             32
         );
-        assert_eq!(
-            LogRecordPayload::checkpoint(0, 0).serialized_size(),
-            16
-        );
+        assert_eq!(LogRecordPayload::checkpoint(0, 0).serialized_size(), 16);
     }
 
     #[test]

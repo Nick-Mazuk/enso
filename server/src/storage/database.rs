@@ -31,13 +31,15 @@ use crate::storage::checkpoint::{
 };
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::hlc::{Clock, ClockError};
+use crate::storage::indexes::attribute::{AttributeIndex, AttributeIndexError};
+use crate::storage::indexes::entity_attribute::{EntityAttributeIndex, EntityAttributeIndexError};
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::superblock::HlcTimestamp;
 use crate::storage::triple::{
     AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
 };
-use crate::storage::wal::{LogRecordPayload, Lsn, WalError, DEFAULT_WAL_CAPACITY};
+use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
 
 /// Tracks active read-only snapshots for garbage collection.
 ///
@@ -309,25 +311,48 @@ impl Database {
             }
         }
 
-        // Second pass: remove the collected records
+        // Second pass: remove from all indexes
         let records_removed = to_remove.len() as u64;
         let mut bytes_freed = 0u64;
 
         if !to_remove.is_empty() {
-            let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
-
-            for (entity_id, attribute_id) in to_remove {
-                if let Some(removed) = index.remove(&entity_id, &attribute_id)? {
-                    bytes_freed += removed.serialized_size() as u64;
+            // Remove from primary index
+            let primary_root = {
+                let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
+                for (entity_id, attribute_id) in &to_remove {
+                    if let Some(removed) = index.remove(entity_id, attribute_id)? {
+                        bytes_freed += removed.serialized_size() as u64;
+                    }
                 }
-            }
+                index.root_page()
+            };
 
-            // Update root page if it changed
-            let new_root = index.root_page();
-            let file = index.file_mut();
-            file.superblock_mut().primary_index_root = new_root;
-            file.write_superblock()?;
-            file.sync()?;
+            // Remove from attribute index
+            let attribute_root = {
+                let attr_root_page = self.file.superblock().attribute_index_root;
+                let mut index = AttributeIndex::new(&mut self.file, attr_root_page)?;
+                for (entity_id, attribute_id) in &to_remove {
+                    index.remove(attribute_id, entity_id)?;
+                }
+                index.root_page()
+            };
+
+            // Remove from entity-attribute index
+            let entity_attr_root = {
+                let ea_root_page = self.file.superblock().entity_attribute_index_root;
+                let mut index = EntityAttributeIndex::new(&mut self.file, ea_root_page)?;
+                for (entity_id, attribute_id) in &to_remove {
+                    index.remove(entity_id, attribute_id)?;
+                }
+                index.root_page()
+            };
+
+            // Update root pages
+            self.file.superblock_mut().primary_index_root = primary_root;
+            self.file.superblock_mut().attribute_index_root = attribute_root;
+            self.file.superblock_mut().entity_attribute_index_root = entity_attr_root;
+            self.file.write_superblock()?;
+            self.file.sync()?;
         }
 
         Ok(GcResult {
@@ -502,7 +527,10 @@ impl<'a> WalTransaction<'a> {
     /// Scan all triples for an entity.
     ///
     /// Returns all triples for the given entity as a vector.
-    pub fn scan_entity(&mut self, entity_id: &EntityId) -> Result<Vec<TripleRecord>, DatabaseError> {
+    pub fn scan_entity(
+        &mut self,
+        entity_id: &EntityId,
+    ) -> Result<Vec<TripleRecord>, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(self.file, root_page)?;
         let mut scan = index.scan_entity(entity_id)?;
@@ -522,6 +550,46 @@ impl<'a> WalTransaction<'a> {
         let root_page = self.file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(self.file, root_page)?;
         Ok(index.count()?)
+    }
+
+    /// Get all entity IDs that have a given attribute.
+    ///
+    /// Uses the attribute index for efficient lookup.
+    /// Note: This reads from committed state, not buffered operations.
+    pub fn get_entities_with_attribute(
+        &mut self,
+        attribute_id: &AttributeId,
+    ) -> Result<Vec<EntityId>, DatabaseError> {
+        let root_page = self.file.superblock().attribute_index_root;
+        let mut index = AttributeIndex::new(self.file, root_page)?;
+        let mut scan = index.scan_attribute(attribute_id)?;
+
+        let mut entities = Vec::new();
+        while let Some(entity_id) = scan.next_entity()? {
+            entities.push(entity_id);
+        }
+
+        Ok(entities)
+    }
+
+    /// Get all attribute IDs for a given entity.
+    ///
+    /// Uses the entity-attribute index for efficient lookup.
+    /// Note: This reads from committed state, not buffered operations.
+    pub fn get_attributes_for_entity(
+        &mut self,
+        entity_id: &EntityId,
+    ) -> Result<Vec<AttributeId>, DatabaseError> {
+        let root_page = self.file.superblock().entity_attribute_index_root;
+        let mut index = EntityAttributeIndex::new(self.file, root_page)?;
+        let mut scan = index.scan_entity(entity_id)?;
+
+        let mut attributes = Vec::new();
+        while let Some(attribute_id) = scan.next_attribute()? {
+            attributes.push(attribute_id);
+        }
+
+        Ok(attributes)
     }
 
     /// Insert a triple.
@@ -643,8 +711,13 @@ impl<'a> WalTransaction<'a> {
                     attribute_id,
                     value,
                 } => {
-                    let record =
-                        TripleRecord::new(*entity_id, *attribute_id, txn_id, hlc, value.clone_value());
+                    let record = TripleRecord::new(
+                        *entity_id,
+                        *attribute_id,
+                        txn_id,
+                        hlc,
+                        value.clone_value(),
+                    );
                     let payload = LogRecordPayload::insert(&record);
                     total_bytes += payload.serialized_size() as u64;
                     wal.append(txn_id, hlc, payload)?;
@@ -654,8 +727,13 @@ impl<'a> WalTransaction<'a> {
                     attribute_id,
                     value,
                 } => {
-                    let record =
-                        TripleRecord::new(*entity_id, *attribute_id, txn_id, hlc, value.clone_value());
+                    let record = TripleRecord::new(
+                        *entity_id,
+                        *attribute_id,
+                        txn_id,
+                        hlc,
+                        value.clone_value(),
+                    );
                     let payload = LogRecordPayload::update(&record);
                     total_bytes += payload.serialized_size() as u64;
                     wal.append(txn_id, hlc, payload)?;
@@ -689,40 +767,108 @@ impl<'a> WalTransaction<'a> {
         Ok(total_bytes)
     }
 
-    /// Apply buffered operations to the index.
+    /// Apply buffered operations to all indexes.
     fn apply_to_index(&mut self, txn_id: TxnId, hlc: HlcTimestamp) -> Result<(), DatabaseError> {
-        let root_page = self.file.superblock().primary_index_root;
-        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        // Apply to primary index
+        let primary_root = {
+            let root_page = self.file.superblock().primary_index_root;
+            let mut index = PrimaryIndex::new(self.file, root_page)?;
 
-        for op in &self.operations {
-            match op {
-                BufferedOp::Insert {
-                    entity_id,
-                    attribute_id,
-                    value,
-                }
-                | BufferedOp::Update {
-                    entity_id,
-                    attribute_id,
-                    value,
-                } => {
-                    let record =
-                        TripleRecord::new(*entity_id, *attribute_id, txn_id, hlc, value.clone_value());
-                    index.insert(&record)?;
-                }
-                BufferedOp::Delete {
-                    entity_id,
-                    attribute_id,
-                } => {
-                    index.mark_deleted(entity_id, attribute_id, txn_id)?;
+            for op in &self.operations {
+                match op {
+                    BufferedOp::Insert {
+                        entity_id,
+                        attribute_id,
+                        value,
+                    }
+                    | BufferedOp::Update {
+                        entity_id,
+                        attribute_id,
+                        value,
+                    } => {
+                        let record = TripleRecord::new(
+                            *entity_id,
+                            *attribute_id,
+                            txn_id,
+                            hlc,
+                            value.clone_value(),
+                        );
+                        index.insert(&record)?;
+                    }
+                    BufferedOp::Delete {
+                        entity_id,
+                        attribute_id,
+                    } => {
+                        index.mark_deleted(entity_id, attribute_id, txn_id)?;
+                    }
                 }
             }
-        }
 
-        // Update root page in superblock
-        let new_root = index.root_page();
-        let file = index.file_mut();
-        file.superblock_mut().primary_index_root = new_root;
+            index.root_page()
+        };
+
+        // Apply to attribute index (attribute_id -> entity_id)
+        let attribute_root = {
+            let root_page = self.file.superblock().attribute_index_root;
+            let mut index = AttributeIndex::new(self.file, root_page)?;
+
+            for op in &self.operations {
+                match op {
+                    BufferedOp::Insert {
+                        entity_id,
+                        attribute_id,
+                        ..
+                    } => {
+                        index.insert(attribute_id, entity_id, txn_id)?;
+                    }
+                    BufferedOp::Update { .. } => {
+                        // Updates don't change the attribute->entity mapping
+                    }
+                    BufferedOp::Delete {
+                        entity_id,
+                        attribute_id,
+                    } => {
+                        index.mark_deleted(attribute_id, entity_id, txn_id)?;
+                    }
+                }
+            }
+
+            index.root_page()
+        };
+
+        // Apply to entity-attribute index (entity_id -> attribute_id)
+        let entity_attribute_root = {
+            let root_page = self.file.superblock().entity_attribute_index_root;
+            let mut index = EntityAttributeIndex::new(self.file, root_page)?;
+
+            for op in &self.operations {
+                match op {
+                    BufferedOp::Insert {
+                        entity_id,
+                        attribute_id,
+                        ..
+                    } => {
+                        index.insert(entity_id, attribute_id, txn_id)?;
+                    }
+                    BufferedOp::Update { .. } => {
+                        // Updates don't change the entity->attribute mapping
+                    }
+                    BufferedOp::Delete {
+                        entity_id,
+                        attribute_id,
+                    } => {
+                        index.mark_deleted(entity_id, attribute_id, txn_id)?;
+                    }
+                }
+            }
+
+            index.root_page()
+        };
+
+        // Update root pages in superblock
+        self.file.superblock_mut().primary_index_root = primary_root;
+        self.file.superblock_mut().attribute_index_root = attribute_root;
+        self.file.superblock_mut().entity_attribute_index_root = entity_attribute_root;
 
         Ok(())
     }
@@ -806,7 +952,10 @@ impl<'a> Snapshot<'a> {
     /// Scan all triples for an entity.
     ///
     /// Returns only triples visible at this snapshot.
-    pub fn scan_entity(&mut self, entity_id: &EntityId) -> Result<Vec<TripleRecord>, DatabaseError> {
+    pub fn scan_entity(
+        &mut self,
+        entity_id: &EntityId,
+    ) -> Result<Vec<TripleRecord>, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(self.file, root_page)?;
         let mut scan = index.scan_entity_visible(entity_id, self.txn_id)?;
@@ -851,6 +1000,46 @@ impl<'a> Snapshot<'a> {
         Ok(results)
     }
 
+    /// Get all entity IDs that have a given attribute.
+    ///
+    /// Uses the attribute index for efficient lookup.
+    /// Returns only entities visible at this snapshot.
+    pub fn get_entities_with_attribute(
+        &mut self,
+        attribute_id: &AttributeId,
+    ) -> Result<Vec<EntityId>, DatabaseError> {
+        let root_page = self.file.superblock().attribute_index_root;
+        let mut index = AttributeIndex::new(self.file, root_page)?;
+        let mut scan = index.scan_attribute_visible(attribute_id, self.txn_id)?;
+
+        let mut entities = Vec::new();
+        while let Some(entity_id) = scan.next_entity()? {
+            entities.push(entity_id);
+        }
+
+        Ok(entities)
+    }
+
+    /// Get all attribute IDs for a given entity.
+    ///
+    /// Uses the entity-attribute index for efficient lookup.
+    /// Returns only attributes visible at this snapshot.
+    pub fn get_attributes_for_entity(
+        &mut self,
+        entity_id: &EntityId,
+    ) -> Result<Vec<AttributeId>, DatabaseError> {
+        let root_page = self.file.superblock().entity_attribute_index_root;
+        let mut index = EntityAttributeIndex::new(self.file, root_page)?;
+        let mut scan = index.scan_entity_visible(entity_id, self.txn_id)?;
+
+        let mut attributes = Vec::new();
+        while let Some(attribute_id) = scan.next_attribute()? {
+            attributes.push(attribute_id);
+        }
+
+        Ok(attributes)
+    }
+
     /// Close the snapshot and return its transaction ID.
     ///
     /// After closing, call `db.release_snapshot(txn_id)` to allow
@@ -882,8 +1071,12 @@ pub enum DatabaseError {
     File(FileError),
     /// WAL error.
     Wal(WalError),
-    /// Index error.
+    /// Primary index error.
     Index(PrimaryIndexError),
+    /// Attribute index error.
+    AttributeIndex(AttributeIndexError),
+    /// Entity-attribute index error.
+    EntityAttributeIndex(EntityAttributeIndexError),
     /// Triple error.
     Triple(TripleError),
     /// Recovery error.
@@ -901,7 +1094,9 @@ impl std::fmt::Display for DatabaseError {
         match self {
             Self::File(e) => write!(f, "file error: {e}"),
             Self::Wal(e) => write!(f, "WAL error: {e}"),
-            Self::Index(e) => write!(f, "index error: {e}"),
+            Self::Index(e) => write!(f, "primary index error: {e}"),
+            Self::AttributeIndex(e) => write!(f, "attribute index error: {e}"),
+            Self::EntityAttributeIndex(e) => write!(f, "entity-attribute index error: {e}"),
             Self::Triple(e) => write!(f, "triple error: {e}"),
             Self::Recovery(e) => write!(f, "recovery error: {e}"),
             Self::Checkpoint(e) => write!(f, "checkpoint error: {e}"),
@@ -917,6 +1112,8 @@ impl std::error::Error for DatabaseError {
             Self::File(e) => Some(e),
             Self::Wal(e) => Some(e),
             Self::Index(e) => Some(e),
+            Self::AttributeIndex(e) => Some(e),
+            Self::EntityAttributeIndex(e) => Some(e),
             Self::Triple(e) => Some(e),
             Self::Recovery(e) => Some(e),
             Self::Checkpoint(e) => Some(e),
@@ -941,6 +1138,18 @@ impl From<WalError> for DatabaseError {
 impl From<PrimaryIndexError> for DatabaseError {
     fn from(e: PrimaryIndexError) -> Self {
         Self::Index(e)
+    }
+}
+
+impl From<AttributeIndexError> for DatabaseError {
+    fn from(e: AttributeIndexError) -> Self {
+        Self::AttributeIndex(e)
+    }
+}
+
+impl From<EntityAttributeIndexError> for DatabaseError {
+    fn from(e: EntityAttributeIndexError) -> Self {
+        Self::EntityAttributeIndex(e)
     }
 }
 
@@ -990,7 +1199,11 @@ mod tests {
 
             let entity_id = [1u8; 16];
             let attribute_id = [2u8; 16];
-            txn.insert(entity_id, attribute_id, TripleValue::String("hello".to_string()));
+            txn.insert(
+                entity_id,
+                attribute_id,
+                TripleValue::String("hello".to_string()),
+            );
             txn.commit().expect("commit");
         }
 
@@ -1043,7 +1256,11 @@ mod tests {
             let mut db = Database::create(&path).expect("create db");
             let mut txn = db.begin().expect("begin txn");
 
-            txn.insert([1u8; 16], [2u8; 16], TripleValue::String("aborted".to_string()));
+            txn.insert(
+                [1u8; 16],
+                [2u8; 16],
+                TripleValue::String("aborted".to_string()),
+            );
             txn.abort(); // Don't commit
         }
 
@@ -1175,7 +1392,11 @@ mod tests {
         {
             let mut db = Database::create(&path).expect("create db");
             let mut txn = db.begin().expect("begin");
-            txn.insert([1u8; 16], [1u8; 16], TripleValue::String("recovered".to_string()));
+            txn.insert(
+                [1u8; 16],
+                [1u8; 16],
+                TripleValue::String("recovered".to_string()),
+            );
             txn.commit().expect("commit");
             // Don't call close() - simulates crash after commit
         }
@@ -1295,7 +1516,11 @@ mod tests {
         // Insert data (txn_id = 1)
         {
             let mut txn = db.begin().expect("begin");
-            txn.insert([1u8; 16], [1u8; 16], TripleValue::String("hello".to_string()));
+            txn.insert(
+                [1u8; 16],
+                [1u8; 16],
+                TripleValue::String("hello".to_string()),
+            );
             txn.commit().expect("commit");
         }
 
@@ -1311,7 +1536,10 @@ mod tests {
             let mut snapshot = db.begin_readonly();
             assert_eq!(snapshot.snapshot_txn(), 2);
             let record = snapshot.get(&[1u8; 16], &[1u8; 16]).expect("get");
-            assert!(record.is_none(), "snapshot at delete txn should not see record");
+            assert!(
+                record.is_none(),
+                "snapshot at delete txn should not see record"
+            );
             snapshot.close()
         };
         db.release_snapshot(txn_id);
@@ -1478,7 +1706,7 @@ mod tests {
         // Run GC - should remove the deleted records
         let result = db.collect_garbage().expect("gc");
         assert_eq!(result.records_scanned, 10); // All records scanned
-        assert_eq!(result.records_removed, 5);  // 5 deleted records removed
+        assert_eq!(result.records_removed, 5); // 5 deleted records removed
         assert!(result.bytes_freed > 0);
         assert!(result.min_active_snapshot.is_none()); // No active snapshots
 
@@ -1664,5 +1892,180 @@ mod tests {
         // Active snapshot at or after deletion - not eligible
         assert!(!record.is_gc_eligible(Some(50))); // deleted_txn=50 is not < 50
         assert!(!record.is_gc_eligible(Some(40))); // deleted_txn=50 is not < 40
+    }
+
+    #[test]
+    fn test_secondary_index_entities_with_attribute() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        let attr1 = [1u8; 16];
+        let attr2 = [2u8; 16];
+
+        // Insert entities with various attributes
+        {
+            let mut txn = db.begin().expect("begin");
+            // Entity 1 has attr1 and attr2
+            txn.insert([1u8; 16], attr1, TripleValue::Number(1.0));
+            txn.insert([1u8; 16], attr2, TripleValue::Number(2.0));
+            // Entity 2 has only attr1
+            txn.insert([2u8; 16], attr1, TripleValue::Number(3.0));
+            // Entity 3 has only attr2
+            txn.insert([3u8; 16], attr2, TripleValue::Number(4.0));
+            txn.commit().expect("commit");
+        }
+
+        // Query entities with attr1 via transaction
+        {
+            let mut txn = db.begin().expect("begin");
+            let entities = txn.get_entities_with_attribute(&attr1).expect("query");
+            assert_eq!(entities.len(), 2);
+            assert!(entities.contains(&[1u8; 16]));
+            assert!(entities.contains(&[2u8; 16]));
+            txn.abort();
+        }
+
+        // Query entities with attr2 via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let entities = snapshot.get_entities_with_attribute(&attr2).expect("query");
+            assert_eq!(entities.len(), 2);
+            assert!(entities.contains(&[1u8; 16]));
+            assert!(entities.contains(&[3u8; 16]));
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_secondary_index_attributes_for_entity() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        let entity1 = [1u8; 16];
+        let entity2 = [2u8; 16];
+        let attr1 = [10u8; 16];
+        let attr2 = [20u8; 16];
+        let attr3 = [30u8; 16];
+
+        // Insert triples
+        {
+            let mut txn = db.begin().expect("begin");
+            // Entity 1 has 3 attributes
+            txn.insert(entity1, attr1, TripleValue::Number(1.0));
+            txn.insert(entity1, attr2, TripleValue::Number(2.0));
+            txn.insert(entity1, attr3, TripleValue::Number(3.0));
+            // Entity 2 has 1 attribute
+            txn.insert(entity2, attr1, TripleValue::Number(4.0));
+            txn.commit().expect("commit");
+        }
+
+        // Query attributes for entity1 via transaction
+        {
+            let mut txn = db.begin().expect("begin");
+            let attrs = txn.get_attributes_for_entity(&entity1).expect("query");
+            assert_eq!(attrs.len(), 3);
+            assert!(attrs.contains(&attr1));
+            assert!(attrs.contains(&attr2));
+            assert!(attrs.contains(&attr3));
+            txn.abort();
+        }
+
+        // Query attributes for entity2 via snapshot
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let attrs = snapshot.get_attributes_for_entity(&entity2).expect("query");
+            assert_eq!(attrs.len(), 1);
+            assert!(attrs.contains(&attr1));
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_secondary_index_visibility() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        let entity = [1u8; 16];
+        let attr1 = [10u8; 16];
+        let attr2 = [20u8; 16];
+
+        // Insert first attribute (txn_id = 1)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert(entity, attr1, TripleValue::Number(1.0));
+            txn.commit().expect("commit");
+        }
+
+        // Create snapshot at txn_id = 1
+        let snapshot1_txn = {
+            let snapshot = db.begin_readonly();
+            snapshot.close()
+        };
+
+        // Insert second attribute (txn_id = 2)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert(entity, attr2, TripleValue::Number(2.0));
+            txn.commit().expect("commit");
+        }
+
+        // Delete first attribute (txn_id = 3)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&entity, &attr1).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // Current snapshot should see only attr2
+        let current_txn = {
+            let mut snapshot = db.begin_readonly();
+            let attrs = snapshot.get_attributes_for_entity(&entity).expect("query");
+            assert_eq!(attrs.len(), 1);
+            assert!(attrs.contains(&attr2));
+            snapshot.close()
+        };
+        db.release_snapshot(current_txn);
+
+        // Release snapshot1
+        db.release_snapshot(snapshot1_txn);
+    }
+
+    #[test]
+    fn test_secondary_index_gc_integration() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        let entity = [1u8; 16];
+        let attr = [10u8; 16];
+
+        // Insert
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert(entity, attr, TripleValue::Number(1.0));
+            txn.commit().expect("commit");
+        }
+
+        // Delete
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&entity, &attr).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // GC should clean up from all indexes
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 1);
+
+        // Verify the record is gone from secondary indexes too
+        {
+            let mut txn = db.begin().expect("begin");
+            let entities = txn.get_entities_with_attribute(&attr).expect("query");
+            assert!(entities.is_empty());
+            let attrs = txn.get_attributes_for_entity(&entity).expect("query");
+            assert!(attrs.is_empty());
+            txn.abort();
+        }
     }
 }

@@ -25,16 +25,17 @@ mod offsets {
     pub const TOTAL_PAGE_COUNT: usize = 24;
     pub const PRIMARY_INDEX_ROOT: usize = 32;
     pub const ATTRIBUTE_INDEX_ROOT: usize = 40;
-    pub const FREE_LIST_HEAD: usize = 48;
-    pub const LAST_CHECKPOINT_LSN: usize = 56;
-    pub const LAST_CHECKPOINT_HLC: usize = 64;
-    pub const LAST_WAL_LSN: usize = 80;
-    pub const TXN_LOG_START: usize = 88;
-    pub const TXN_LOG_END: usize = 96;
-    pub const TXN_LOG_CAPACITY: usize = 104;
-    pub const ACTIVE_TXN_COUNT: usize = 112;
-    pub const NEXT_TXN_ID: usize = 120;
-    pub const SCHEMA_VERSION: usize = 128;
+    pub const ENTITY_ATTRIBUTE_INDEX_ROOT: usize = 48;
+    pub const FREE_LIST_HEAD: usize = 56;
+    pub const LAST_CHECKPOINT_LSN: usize = 64;
+    pub const LAST_CHECKPOINT_HLC: usize = 72;
+    pub const LAST_WAL_LSN: usize = 88;
+    pub const TXN_LOG_START: usize = 96;
+    pub const TXN_LOG_END: usize = 104;
+    pub const TXN_LOG_CAPACITY: usize = 112;
+    pub const ACTIVE_TXN_COUNT: usize = 120;
+    pub const NEXT_TXN_ID: usize = 128;
+    pub const SCHEMA_VERSION: usize = 136;
     // 136-1023: reserved
     // 1024-8191: checkpoint metadata
 }
@@ -109,6 +110,8 @@ pub struct Superblock {
     pub primary_index_root: PageId,
     /// Root page of the attribute index.
     pub attribute_index_root: PageId,
+    /// Root page of the entity-attribute index.
+    pub entity_attribute_index_root: PageId,
     /// Head of the free page list.
     pub free_list_head: PageId,
     /// Log sequence number of the last checkpoint.
@@ -142,6 +145,7 @@ impl Superblock {
             total_page_count: 1,
             primary_index_root: 0,
             attribute_index_root: 0,
+            entity_attribute_index_root: 0,
             free_list_head: 0,
             last_checkpoint_lsn: 0,
             last_checkpoint_hlc: HlcTimestamp {
@@ -171,6 +175,10 @@ impl Superblock {
         page.write_u64(offsets::TOTAL_PAGE_COUNT, self.total_page_count);
         page.write_u64(offsets::PRIMARY_INDEX_ROOT, self.primary_index_root);
         page.write_u64(offsets::ATTRIBUTE_INDEX_ROOT, self.attribute_index_root);
+        page.write_u64(
+            offsets::ENTITY_ATTRIBUTE_INDEX_ROOT,
+            self.entity_attribute_index_root,
+        );
         page.write_u64(offsets::FREE_LIST_HEAD, self.free_list_head);
         page.write_u64(offsets::LAST_CHECKPOINT_LSN, self.last_checkpoint_lsn);
         page.write_bytes(
@@ -219,6 +227,7 @@ impl Superblock {
             total_page_count: page.read_u64(offsets::TOTAL_PAGE_COUNT),
             primary_index_root: page.read_u64(offsets::PRIMARY_INDEX_ROOT),
             attribute_index_root: page.read_u64(offsets::ATTRIBUTE_INDEX_ROOT),
+            entity_attribute_index_root: page.read_u64(offsets::ENTITY_ATTRIBUTE_INDEX_ROOT),
             free_list_head: page.read_u64(offsets::FREE_LIST_HEAD),
             last_checkpoint_lsn: page.read_u64(offsets::LAST_CHECKPOINT_LSN),
             last_checkpoint_hlc: HlcTimestamp::from_bytes(&hlc_bytes),
@@ -279,6 +288,7 @@ mod tests {
         sb.total_page_count = 128;
         sb.primary_index_root = 5;
         sb.attribute_index_root = 10;
+        sb.entity_attribute_index_root = 12;
         sb.free_list_head = 15;
         sb.next_txn_id = 42;
         sb.last_checkpoint_hlc = HlcTimestamp {
@@ -296,6 +306,7 @@ mod tests {
         assert_eq!(restored.total_page_count, 128);
         assert_eq!(restored.primary_index_root, 5);
         assert_eq!(restored.attribute_index_root, 10);
+        assert_eq!(restored.entity_attribute_index_root, 12);
         assert_eq!(restored.free_list_head, 15);
         assert_eq!(restored.next_txn_id, 42);
         assert_eq!(restored.last_checkpoint_hlc.physical_time, 1_234_567_890);

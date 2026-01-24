@@ -336,7 +336,7 @@ impl From<TripleError> for RecoveryError {
 mod tests {
     use super::*;
     use crate::storage::triple::TripleValue;
-    use crate::storage::wal::{LogRecordPayload, DEFAULT_WAL_CAPACITY};
+    use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload};
     use tempfile::tempdir;
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -494,41 +494,26 @@ mod tests {
             let mut wal = file.wal().expect("get wal");
 
             // Transaction 1 - committed
-            wal.append(1, hlc, LogRecordPayload::Begin).expect("begin 1");
-            let triple1 = TripleRecord::new(
-                [1u8; 16],
-                [1u8; 16],
-                1,
-                hlc,
-                TripleValue::Number(1.0),
-            );
+            wal.append(1, hlc, LogRecordPayload::Begin)
+                .expect("begin 1");
+            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
             wal.append(1, hlc, LogRecordPayload::insert(&triple1))
                 .expect("insert 1");
             wal.append(1, hlc, LogRecordPayload::Commit)
                 .expect("commit 1");
 
             // Transaction 2 - uncommitted
-            wal.append(2, hlc, LogRecordPayload::Begin).expect("begin 2");
-            let triple2 = TripleRecord::new(
-                [2u8; 16],
-                [2u8; 16],
-                2,
-                hlc,
-                TripleValue::Number(2.0),
-            );
+            wal.append(2, hlc, LogRecordPayload::Begin)
+                .expect("begin 2");
+            let triple2 = TripleRecord::new([2u8; 16], [2u8; 16], 2, hlc, TripleValue::Number(2.0));
             wal.append(2, hlc, LogRecordPayload::insert(&triple2))
                 .expect("insert 2");
             // NO COMMIT for txn 2
 
             // Transaction 3 - committed
-            wal.append(3, hlc, LogRecordPayload::Begin).expect("begin 3");
-            let triple3 = TripleRecord::new(
-                [3u8; 16],
-                [3u8; 16],
-                3,
-                hlc,
-                TripleValue::Number(3.0),
-            );
+            wal.append(3, hlc, LogRecordPayload::Begin)
+                .expect("begin 3");
+            let triple3 = TripleRecord::new([3u8; 16], [3u8; 16], 3, hlc, TripleValue::Number(3.0));
             wal.append(3, hlc, LogRecordPayload::insert(&triple3))
                 .expect("insert 3");
             wal.append(3, hlc, LogRecordPayload::Commit)
@@ -666,13 +651,7 @@ mod tests {
             let mut wal = file.wal().expect("get wal");
             wal.append(100, hlc, LogRecordPayload::Begin)
                 .expect("begin");
-            let triple = TripleRecord::new(
-                [1u8; 16],
-                [1u8; 16],
-                100,
-                hlc,
-                TripleValue::Null,
-            );
+            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 100, hlc, TripleValue::Null);
             wal.append(100, hlc, LogRecordPayload::insert(&triple))
                 .expect("insert");
             wal.append(100, hlc, LogRecordPayload::Commit)

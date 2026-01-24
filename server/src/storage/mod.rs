@@ -46,16 +46,16 @@ pub mod wal;
 
 pub use allocator::PageAllocator;
 pub use checkpoint::{
-    CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState,
-    force_checkpoint, maybe_checkpoint, perform_checkpoint,
+    CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
+    maybe_checkpoint, perform_checkpoint,
 };
 pub use database::{Database, DatabaseError, GcResult, Snapshot};
 pub use file::{DatabaseFile, FileError};
+pub use hlc::{Clock as HlcClock, ClockError as HlcClockError};
 pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
 pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
-pub use hlc::{Clock as HlcClock, ClockError as HlcClockError};
+pub use recovery::{RecoveryError, RecoveryResult, needs_recovery, recover};
 pub use superblock::{HlcTimestamp, Superblock, SuperblockError};
 pub use transaction::{Transaction, TransactionError};
 pub use triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};
-pub use recovery::{RecoveryError, RecoveryResult, needs_recovery, recover};
 pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};

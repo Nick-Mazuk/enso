@@ -153,24 +153,23 @@ impl Clock {
 
         let new_physical = now.max(self.last.physical_time).max(remote.physical_time);
 
-        let new_logical = if new_physical == self.last.physical_time
-            && new_physical == remote.physical_time
-        {
-            // All three are equal, take max logical + 1
-            self.last
-                .logical_counter
-                .max(remote.logical_counter)
-                .saturating_add(1)
-        } else if new_physical == self.last.physical_time {
-            // Local physical time is max, increment local logical
-            self.last.logical_counter.saturating_add(1)
-        } else if new_physical == remote.physical_time {
-            // Remote physical time is max, increment remote logical
-            remote.logical_counter.saturating_add(1)
-        } else {
-            // Wall clock is max, reset logical
-            0
-        };
+        let new_logical =
+            if new_physical == self.last.physical_time && new_physical == remote.physical_time {
+                // All three are equal, take max logical + 1
+                self.last
+                    .logical_counter
+                    .max(remote.logical_counter)
+                    .saturating_add(1)
+            } else if new_physical == self.last.physical_time {
+                // Local physical time is max, increment local logical
+                self.last.logical_counter.saturating_add(1)
+            } else if new_physical == remote.physical_time {
+                // Remote physical time is max, increment remote logical
+                remote.logical_counter.saturating_add(1)
+            } else {
+                // Wall clock is max, reset logical
+                0
+            };
 
         self.last = HlcTimestamp {
             physical_time: new_physical,

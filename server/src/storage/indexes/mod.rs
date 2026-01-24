@@ -5,4 +5,6 @@
 //! - Attribute index: `attribute_id` -> [(`entity_id`, pointer)] (Phase 4)
 //! - Value indexes: (`attribute_id`, value) -> [`entity_id`] (Phase 4)
 
+pub mod attribute;
+pub mod entity_attribute;
 pub mod primary;

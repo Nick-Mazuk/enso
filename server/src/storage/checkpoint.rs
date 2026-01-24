@@ -175,8 +175,7 @@ impl CheckpointState {
     #[must_use]
     pub const fn should_checkpoint(&self) -> bool {
         // Check transaction threshold
-        if self.config.txn_threshold > 0
-            && self.txns_since_checkpoint >= self.config.txn_threshold
+        if self.config.txn_threshold > 0 && self.txns_since_checkpoint >= self.config.txn_threshold
         {
             return true;
         }
@@ -394,11 +393,8 @@ mod tests {
 
     #[test]
     fn test_checkpoint_state_dirty_pages() {
-        let mut state = CheckpointState::new(
-            CheckpointConfig::default(),
-            0,
-            HlcTimestamp::new(0, 0),
-        );
+        let mut state =
+            CheckpointState::new(CheckpointConfig::default(), 0, HlcTimestamp::new(0, 0));
 
         assert_eq!(state.dirty_page_count(), 0);
 
@@ -417,11 +413,8 @@ mod tests {
 
     #[test]
     fn test_checkpoint_state_counters() {
-        let mut state = CheckpointState::new(
-            CheckpointConfig::default(),
-            0,
-            HlcTimestamp::new(0, 0),
-        );
+        let mut state =
+            CheckpointState::new(CheckpointConfig::default(), 0, HlcTimestamp::new(0, 0));
 
         assert_eq!(state.txns_since_checkpoint(), 0);
         assert_eq!(state.bytes_since_checkpoint(), 0);
@@ -571,8 +564,8 @@ mod tests {
             let config = CheckpointConfig::default();
             let mut state = CheckpointState::from_database(&file, config);
 
-            let result = force_checkpoint(&mut file, &mut state, checkpoint_hlc)
-                .expect("checkpoint");
+            let result =
+                force_checkpoint(&mut file, &mut state, checkpoint_hlc).expect("checkpoint");
             checkpoint_lsn = result.checkpoint_lsn;
         }
 
