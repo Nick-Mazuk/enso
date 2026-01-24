@@ -12,22 +12,24 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use storage::{DatabaseFile, Transaction, TripleValue};
+//! ```no_run
+//! use server::storage::{DatabaseFile, Transaction, TripleValue};
+//! use std::path::Path;
 //!
 //! // Create a new database
-//! let mut db = DatabaseFile::create(path)?;
+//! let path = Path::new("/tmp/my_database");
+//! let mut db = DatabaseFile::create(path).unwrap();
 //!
 //! // Begin a transaction
-//! let mut txn = Transaction::begin(&mut db)?;
+//! let mut txn = Transaction::begin(&mut db).unwrap();
 //!
 //! // Insert a triple
 //! let entity_id = [1u8; 16];
 //! let attribute_id = [2u8; 16];
-//! txn.insert(entity_id, attribute_id, TripleValue::String("hello".into()))?;
+//! txn.insert(entity_id, attribute_id, TripleValue::String("hello".into())).unwrap();
 //!
 //! // Commit with durability
-//! txn.commit()?;
+//! txn.commit().unwrap();
 //! ```
 
 mod allocator;

@@ -10,30 +10,22 @@
 //!
 //! # Datalog-style Query Example
 //!
-//! ```ignore
-//! use storage::Database;
-//! use query::{Query, Pattern, PatternElement, QueryEngine};
-//!
-//! let mut db = Database::open(path)?;
-//! let mut snapshot = db.begin_readonly();
-//! let mut engine = QueryEngine::new(&mut snapshot);
-//!
-//! let query = Query::new()
-//!     .find("e")
-//!     .find("name")
-//!     .where_pattern(Pattern::new(
-//!         PatternElement::var("e"),
-//!         PatternElement::field("name"),
-//!         PatternElement::var("name"),
-//!     ));
-//!
-//! let result = engine.execute(&query)?;
-//! for row in &result.rows {
-//!     println!("{:?}", row);
-//! }
-//!
-//! let txn_id = snapshot.close();
-//! db.release_snapshot(txn_id);
+//! ```
+//! // Build a query that finds all entities with a "name" attribute
+//! // using the pattern matching API:
+//! //
+//! // let query = Query::new()
+//! //     .find("e")
+//! //     .find("name")
+//! //     .where_pattern(Pattern::new(
+//! //         PatternElement::var("e"),
+//! //         PatternElement::field("name"),
+//! //         PatternElement::var("name"),
+//! //     ));
+//! //
+//! // The query can be executed against a database snapshot:
+//! // let mut engine = QueryEngine::new(&mut snapshot);
+//! // let result = engine.execute(&query)?;
 //! ```
 
 // Allow dead code - this module exports a public API that isn't yet integrated

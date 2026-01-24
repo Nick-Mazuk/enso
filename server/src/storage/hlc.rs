@@ -7,18 +7,22 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use storage::hlc::Clock;
-//! use storage::time::SystemTimeSource;
+//! ```
+//! use server::storage::{HlcClock, SystemTimeSource, HlcTimestamp};
 //!
 //! // Create a clock for node 1 with system time
-//! let mut clock = Clock::new(1, SystemTimeSource);
+//! let mut clock = HlcClock::new(1, SystemTimeSource);
 //!
 //! // Get timestamp for a local event
 //! let ts1 = clock.tick();
 //!
+//! // Timestamps are monotonically increasing
+//! let ts2 = clock.tick();
+//! assert!(ts2.physical_time >= ts1.physical_time);
+//!
 //! // Receive a timestamp from another node and merge
-//! let ts2 = clock.receive(remote_timestamp);
+//! let remote_timestamp = HlcTimestamp::new(1000, 0);
+//! let ts3 = clock.receive(remote_timestamp).unwrap();
 //! ```
 //!
 //! # Guarantees

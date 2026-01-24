@@ -7,19 +7,22 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use storage::Database;
+//! ```no_run
+//! use server::storage::Database;
+//! use std::path::Path;
 //!
 //! // Create a new database (initializes WAL)
-//! let mut db = Database::create(path)?;
-//!
-//! // Or open existing (runs recovery if needed)
-//! let mut db = Database::open(path)?;
+//! let path = Path::new("/tmp/my_database");
+//! let mut db = Database::create(path).unwrap();
 //!
 //! // Begin a transaction
-//! let mut txn = db.begin()?;
-//! txn.insert(entity_id, attr_id, value)?;
-//! txn.commit()?;  // Writes to WAL, then applies to index
+//! let entity_id = [1u8; 16];
+//! let attr_id = [2u8; 16];
+//! let value = server::storage::TripleValue::String("hello".to_string());
+//!
+//! let mut txn = db.begin().unwrap();
+//! txn.insert(entity_id, attr_id, value); // Buffers the insert
+//! txn.commit().unwrap();  // Writes to WAL, then applies to index
 //! ```
 
 use std::collections::BTreeSet;
@@ -233,9 +236,17 @@ impl Database {
     ///
     /// # Usage
     ///
-    /// ```ignore
+    /// ```no_run
+    /// use server::storage::Database;
+    /// use std::path::Path;
+    ///
+    /// let path = Path::new("/tmp/my_database");
+    /// let mut db = Database::create(path).unwrap();
+    ///
     /// let mut snapshot = db.begin_readonly();
-    /// let record = snapshot.get(&entity, &attr)?;
+    /// let entity = [1u8; 16];
+    /// let attr = [2u8; 16];
+    /// let record = snapshot.get(&entity, &attr);
     /// let txn_id = snapshot.close(); // Returns the snapshot's txn_id
     /// db.release_snapshot(txn_id);   // Allow garbage collection
     /// ```

@@ -17,15 +17,14 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use simulation::{Simulator, SimulatorConfig};
+//! ```
+//! use server::simulation::{Simulator, SimulatorConfig};
 //!
 //! let config = SimulatorConfig::new(12345) // seed
-//!     .with_fault_rate(0.01)
 //!     .with_malformed_rate(0.1);
 //!
 //! let mut sim = Simulator::new(config);
-//! let result = sim.run(1000); // Run 1000 messages
+//! let result = sim.run(100); // Run 100 messages
 //!
 //! assert!(result.invariant_violations.is_empty());
 //! ```

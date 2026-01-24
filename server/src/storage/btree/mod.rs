@@ -14,25 +14,17 @@
 //!
 //! # Usage
 //!
-//! ```ignore
-//! use storage::btree::{BTree, make_key};
+//! ```
+//! use server::storage::btree::{make_key, KEY_SIZE};
 //!
-//! let mut tree = BTree::new(&mut file, 0)?; // 0 = create new tree
-//!
-//! // Insert
+//! // Keys are 32 bytes: entity_id (16) + attribute_id (16)
+//! let entity_id = [1u8; 16];
+//! let attribute_id = [2u8; 16];
 //! let key = make_key(&entity_id, &attribute_id);
-//! tree.insert(key, value)?;
 //!
-//! // Lookup
-//! if let Some(value) = tree.get(&key)? {
-//!     // ...
-//! }
-//!
-//! // Iterate
-//! let mut iter = tree.iter()?;
-//! while let Some((key, value)) = iter.next_entry()? {
-//!     // ...
-//! }
+//! assert_eq!(key.len(), KEY_SIZE);
+//! assert_eq!(&key[..16], &entity_id);
+//! assert_eq!(&key[16..], &attribute_id);
 //! ```
 
 mod node;
