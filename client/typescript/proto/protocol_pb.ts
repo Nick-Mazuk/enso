@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file protocol.proto.
  */
 export const file_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wimgEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAYgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAogBARIQCgZzdHJpbmcYAyABKAlIABIQCgZudW1iZXIYBCABKAFIABIRCgdib29sZWFuGAUgASgISABCBwoFdmFsdWVCDAoKX2VudGl0eV9pZEIPCg1fYXR0cmlidXRlX2lkIoIBCg1DbGllbnRNZXNzYWdlEhcKCnJlcXVlc3RfaWQYASABKA1IAYgBARI+ChV0cmlwbGVfdXBkYXRlX3JlcXVlc3QYAiABKAsyHS5wcm90b2NvbC5UcmlwbGVVcGRhdGVSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlImwKDlNlcnZlclJlc3BvbnNlEhcKCnJlcXVlc3RfaWQYASABKA1IAIgBARInCgZzdGF0dXMYAiABKAsyEi5nb29nbGUucnBjLlN0YXR1c0gBiAEBQg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
+  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wigAEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZCJNCgtUcmlwbGVWYWx1ZRIQCgZzdHJpbmcYAyABKAlIABIQCgZudW1iZXIYBCABKAFIABIRCgdib29sZWFuGAUgASgISABCBwoFdmFsdWUiqwEKDUNsaWVudE1lc3NhZ2USFwoKcmVxdWVzdF9pZBgBIAEoDUgBiAEBEj4KFXRyaXBsZV91cGRhdGVfcmVxdWVzdBgCIAEoCzIdLnByb3RvY29sLlRyaXBsZVVwZGF0ZVJlcXVlc3RIABInCgVxdWVyeRgDIAEoCzIWLnByb3RvY29sLlF1ZXJ5UmVxdWVzdEgAQgkKB3BheWxvYWRCDQoLX3JlcXVlc3RfaWQiuAEKDFF1ZXJ5UmVxdWVzdBIsCgRmaW5kGAEgAygLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGUSJQoFd2hlcmUYAiADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKAoIb3B0aW9uYWwYAyADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKQoJd2hlcmVfbm90GAQgAygLMhYucHJvdG9jb2wuUXVlcnlQYXR0ZXJuIrwCCgxRdWVyeVBhdHRlcm4SEwoJZW50aXR5X2lkGAEgASgMSAASOQoPZW50aXR5X3ZhcmlhYmxlGAIgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIABIWCgxhdHRyaWJ1dGVfaWQYAyABKAxIARI8ChJhdHRyaWJ1dGVfdmFyaWFibGUYBCABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgBEiYKBXZhbHVlGAUgASgLMhUucHJvdG9jb2wuVHJpcGxlVmFsdWVIAhI4Cg52YWx1ZV92YXJpYWJsZRgGIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAJCCAoGZW50aXR5QgsKCWF0dHJpYnV0ZUINCgt2YWx1ZV9ncm91cCI0ChRRdWVyeVBhdHRlcm5WYXJpYWJsZRISCgVsYWJlbBgBIAEoCUgAiAEBQggKBl9sYWJlbCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlIm4KEFF1ZXJ5UmVzdWx0VmFsdWUSDAoCaWQYASABKAlIABItCgx0cmlwbGVfdmFsdWUYAiABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgAEhQKDGlzX3VuZGVmaW5lZBgDIAEoCEIHCgV2YWx1ZSI8Cg5RdWVyeVJlc3VsdFJvdxIqCgZ2YWx1ZXMYASADKAsyGi5wcm90b2NvbC5RdWVyeVJlc3VsdFZhbHVlIsgBCg5TZXJ2ZXJSZXNwb25zZRIXCgpyZXF1ZXN0X2lkGAEgASgNSACIAQESJwoGc3RhdHVzGAIgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXNIAYgBARIhCgd0cmlwbGVzGAMgAygLMhAucHJvdG9jb2wuVHJpcGxlEg8KB2NvbHVtbnMYBCADKAkSJgoEcm93cxgFIAMoCzIYLnByb3RvY29sLlF1ZXJ5UmVzdWx0Um93Qg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
 
 /**
  * @generated from message protocol.Triple
@@ -31,7 +31,24 @@ export type Triple = Message<"protocol.Triple"> & {
   attributeId?: Uint8Array;
 
   /**
-   * @generated from oneof protocol.Triple.value
+   * @generated from field: protocol.TripleValue value = 3;
+   */
+  value?: TripleValue;
+};
+
+/**
+ * Describes the message protocol.Triple.
+ * Use `create(TripleSchema)` to create a new message.
+ */
+export const TripleSchema: GenMessage<Triple> = /*@__PURE__*/
+  messageDesc(file_protocol, 0);
+
+/**
+ * @generated from message protocol.TripleValue
+ */
+export type TripleValue = Message<"protocol.TripleValue"> & {
+  /**
+   * @generated from oneof protocol.TripleValue.value
    */
   value: {
     /**
@@ -55,11 +72,11 @@ export type Triple = Message<"protocol.Triple"> & {
 };
 
 /**
- * Describes the message protocol.Triple.
- * Use `create(TripleSchema)` to create a new message.
+ * Describes the message protocol.TripleValue.
+ * Use `create(TripleValueSchema)` to create a new message.
  */
-export const TripleSchema: GenMessage<Triple> = /*@__PURE__*/
-  messageDesc(file_protocol, 0);
+export const TripleValueSchema: GenMessage<TripleValue> = /*@__PURE__*/
+  messageDesc(file_protocol, 1);
 
 /**
  * @generated from message protocol.ClientMessage
@@ -78,14 +95,19 @@ export type ClientMessage = Message<"protocol.ClientMessage"> & {
    */
   payload: {
     /**
-     * QueryRequest query = 2; // One-time query
-     * SubscribeRequest subscribe = 3; // Reactive subscription
-     * uint32 unsubscribe_id = 4; // subscription_id to stop
-     *
      * @generated from field: protocol.TripleUpdateRequest triple_update_request = 2;
      */
     value: TripleUpdateRequest;
     case: "tripleUpdateRequest";
+  } | {
+    /**
+     * SubscribeRequest subscribe = 3; // Reactive subscription
+     * uint32 unsubscribe_id = 4; // subscription_id to stop
+     *
+     * @generated from field: protocol.QueryRequest query = 3;
+     */
+    value: QueryRequest;
+    case: "query";
   } | { case: undefined; value?: undefined };
 };
 
@@ -94,7 +116,127 @@ export type ClientMessage = Message<"protocol.ClientMessage"> & {
  * Use `create(ClientMessageSchema)` to create a new message.
  */
 export const ClientMessageSchema: GenMessage<ClientMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 1);
+  messageDesc(file_protocol, 2);
+
+/**
+ * @generated from message protocol.QueryRequest
+ */
+export type QueryRequest = Message<"protocol.QueryRequest"> & {
+  /**
+   * These are the fields to return
+   *
+   * @generated from field: repeated protocol.QueryPatternVariable find = 1;
+   */
+  find: QueryPatternVariable[];
+
+  /**
+   * The patterns to match against
+   *
+   * @generated from field: repeated protocol.QueryPattern where = 2;
+   */
+  where: QueryPattern[];
+
+  /**
+   * Optional patterns (left join semantics)
+   *
+   * @generated from field: repeated protocol.QueryPattern optional = 3;
+   */
+  optional: QueryPattern[];
+
+  /**
+   * Negation patterns (anti-join)
+   *
+   * @generated from field: repeated protocol.QueryPattern where_not = 4;
+   */
+  whereNot: QueryPattern[];
+};
+
+/**
+ * Describes the message protocol.QueryRequest.
+ * Use `create(QueryRequestSchema)` to create a new message.
+ */
+export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
+  messageDesc(file_protocol, 3);
+
+/**
+ * @generated from message protocol.QueryPattern
+ */
+export type QueryPattern = Message<"protocol.QueryPattern"> & {
+  /**
+   * @generated from oneof protocol.QueryPattern.entity
+   */
+  entity: {
+    /**
+     * @generated from field: bytes entity_id = 1;
+     */
+    value: Uint8Array;
+    case: "entityId";
+  } | {
+    /**
+     * @generated from field: protocol.QueryPatternVariable entity_variable = 2;
+     */
+    value: QueryPatternVariable;
+    case: "entityVariable";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * @generated from oneof protocol.QueryPattern.attribute
+   */
+  attribute: {
+    /**
+     * @generated from field: bytes attribute_id = 3;
+     */
+    value: Uint8Array;
+    case: "attributeId";
+  } | {
+    /**
+     * @generated from field: protocol.QueryPatternVariable attribute_variable = 4;
+     */
+    value: QueryPatternVariable;
+    case: "attributeVariable";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * @generated from oneof protocol.QueryPattern.value_group
+   */
+  valueGroup: {
+    /**
+     * @generated from field: protocol.TripleValue value = 5;
+     */
+    value: TripleValue;
+    case: "value";
+  } | {
+    /**
+     * @generated from field: protocol.QueryPatternVariable value_variable = 6;
+     */
+    value: QueryPatternVariable;
+    case: "valueVariable";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message protocol.QueryPattern.
+ * Use `create(QueryPatternSchema)` to create a new message.
+ */
+export const QueryPatternSchema: GenMessage<QueryPattern> = /*@__PURE__*/
+  messageDesc(file_protocol, 4);
+
+/**
+ * @generated from message protocol.QueryPatternVariable
+ */
+export type QueryPatternVariable = Message<"protocol.QueryPatternVariable"> & {
+  /**
+   * @generated from field: optional string label = 1;
+   */
+  label?: string;
+};
+
+/**
+ * Describes the message protocol.QueryPatternVariable.
+ * Use `create(QueryPatternVariableSchema)` to create a new message.
+ */
+export const QueryPatternVariableSchema: GenMessage<QueryPatternVariable> = /*@__PURE__*/
+  messageDesc(file_protocol, 5);
 
 /**
  * @generated from message protocol.TripleUpdateRequest
@@ -111,7 +253,7 @@ export type TripleUpdateRequest = Message<"protocol.TripleUpdateRequest"> & {
  * Use `create(TripleUpdateRequestSchema)` to create a new message.
  */
 export const TripleUpdateRequestSchema: GenMessage<TripleUpdateRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 2);
+  messageDesc(file_protocol, 6);
 
 /**
  * @generated from message protocol.ServerMessage
@@ -134,7 +276,68 @@ export type ServerMessage = Message<"protocol.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 3);
+  messageDesc(file_protocol, 7);
+
+/**
+ * A single value in a query result row
+ *
+ * @generated from message protocol.QueryResultValue
+ */
+export type QueryResultValue = Message<"protocol.QueryResultValue"> & {
+  /**
+   * @generated from oneof protocol.QueryResultValue.value
+   */
+  value: {
+    /**
+     * Entity or Field ID as string
+     *
+     * @generated from field: string id = 1;
+     */
+    value: string;
+    case: "id";
+  } | {
+    /**
+     * Actual value (string, number, boolean)
+     *
+     * @generated from field: protocol.TripleValue triple_value = 2;
+     */
+    value: TripleValue;
+    case: "tripleValue";
+  } | { case: undefined; value?: undefined };
+
+  /**
+   * True if value is missing (for optional patterns)
+   *
+   * @generated from field: bool is_undefined = 3;
+   */
+  isUndefined: boolean;
+};
+
+/**
+ * Describes the message protocol.QueryResultValue.
+ * Use `create(QueryResultValueSchema)` to create a new message.
+ */
+export const QueryResultValueSchema: GenMessage<QueryResultValue> = /*@__PURE__*/
+  messageDesc(file_protocol, 8);
+
+/**
+ * A row of query results
+ *
+ * @generated from message protocol.QueryResultRow
+ */
+export type QueryResultRow = Message<"protocol.QueryResultRow"> & {
+  /**
+   * @generated from field: repeated protocol.QueryResultValue values = 1;
+   */
+  values: QueryResultValue[];
+};
+
+/**
+ * Describes the message protocol.QueryResultRow.
+ * Use `create(QueryResultRowSchema)` to create a new message.
+ */
+export const QueryResultRowSchema: GenMessage<QueryResultRow> = /*@__PURE__*/
+  messageDesc(file_protocol, 9);
 
 /**
  * @generated from message protocol.ServerResponse
@@ -149,6 +352,25 @@ export type ServerResponse = Message<"protocol.ServerResponse"> & {
    * @generated from field: optional google.rpc.Status status = 2;
    */
   status?: Status;
+
+  /**
+   * Query results (populated for QueryRequest responses)
+   *
+   * @generated from field: repeated protocol.Triple triples = 3;
+   */
+  triples: Triple[];
+
+  /**
+   * Columnar query results
+   *
+   * @generated from field: repeated string columns = 4;
+   */
+  columns: string[];
+
+  /**
+   * @generated from field: repeated protocol.QueryResultRow rows = 5;
+   */
+  rows: QueryResultRow[];
 };
 
 /**
@@ -156,5 +378,5 @@ export type ServerResponse = Message<"protocol.ServerResponse"> & {
  * Use `create(ServerResponseSchema)` to create a new message.
  */
 export const ServerResponseSchema: GenMessage<ServerResponse> = /*@__PURE__*/
-  messageDesc(file_protocol, 4);
+  messageDesc(file_protocol, 10);
 
