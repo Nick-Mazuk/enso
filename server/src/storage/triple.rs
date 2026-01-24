@@ -214,6 +214,33 @@ impl TripleRecord {
             && (self.deleted_txn == 0 || self.deleted_txn > snapshot_txn)
     }
 
+    /// Check if this triple is eligible for garbage collection.
+    ///
+    /// A triple can be garbage collected if:
+    /// - It has been deleted (`deleted_txn` != 0)
+    /// - No active snapshot can see it (`deleted_txn` < `min_active_txn`)
+    ///
+    /// If `min_active_txn` is None (no active snapshots), any deleted record
+    /// can be garbage collected.
+    #[must_use]
+    pub const fn is_gc_eligible(&self, min_active_txn: Option<TxnId>) -> bool {
+        if self.deleted_txn == 0 {
+            // Not deleted, cannot GC
+            return false;
+        }
+
+        match min_active_txn {
+            Some(min_txn) => {
+                // Can GC if deleted before the oldest active snapshot
+                self.deleted_txn < min_txn
+            }
+            None => {
+                // No active snapshots, any deleted record can be GC'd
+                true
+            }
+        }
+    }
+
     /// Calculate the serialized size of this record.
     #[must_use]
     pub fn serialized_size(&self) -> usize {

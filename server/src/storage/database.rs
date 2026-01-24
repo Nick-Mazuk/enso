@@ -272,6 +272,72 @@ impl Database {
         self.active_snapshots.count()
     }
 
+    /// Run garbage collection to remove deleted records.
+    ///
+    /// This physically removes records that:
+    /// - Have been deleted (`deleted_txn` != 0)
+    /// - Are no longer visible to any active snapshot (`deleted_txn` < `min_active_snapshot`)
+    ///
+    /// If there are no active snapshots, all deleted records are eligible for GC.
+    ///
+    /// # Returns
+    ///
+    /// A `GcResult` with statistics about what was collected.
+    ///
+    /// # Note
+    ///
+    /// This operation modifies the database but does not use the WAL.
+    /// It's safe to run during normal operation as it only removes records
+    /// that are no longer visible to any transaction.
+    pub fn collect_garbage(&mut self) -> Result<GcResult, DatabaseError> {
+        let min_active = self.active_snapshots.min_active();
+        let root_page = self.file.superblock().primary_index_root;
+
+        // First pass: collect keys of records eligible for GC
+        let mut to_remove: Vec<(EntityId, AttributeId)> = Vec::new();
+        let mut records_scanned = 0u64;
+
+        {
+            let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
+            let mut cursor = index.cursor()?;
+
+            while let Some(record) = cursor.next_record()? {
+                records_scanned += 1;
+                if record.is_gc_eligible(min_active) {
+                    to_remove.push((record.entity_id, record.attribute_id));
+                }
+            }
+        }
+
+        // Second pass: remove the collected records
+        let records_removed = to_remove.len() as u64;
+        let mut bytes_freed = 0u64;
+
+        if !to_remove.is_empty() {
+            let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
+
+            for (entity_id, attribute_id) in to_remove {
+                if let Some(removed) = index.remove(&entity_id, &attribute_id)? {
+                    bytes_freed += removed.serialized_size() as u64;
+                }
+            }
+
+            // Update root page if it changed
+            let new_root = index.root_page();
+            let file = index.file_mut();
+            file.superblock_mut().primary_index_root = new_root;
+            file.write_superblock()?;
+            file.sync()?;
+        }
+
+        Ok(GcResult {
+            records_scanned,
+            records_removed,
+            bytes_freed,
+            min_active_snapshot: min_active,
+        })
+    }
+
     /// Get the current checkpoint state.
     #[must_use]
     pub const fn checkpoint_state(&self) -> &CheckpointState {
@@ -793,6 +859,20 @@ impl<'a> Snapshot<'a> {
     pub const fn close(self) -> TxnId {
         self.txn_id
     }
+}
+
+/// Result of a garbage collection operation.
+#[derive(Debug)]
+pub struct GcResult {
+    /// Number of records scanned during GC.
+    pub records_scanned: u64,
+    /// Number of records physically removed.
+    pub records_removed: u64,
+    /// Approximate bytes freed (based on serialized record size).
+    pub bytes_freed: u64,
+    /// The minimum active snapshot at time of GC.
+    /// Records deleted before this transaction were eligible for removal.
+    pub min_active_snapshot: Option<TxnId>,
 }
 
 /// Errors that can occur during database operations.
@@ -1366,5 +1446,223 @@ mod tests {
             snapshot.close()
         };
         db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_gc_removes_deleted_records() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert records
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..10u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.insert(entity, [1u8; 16], TripleValue::Number(f64::from(i)));
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Delete half the records
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..5u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.delete(&entity, &[1u8; 16]).expect("delete");
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Run GC - should remove the deleted records
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_scanned, 10); // All records scanned
+        assert_eq!(result.records_removed, 5);  // 5 deleted records removed
+        assert!(result.bytes_freed > 0);
+        assert!(result.min_active_snapshot.is_none()); // No active snapshots
+
+        // Verify only 5 records remain
+        let txn_id = {
+            let mut snapshot = db.begin_readonly();
+            let count = snapshot.count().expect("count");
+            assert_eq!(count, 5);
+            snapshot.close()
+        };
+        db.release_snapshot(txn_id);
+    }
+
+    #[test]
+    fn test_gc_respects_active_snapshots() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert a record (txn_id = 1)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
+            txn.commit().expect("commit");
+        }
+
+        // Create a snapshot at txn_id = 1
+        let snapshot_txn = {
+            let snapshot = db.begin_readonly();
+            snapshot.close()
+        };
+        // Don't release - keep it active
+
+        // Delete the record (txn_id = 2)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // Run GC - should NOT remove the record because snapshot at txn=1 can still see it
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 0); // Nothing removed
+        assert_eq!(result.min_active_snapshot, Some(1));
+
+        // Release the snapshot
+        db.release_snapshot(snapshot_txn);
+
+        // Run GC again - now it should be removed
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 1);
+        assert!(result.min_active_snapshot.is_none());
+    }
+
+    #[test]
+    fn test_gc_no_deleted_records() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert records (no deletes)
+        {
+            let mut txn = db.begin().expect("begin");
+            for i in 0..5u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.insert(entity, [1u8; 16], TripleValue::Number(f64::from(i)));
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Run GC - nothing to collect
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_scanned, 5);
+        assert_eq!(result.records_removed, 0);
+        assert_eq!(result.bytes_freed, 0);
+    }
+
+    #[test]
+    fn test_gc_empty_database() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Run GC on empty database
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_scanned, 0);
+        assert_eq!(result.records_removed, 0);
+        assert_eq!(result.bytes_freed, 0);
+    }
+
+    #[test]
+    fn test_gc_multiple_snapshots() {
+        let (_dir, path) = create_test_db();
+        let mut db = Database::create(&path).expect("create db");
+
+        // Insert records (txn_id = 1)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
+            txn.insert([2u8; 16], [1u8; 16], TripleValue::Number(2.0));
+            txn.commit().expect("commit");
+        }
+
+        // Snapshot 1 at txn_id = 1
+        let snapshot1_txn = {
+            let snapshot = db.begin_readonly();
+            snapshot.close()
+        };
+
+        // Delete first record (txn_id = 2)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // Snapshot 2 at txn_id = 2
+        let snapshot2_txn = {
+            let snapshot = db.begin_readonly();
+            snapshot.close()
+        };
+
+        // Delete second record (txn_id = 3)
+        {
+            let mut txn = db.begin().expect("begin");
+            txn.delete(&[2u8; 16], &[1u8; 16]).expect("delete");
+            txn.commit().expect("commit");
+        }
+
+        // GC: min_active = 1, can't remove either (both deleted after txn=1)
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 0);
+        assert_eq!(result.min_active_snapshot, Some(1));
+
+        // Release snapshot 1
+        db.release_snapshot(snapshot1_txn);
+
+        // GC: min_active = 2, can remove first record (deleted at txn=2, which is not < 2)
+        // Wait - deleted_txn=2 is NOT < min_active=2, so it shouldn't be GC'd
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 0);
+        assert_eq!(result.min_active_snapshot, Some(2));
+
+        // Release snapshot 2
+        db.release_snapshot(snapshot2_txn);
+
+        // GC: no active snapshots, both records should be removed
+        let result = db.collect_garbage().expect("gc");
+        assert_eq!(result.records_removed, 2);
+        assert!(result.min_active_snapshot.is_none());
+    }
+
+    #[test]
+    fn test_is_gc_eligible() {
+        use crate::storage::superblock::HlcTimestamp;
+
+        // Not deleted - not eligible
+        let record = TripleRecord::new(
+            [1u8; 16],
+            [1u8; 16],
+            10,
+            HlcTimestamp::new(1000, 0),
+            TripleValue::Null,
+        );
+        assert!(!record.is_gc_eligible(None));
+        assert!(!record.is_gc_eligible(Some(5)));
+        assert!(!record.is_gc_eligible(Some(15)));
+
+        // Deleted at txn=50
+        let mut record = TripleRecord::new(
+            [1u8; 16],
+            [1u8; 16],
+            10,
+            HlcTimestamp::new(1000, 0),
+            TripleValue::Null,
+        );
+        record.deleted_txn = 50;
+
+        // No active snapshots - always eligible
+        assert!(record.is_gc_eligible(None));
+
+        // Active snapshot before deletion - eligible
+        assert!(record.is_gc_eligible(Some(60))); // deleted_txn=50 < 60
+
+        // Active snapshot at or after deletion - not eligible
+        assert!(!record.is_gc_eligible(Some(50))); // deleted_txn=50 is not < 50
+        assert!(!record.is_gc_eligible(Some(40))); // deleted_txn=50 is not < 40
     }
 }

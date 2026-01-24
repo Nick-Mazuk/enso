@@ -49,7 +49,7 @@ pub use checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState,
     force_checkpoint, maybe_checkpoint, perform_checkpoint,
 };
-pub use database::{Database, DatabaseError};
+pub use database::{Database, DatabaseError, GcResult, Snapshot};
 pub use file::{DatabaseFile, FileError};
 pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
 pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
