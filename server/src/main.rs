@@ -1,4 +1,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
+// Forbid unwrap() in production code to prevent panics from corrupt data.
+// Test code is allowed to use unwrap() for convenience.
+#![cfg_attr(not(test), deny(clippy::unwrap_used))]
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;

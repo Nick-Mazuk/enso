@@ -674,4 +674,261 @@ mod tests {
         // Verify next_txn_id was updated
         assert!(file.superblock().next_txn_id > 100);
     }
+
+    #[test]
+    fn test_recover_interleaved_transactions() {
+        // Test recovery with interleaved transactions (concurrent writes)
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+        file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
+
+        let hlc = HlcTimestamp::new(1000, 0);
+
+        // Write interleaved transactions: BEGIN1, BEGIN2, INSERT1, INSERT2, COMMIT1
+        // Only transaction 1 should be committed
+        {
+            let mut wal = file.wal().expect("get wal");
+
+            // Transaction 1 begins
+            wal.append(1, hlc, LogRecordPayload::Begin)
+                .expect("begin 1");
+
+            // Transaction 2 begins (interleaved)
+            wal.append(2, hlc, LogRecordPayload::Begin)
+                .expect("begin 2");
+
+            // Transaction 1 inserts
+            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
+            wal.append(1, hlc, LogRecordPayload::insert(&triple1))
+                .expect("insert 1");
+
+            // Transaction 2 inserts (uncommitted)
+            let triple2 = TripleRecord::new([2u8; 16], [2u8; 16], 2, hlc, TripleValue::Number(2.0));
+            wal.append(2, hlc, LogRecordPayload::insert(&triple2))
+                .expect("insert 2");
+
+            // Transaction 1 commits
+            wal.append(1, hlc, LogRecordPayload::Commit)
+                .expect("commit 1");
+
+            // Transaction 2 never commits (simulates crash)
+
+            wal.sync().expect("sync");
+            let head = wal.head();
+            let last_lsn = wal.last_lsn();
+            #[allow(clippy::drop_non_drop)]
+            drop(wal);
+            file.update_wal_head(head, last_lsn);
+        }
+        file.write_superblock().expect("write superblock");
+
+        // Run recovery
+        let result = recover(&mut file).expect("recover");
+
+        assert_eq!(result.transactions_replayed, 1); // Only txn 1
+        assert_eq!(result.transactions_discarded, 1); // Txn 2
+        assert_eq!(result.operations_applied, 1);
+
+        // Verify only transaction 1's data was applied
+        let root_page = file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
+
+        assert!(index.get(&[1u8; 16], &[1u8; 16]).expect("get 1").is_some());
+        assert!(index.get(&[2u8; 16], &[2u8; 16]).expect("get 2").is_none());
+    }
+
+    #[test]
+    fn test_recover_insert_then_delete_same_key() {
+        // Test recovery when same key is inserted and deleted in same transaction
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+        file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
+
+        let hlc = HlcTimestamp::new(1000, 0);
+
+        // Write: BEGIN, INSERT, DELETE (same key), COMMIT
+        {
+            let mut wal = file.wal().expect("get wal");
+
+            wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
+
+            // Insert a triple
+            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(42.0));
+            wal.append(1, hlc, LogRecordPayload::insert(&triple))
+                .expect("insert");
+
+            // Delete the same triple in the same transaction
+            wal.append(1, hlc, LogRecordPayload::delete([1u8; 16], [1u8; 16]))
+                .expect("delete");
+
+            wal.append(1, hlc, LogRecordPayload::Commit)
+                .expect("commit");
+
+            wal.sync().expect("sync");
+            let head = wal.head();
+            let last_lsn = wal.last_lsn();
+            #[allow(clippy::drop_non_drop)]
+            drop(wal);
+            file.update_wal_head(head, last_lsn);
+        }
+        file.write_superblock().expect("write superblock");
+
+        // Run recovery
+        let result = recover(&mut file).expect("recover");
+
+        assert_eq!(result.transactions_replayed, 1);
+        // The insert was cancelled by the delete, only delete should be applied
+        assert_eq!(result.operations_applied, 1);
+
+        // Verify the record doesn't exist (was deleted)
+        let root_page = file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
+
+        // The record should not exist because it was deleted after insert
+        let record = index.get(&[1u8; 16], &[1u8; 16]).expect("get");
+        assert!(record.is_none() || record.unwrap().is_deleted());
+    }
+
+    #[test]
+    fn test_recover_multiple_inserts_same_key() {
+        // Test recovery when same key is inserted multiple times (update scenario)
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+        file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
+
+        let hlc = HlcTimestamp::new(1000, 0);
+
+        // Write: BEGIN, INSERT(value=1), INSERT(value=2 same key), COMMIT
+        // The last insert should win
+        {
+            let mut wal = file.wal().expect("get wal");
+
+            wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
+
+            // First insert
+            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
+            wal.append(1, hlc, LogRecordPayload::insert(&triple1))
+                .expect("insert 1");
+
+            // Second insert (same key, different value)
+            let triple2 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(2.0));
+            wal.append(1, hlc, LogRecordPayload::insert(&triple2))
+                .expect("insert 2");
+
+            wal.append(1, hlc, LogRecordPayload::Commit)
+                .expect("commit");
+
+            wal.sync().expect("sync");
+            let head = wal.head();
+            let last_lsn = wal.last_lsn();
+            #[allow(clippy::drop_non_drop)]
+            drop(wal);
+            file.update_wal_head(head, last_lsn);
+        }
+        file.write_superblock().expect("write superblock");
+
+        // Run recovery
+        let result = recover(&mut file).expect("recover");
+
+        assert_eq!(result.transactions_replayed, 1);
+        // Only one insert should be applied (the last one wins in the hashmap)
+        assert_eq!(result.operations_applied, 1);
+
+        // Verify the final value
+        let root_page = file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
+
+        let record = index.get(&[1u8; 16], &[1u8; 16]).expect("get").unwrap();
+        assert_eq!(record.value, TripleValue::Number(2.0));
+    }
+
+    #[test]
+    fn test_recover_checkpoint_record() {
+        // Test that checkpoint records don't affect recovery
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+        file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
+
+        let hlc = HlcTimestamp::new(1000, 0);
+
+        // Write: BEGIN, INSERT, CHECKPOINT, COMMIT
+        {
+            let mut wal = file.wal().expect("get wal");
+
+            wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
+
+            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(42.0));
+            wal.append(1, hlc, LogRecordPayload::insert(&triple))
+                .expect("insert");
+
+            // Checkpoint in the middle of transaction
+            wal.append(0, hlc, LogRecordPayload::checkpoint(1, 1))
+                .expect("checkpoint");
+
+            wal.append(1, hlc, LogRecordPayload::Commit)
+                .expect("commit");
+
+            wal.sync().expect("sync");
+            let head = wal.head();
+            let last_lsn = wal.last_lsn();
+            #[allow(clippy::drop_non_drop)]
+            drop(wal);
+            file.update_wal_head(head, last_lsn);
+        }
+        file.write_superblock().expect("write superblock");
+
+        // Run recovery
+        let result = recover(&mut file).expect("recover");
+
+        assert_eq!(result.records_scanned, 4); // BEGIN, INSERT, CHECKPOINT, COMMIT
+        assert_eq!(result.transactions_replayed, 1);
+        assert_eq!(result.operations_applied, 1);
+
+        // Verify the data was applied
+        let root_page = file.superblock().primary_index_root;
+        let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
+        assert!(index.get(&[1u8; 16], &[1u8; 16]).expect("get").is_some());
+    }
+
+    #[test]
+    fn test_recover_short_insert_record_ignored() {
+        // Test that insert records with bytes < 32 are silently ignored
+        // This tests the safety check at line 139: if bytes.len() >= 32
+        let (_dir, path) = create_test_db();
+        let mut file = DatabaseFile::create(&path).expect("create db");
+        file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
+
+        let hlc = HlcTimestamp::new(1000, 0);
+
+        // Write a transaction with a malformed insert (bytes too short)
+        {
+            let mut wal = file.wal().expect("get wal");
+
+            wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
+
+            // Manually create an insert with too few bytes
+            // This simulates corruption or a bug that produced a short record
+            let short_bytes = vec![0u8; 16]; // Only 16 bytes, need at least 32
+            wal.append(1, hlc, LogRecordPayload::Insert(short_bytes))
+                .expect("insert");
+
+            wal.append(1, hlc, LogRecordPayload::Commit)
+                .expect("commit");
+
+            wal.sync().expect("sync");
+            let head = wal.head();
+            let last_lsn = wal.last_lsn();
+            #[allow(clippy::drop_non_drop)]
+            drop(wal);
+            file.update_wal_head(head, last_lsn);
+        }
+        file.write_superblock().expect("write superblock");
+
+        // Run recovery - should not error, just skip the malformed record
+        let result = recover(&mut file).expect("recover");
+
+        assert_eq!(result.transactions_replayed, 1);
+        // The short insert should be ignored, so 0 operations
+        assert_eq!(result.operations_applied, 0);
+    }
 }

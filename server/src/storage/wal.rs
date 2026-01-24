@@ -326,7 +326,16 @@ impl LogRecord {
     /// Deserialize a record from bytes.
     ///
     /// Returns the record and the number of bytes consumed.
+    ///
+    /// # Panics
+    /// Panics if the input buffer is empty (indicates programming error).
     pub fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), WalError> {
+        // Pre-condition: input buffer must not be empty
+        assert!(
+            !bytes.is_empty(),
+            "Cannot deserialize LogRecord from empty buffer"
+        );
+
         if bytes.len() < RECORD_HEADER_SIZE + CHECKSUM_SIZE {
             return Err(WalError::CorruptRecord);
         }
@@ -419,8 +428,11 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
     /// - `head`: Current write position (relative to `region_start`)
     /// - `tail`: Oldest record position (relative to `region_start`)
     /// - `next_lsn`: Next LSN to assign
+    ///
+    /// # Panics
+    /// Panics if capacity is 0, or if head/tail exceed capacity.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         file: &'a mut F,
         region_start: u64,
         capacity: u64,
@@ -428,6 +440,21 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
         tail: u64,
         next_lsn: Lsn,
     ) -> Self {
+        // Invariant: capacity must be positive
+        assert!(capacity > 0, "WAL capacity must be positive, got 0");
+
+        // Invariant: head must be within bounds
+        assert!(
+            head <= capacity,
+            "WAL head ({head}) exceeds capacity ({capacity})"
+        );
+
+        // Invariant: tail must be within bounds
+        assert!(
+            tail <= capacity,
+            "WAL tail ({tail}) exceeds capacity ({capacity})"
+        );
+
         Self {
             file,
             region_start,
@@ -494,6 +521,9 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
     /// Append a log record to the WAL.
     ///
     /// Returns the LSN assigned to this record.
+    ///
+    /// # Panics
+    /// Panics if head position becomes invalid after write.
     pub fn append(
         &mut self,
         txn_id: TxnId,
@@ -504,6 +534,13 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
         let record = LogRecord::new(txn_id, lsn, hlc, payload);
         let bytes = record.to_bytes();
         let record_len = bytes.len() as u64;
+
+        // Invariant: record length must be reasonable (at least header + checksum)
+        assert!(
+            record_len >= (RECORD_HEADER_SIZE + CHECKSUM_SIZE) as u64,
+            "Record too small: {record_len} bytes, minimum is {}",
+            RECORD_HEADER_SIZE + CHECKSUM_SIZE
+        );
 
         // Check if we have enough space
         if record_len > self.capacity {
@@ -548,6 +585,15 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
         }
 
         self.next_lsn += 1;
+
+        // Post-condition: head must remain within capacity bounds
+        assert!(
+            self.head <= self.capacity,
+            "WAL head ({}) exceeded capacity ({}) after append",
+            self.head,
+            self.capacity
+        );
+
         Ok(lsn)
     }
 
@@ -590,7 +636,17 @@ impl<'a, F: Read + Write + Seek> Wal<'a, F> {
     }
 
     /// Read a record at the given offset (relative to `region_start`).
+    ///
+    /// # Panics
+    /// Panics if the computed next offset is invalid.
     pub fn read_at(&mut self, offset: u64) -> Result<(LogRecord, u64), WalError> {
+        // Pre-condition: offset must be within capacity
+        assert!(
+            offset < self.capacity,
+            "read_at offset ({offset}) must be less than capacity ({})",
+            self.capacity
+        );
+
         if offset >= self.capacity {
             return Err(WalError::InvalidOffset(offset));
         }

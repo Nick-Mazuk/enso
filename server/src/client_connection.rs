@@ -507,4 +507,167 @@ mod tests {
         assert_eq!(server_response.columns, vec!["attr", "value"]);
         assert_eq!(server_response.rows.len(), 3);
     }
+
+    // Error path tests
+
+    #[tokio::test]
+    async fn test_handle_message_missing_payload() {
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
+
+        // Send a message with no payload
+        let client_message = proto::ClientMessage {
+            request_id: Some(400),
+            payload: None,
+        };
+
+        let response = client_conn.handle_message(client_message).await;
+
+        let server_response = response.response.unwrap();
+        assert_eq!(server_response.request_id, Some(400));
+        assert_eq!(
+            server_response.status.unwrap().code,
+            proto::google::rpc::Code::InvalidArgument as i32
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_message_invalid_entity_id_length() {
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
+
+        // Entity ID is wrong length (should be 16 bytes)
+        let triple = proto::Triple {
+            entity_id: Some(vec![1u8; 10]), // Wrong length
+            attribute_id: Some(vec![2u8; 16]),
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+        };
+
+        let update_request = proto::TripleUpdateRequest {
+            triples: vec![triple],
+        };
+
+        let client_message = proto::ClientMessage {
+            request_id: Some(401),
+            payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+                update_request,
+            )),
+        };
+
+        let response = client_conn.handle_message(client_message).await;
+
+        let server_response = response.response.unwrap();
+        assert_eq!(server_response.request_id, Some(401));
+        assert_eq!(
+            server_response.status.unwrap().code,
+            proto::google::rpc::Code::InvalidArgument as i32
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_message_invalid_attribute_id_length() {
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
+
+        // Attribute ID is wrong length (should be 16 bytes)
+        let triple = proto::Triple {
+            entity_id: Some(vec![1u8; 16]),
+            attribute_id: Some(vec![2u8; 8]), // Wrong length
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+        };
+
+        let update_request = proto::TripleUpdateRequest {
+            triples: vec![triple],
+        };
+
+        let client_message = proto::ClientMessage {
+            request_id: Some(402),
+            payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+                update_request,
+            )),
+        };
+
+        let response = client_conn.handle_message(client_message).await;
+
+        let server_response = response.response.unwrap();
+        assert_eq!(server_response.request_id, Some(402));
+        assert_eq!(
+            server_response.status.unwrap().code,
+            proto::google::rpc::Code::InvalidArgument as i32
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_message_missing_entity_id() {
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
+
+        // Triple with missing entity_id
+        let triple = proto::Triple {
+            entity_id: None,
+            attribute_id: Some(vec![2u8; 16]),
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+        };
+
+        let update_request = proto::TripleUpdateRequest {
+            triples: vec![triple],
+        };
+
+        let client_message = proto::ClientMessage {
+            request_id: Some(403),
+            payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+                update_request,
+            )),
+        };
+
+        let response = client_conn.handle_message(client_message).await;
+
+        let server_response = response.response.unwrap();
+        assert_eq!(server_response.request_id, Some(403));
+        assert_eq!(
+            server_response.status.unwrap().code,
+            proto::google::rpc::Code::InvalidArgument as i32
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_message_missing_attribute_id() {
+        let database = new_test_database().expect("Failed to create test db");
+        let client_conn = ClientConnection::new(database);
+
+        // Triple with missing attribute_id
+        let triple = proto::Triple {
+            entity_id: Some(vec![1u8; 16]),
+            attribute_id: None,
+            value: Some(proto::TripleValue {
+                value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+        };
+
+        let update_request = proto::TripleUpdateRequest {
+            triples: vec![triple],
+        };
+
+        let client_message = proto::ClientMessage {
+            request_id: Some(404),
+            payload: Some(proto::client_message::Payload::TripleUpdateRequest(
+                update_request,
+            )),
+        };
+
+        let response = client_conn.handle_message(client_message).await;
+
+        let server_response = response.response.unwrap();
+        assert_eq!(server_response.request_id, Some(404));
+        assert_eq!(
+            server_response.status.unwrap().code,
+            proto::google::rpc::Code::InvalidArgument as i32
+        );
+    }
 }

@@ -45,6 +45,115 @@ use crate::storage::triple::{
 };
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
 
+/// Trait for applying operations to secondary indexes (attribute and entity-attribute).
+///
+/// This trait abstracts over the different argument orders used by secondary indexes,
+/// allowing a single helper function to apply operations to both index types.
+trait SecondaryIndexOps {
+    type Error: Into<DatabaseError>;
+
+    /// Apply an insert operation to the index.
+    fn apply_insert(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error>;
+
+    /// Apply a delete operation to the index.
+    fn apply_delete(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error>;
+}
+
+impl SecondaryIndexOps for AttributeIndex<'_> {
+    type Error = AttributeIndexError;
+
+    fn apply_insert(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error> {
+        // AttributeIndex uses (attribute_id, entity_id) order
+        self.insert(attribute_id, entity_id, txn_id)
+    }
+
+    fn apply_delete(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error> {
+        self.mark_deleted(attribute_id, entity_id, txn_id)?;
+        Ok(())
+    }
+}
+
+impl SecondaryIndexOps for EntityAttributeIndex<'_> {
+    type Error = EntityAttributeIndexError;
+
+    fn apply_insert(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error> {
+        // EntityAttributeIndex uses (entity_id, attribute_id) order
+        self.insert(entity_id, attribute_id, txn_id)
+    }
+
+    fn apply_delete(
+        &mut self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        txn_id: TxnId,
+    ) -> Result<(), Self::Error> {
+        self.mark_deleted(entity_id, attribute_id, txn_id)?;
+        Ok(())
+    }
+}
+
+/// Apply buffered operations to a secondary index.
+///
+/// This helper function applies Insert and Delete operations to any index
+/// implementing `SecondaryIndexOps`. Update operations are skipped as they
+/// don't change the entity-attribute mapping in secondary indexes.
+fn apply_ops_to_secondary_index<I: SecondaryIndexOps>(
+    index: &mut I,
+    operations: &[BufferedOp],
+    txn_id: TxnId,
+) -> Result<(), DatabaseError> {
+    for op in operations {
+        match op {
+            BufferedOp::Insert {
+                entity_id,
+                attribute_id,
+                ..
+            } => {
+                index
+                    .apply_insert(entity_id, attribute_id, txn_id)
+                    .map_err(Into::into)?;
+            }
+            BufferedOp::Update { .. } => {
+                // Updates don't change the entity-attribute mapping in secondary indexes
+            }
+            BufferedOp::Delete {
+                entity_id,
+                attribute_id,
+            } => {
+                index
+                    .apply_delete(entity_id, attribute_id, txn_id)
+                    .map_err(Into::into)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Tracks active read-only snapshots for garbage collection.
 ///
 /// When a snapshot is created, its transaction ID is added to this set.
@@ -59,13 +168,27 @@ struct ActiveSnapshots {
 
 impl ActiveSnapshots {
     /// Register a new active snapshot.
+    ///
+    /// # Panics
+    /// Panics if the `txn_id` is already registered (indicates a programming error).
     fn register(&mut self, txn_id: TxnId) {
-        self.active.insert(txn_id);
+        let inserted = self.active.insert(txn_id);
+        assert!(
+            inserted,
+            "Snapshot txn_id {txn_id} already registered - duplicate snapshot registration"
+        );
     }
 
     /// Unregister a snapshot when it's released.
+    ///
+    /// # Panics
+    /// Panics if the `txn_id` was not registered (indicates a programming error).
     fn unregister(&mut self, txn_id: TxnId) {
-        self.active.remove(&txn_id);
+        let removed = self.active.remove(&txn_id);
+        assert!(
+            removed,
+            "Snapshot txn_id {txn_id} was not registered - releasing unregistered snapshot"
+        );
     }
 
     /// Get the minimum active snapshot transaction ID.
@@ -208,9 +331,18 @@ impl Database {
     /// The transaction is assigned a unique HLC timestamp.
     ///
     /// Only one write transaction can be active at a time (enforced by borrow checker).
+    ///
+    /// # Panics
+    /// Panics if transaction ID is 0 (indicates uninitialized database state).
     pub fn begin(&mut self) -> Result<WalTransaction<'_>, DatabaseError> {
         // Get next transaction ID
         let txn_id = self.file.superblock().next_txn_id;
+
+        // Invariant: transaction IDs must be positive (0 is reserved for "no transaction")
+        assert!(
+            txn_id > 0,
+            "Transaction ID must be positive, got {txn_id} - database may be uninitialized"
+        );
 
         // Advance HLC using proper wall clock
         let hlc = self.clock.tick();
@@ -306,6 +438,16 @@ impl Database {
     pub fn collect_garbage(&mut self) -> Result<GcResult, DatabaseError> {
         let min_active = self.active_snapshots.min_active();
         let root_page = self.file.superblock().primary_index_root;
+
+        // Empty database has root_page = 0, which is valid - nothing to GC
+        if root_page == 0 {
+            return Ok(GcResult {
+                records_scanned: 0,
+                records_removed: 0,
+                bytes_freed: 0,
+                min_active_snapshot: min_active,
+            });
+        }
 
         // First pass: collect keys of records eligible for GC
         let mut to_remove: Vec<(EntityId, AttributeId)> = Vec::new();
@@ -667,7 +809,16 @@ impl<'a> WalTransaction<'a> {
     /// 5. Applies operations to the index
     /// 6. Updates superblock
     /// 7. Optionally triggers checkpoint
+    ///
+    /// # Panics
+    /// Panics if the transaction was already finalized.
     pub fn commit(mut self) -> Result<(), DatabaseError> {
+        // Invariant: transaction must not already be finalized
+        assert!(
+            !self.finalized,
+            "Transaction already finalized - cannot commit twice"
+        );
+
         self.finalized = true;
 
         if self.operations.is_empty() {
@@ -823,28 +974,7 @@ impl<'a> WalTransaction<'a> {
         let attribute_root = {
             let root_page = self.file.superblock().attribute_index_root;
             let mut index = AttributeIndex::new(self.file, root_page)?;
-
-            for op in &self.operations {
-                match op {
-                    BufferedOp::Insert {
-                        entity_id,
-                        attribute_id,
-                        ..
-                    } => {
-                        index.insert(attribute_id, entity_id, txn_id)?;
-                    }
-                    BufferedOp::Update { .. } => {
-                        // Updates don't change the attribute->entity mapping
-                    }
-                    BufferedOp::Delete {
-                        entity_id,
-                        attribute_id,
-                    } => {
-                        index.mark_deleted(attribute_id, entity_id, txn_id)?;
-                    }
-                }
-            }
-
+            apply_ops_to_secondary_index(&mut index, &self.operations, txn_id)?;
             index.root_page()
         };
 
@@ -852,30 +982,23 @@ impl<'a> WalTransaction<'a> {
         let entity_attribute_root = {
             let root_page = self.file.superblock().entity_attribute_index_root;
             let mut index = EntityAttributeIndex::new(self.file, root_page)?;
-
-            for op in &self.operations {
-                match op {
-                    BufferedOp::Insert {
-                        entity_id,
-                        attribute_id,
-                        ..
-                    } => {
-                        index.insert(entity_id, attribute_id, txn_id)?;
-                    }
-                    BufferedOp::Update { .. } => {
-                        // Updates don't change the entity->attribute mapping
-                    }
-                    BufferedOp::Delete {
-                        entity_id,
-                        attribute_id,
-                    } => {
-                        index.mark_deleted(entity_id, attribute_id, txn_id)?;
-                    }
-                }
-            }
-
+            apply_ops_to_secondary_index(&mut index, &self.operations, txn_id)?;
             index.root_page()
         };
+
+        // Invariant: root pages must be valid (non-zero) after operations
+        assert!(
+            primary_root > 0,
+            "Primary index root page is 0 after apply_to_index - index corruption"
+        );
+        assert!(
+            attribute_root > 0,
+            "Attribute index root page is 0 after apply_to_index - index corruption"
+        );
+        assert!(
+            entity_attribute_root > 0,
+            "Entity-attribute index root page is 0 after apply_to_index - index corruption"
+        );
 
         // Update root pages in superblock
         self.file.superblock_mut().primary_index_root = primary_root;
@@ -888,7 +1011,16 @@ impl<'a> WalTransaction<'a> {
     /// Abort the transaction.
     ///
     /// Discards all buffered operations without writing to WAL.
+    ///
+    /// # Panics
+    /// Panics if the transaction was already finalized.
     pub fn abort(mut self) {
+        // Invariant: transaction must not already be finalized
+        assert!(
+            !self.finalized,
+            "Transaction already finalized - cannot abort twice"
+        );
+
         self.finalized = true;
         self.operations.clear();
     }
@@ -896,10 +1028,11 @@ impl<'a> WalTransaction<'a> {
 
 impl Drop for WalTransaction<'_> {
     fn drop(&mut self) {
-        if !self.finalized {
-            // Transaction was dropped without commit or abort
-            // In debug builds, this could panic or log a warning
-        }
+        assert!(
+            self.finalized,
+            "WalTransaction dropped without commit() or abort() - this is a programming error. \
+             Transactions must be explicitly finalized to ensure data integrity."
+        );
     }
 }
 
