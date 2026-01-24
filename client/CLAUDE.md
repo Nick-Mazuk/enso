@@ -1,15 +1,4 @@
-## About
-
-Enso is a fast, relational sync engine for delightful front-end web apps.
-
-- Reactive updates
-- Instant writes and reads
-- End-to-end type safety
-- No schema migrations
-- Drizzle-like relational queries
-- Lightweight (<10kb compressed)
-
-## Code style
+## TypeScript styleguide
 
 Safety:
 
@@ -23,25 +12,21 @@ Testing:
 
 - Always include tests for new features or bug fixes.
 - Test with invalid data and states, not just the happy path.
+- Verify all TypeScript changes with `bun format`, `bun check`, `bun test`, and `bun typecheck`.
 
 Simplicity:
 
-- Minimize dependencies. Do not add new dependencies to the package.json without approval.
-
-Quality:
-
-- Always ensure `bun test`, `bun check`, and `bun typecheck` pass before finishing.
+- Minimize dependencies. Do not add new dependencies without approval.
 
 ## Repository structure
 
 Important files / directories:
 
-- `.github/workflows`: GitHub actions configuration.
 - `package.json`: dependencies and scripts.
 - `docs/client-api.md`: documents how developers will use the library.
 - `docs/design.md`: documents the project's system design.
 - `packages/client`: the code that runs on the client (web browsers).
-- `packages/shared`: code shared across multiple other packages.
+- `packages/typescript`: code shared across multiple other packages.
 
 ## Scripts
 
@@ -52,3 +37,4 @@ For JavaScript / TypeScript, always use `bun`. Never use `npm`.
 - `bun check`: lint and check formatting
 - `bun format`: format code
 - `bun typecheck`: check TypeScript types
+- `bun 

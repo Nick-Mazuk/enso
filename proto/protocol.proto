@@ -85,10 +85,10 @@ message ServerMessage {
 // A single value in a query result row
 message QueryResultValue {
   oneof value {
-    string id = 1;           // Entity or Field ID as string
-    TripleValue triple_value = 2;  // Actual value (string, number, boolean)
+    string id = 1; // Entity or Field ID as string
+    TripleValue triple_value = 2; // Actual value (string, number, boolean)
   }
-  bool is_undefined = 3;  // True if value is missing (for optional patterns)
+  bool is_undefined = 3; // True if value is missing (for optional patterns)
 }
 
 // A row of query results
