@@ -17,16 +17,16 @@ use crate::storage::{ChangeType, HlcTimestamp, TripleValue};
 /// filters out a connection's own writes.
 #[test]
 fn test_insert_broadcasts_change_notification() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
     // Create a sibling connection to receive notifications
-    let sibling = test.create_sibling();
+    let sibling = client.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id = new_entity_id(1);
     let attribute_id = new_attribute_id(1);
 
     // Insert a triple from the main client
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -65,15 +65,15 @@ fn test_insert_broadcasts_change_notification() {
 /// filters out a connection's own writes.
 #[test]
 fn test_update_broadcasts_change_notification() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
     // Create a sibling connection to receive notifications
-    let sibling = test.create_sibling();
+    let sibling = client.create_sibling();
 
     let entity_id = new_entity_id(2);
     let attribute_id = new_attribute_id(2);
 
     // First insert
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -94,7 +94,7 @@ fn test_update_broadcasts_change_notification() {
     let mut change_rx = sibling.subscribe_to_changes();
 
     // Update the triple with a newer HLC
-    let update_resp = test.handle_message(proto::ClientMessage {
+    let update_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -136,9 +136,9 @@ fn test_update_broadcasts_change_notification() {
 /// filters out a connection's own writes.
 #[test]
 fn test_batch_insert_broadcasts_multiple_changes() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
     // Create a sibling connection to receive notifications
-    let sibling = test.create_sibling();
+    let sibling = client.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id_1 = new_entity_id(4);
@@ -146,7 +146,7 @@ fn test_batch_insert_broadcasts_multiple_changes() {
     let attribute_id = new_attribute_id(4);
 
     // Insert two triples in one request
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -198,7 +198,7 @@ fn test_batch_insert_broadcasts_multiple_changes() {
 /// Test that `get_changes_since` returns changes after a given HLC.
 #[test]
 fn test_get_changes_since_returns_changes() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(6);
     let attribute_id = new_attribute_id(6);
@@ -211,7 +211,7 @@ fn test_get_changes_since_returns_changes() {
     };
 
     // Insert a triple
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -232,7 +232,7 @@ fn test_get_changes_since_returns_changes() {
     assert!(is_ok(&insert_resp));
 
     // Get changes since before the insert
-    let changes = test
+    let changes = client
         .get_changes_since(before_hlc)
         .expect("get_changes_since should succeed");
 
@@ -243,11 +243,11 @@ fn test_get_changes_since_returns_changes() {
 /// Test that failed operations do not broadcast notifications.
 #[test]
 fn test_failed_operation_does_not_broadcast() {
-    let mut test = TestClient::new();
-    let mut change_rx = test.subscribe_to_changes();
+    let mut client = TestClient::new();
+    let mut change_rx = client.subscribe_to_changes();
 
     // Send an invalid request (missing entity_id)
-    let invalid_resp = test.handle_message(proto::ClientMessage {
+    let invalid_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -276,13 +276,13 @@ fn test_failed_operation_does_not_broadcast() {
 /// Test that an older HLC update does not broadcast (conflict resolution).
 #[test]
 fn test_older_hlc_update_does_not_broadcast() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(8);
     let attribute_id = new_attribute_id(8);
 
     // Insert with HLC 10
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -300,10 +300,10 @@ fn test_older_hlc_update_does_not_broadcast() {
     assert!(is_ok(&insert_resp));
 
     // Subscribe after the insert
-    let mut change_rx = test.subscribe_to_changes();
+    let mut change_rx = client.subscribe_to_changes();
 
     // Try to update with older HLC (should be rejected by conflict resolution)
-    let old_update_resp = test.handle_message(proto::ClientMessage {
+    let old_update_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -335,16 +335,16 @@ fn test_older_hlc_update_does_not_broadcast() {
 /// filters out a connection's own writes.
 #[test]
 fn test_insert_boolean_broadcasts_correctly() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
     // Create a sibling connection to receive notifications
-    let sibling = test.create_sibling();
+    let sibling = client.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id = new_entity_id(9);
     let attribute_id = new_attribute_id(9);
 
     // Insert a boolean triple
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {

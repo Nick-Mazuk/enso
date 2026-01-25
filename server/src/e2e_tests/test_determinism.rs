@@ -7,7 +7,7 @@ use crate::proto;
 
 #[allow(clippy::too_many_lines)]
 fn run_sequence() -> Vec<proto::ServerResponse> {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
     let mut responses = Vec::new();
 
     let entity_id = new_entity_id(80);
@@ -15,7 +15,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     let attribute_id_2 = new_attribute_id(82);
 
     // Insert
-    responses.push(test.handle_message(proto::ClientMessage {
+    responses.push(client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -31,7 +31,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         )),
     }));
 
-    responses.push(test.handle_message(proto::ClientMessage {
+    responses.push(client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -48,7 +48,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     }));
 
     // Query
-    responses.push(test.handle_message(proto::ClientMessage {
+    responses.push(client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![
@@ -78,7 +78,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     }));
 
     // Update
-    responses.push(test.handle_message(proto::ClientMessage {
+    responses.push(client.handle_message(proto::ClientMessage {
         request_id: Some(4),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -95,7 +95,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
     }));
 
     // Query again
-    responses.push(test.handle_message(proto::ClientMessage {
+    responses.push(client.handle_message(proto::ClientMessage {
         request_id: Some(5),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![

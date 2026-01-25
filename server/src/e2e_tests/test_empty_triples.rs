@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_empty_triples_request() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -14,7 +14,7 @@ fn test_empty_triples_request() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert!(is_ok(&resp));
     assert_eq!(resp.request_id, Some(1));
 }

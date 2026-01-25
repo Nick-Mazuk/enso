@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_insert_multiple_triples_single_request() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(10);
     let attribute_id_1 = new_attribute_id(11);
@@ -13,7 +13,7 @@ fn test_insert_multiple_triples_single_request() {
     let attribute_id_3 = new_attribute_id(13);
 
     // Insert multiple triples in one request
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -50,7 +50,7 @@ fn test_insert_multiple_triples_single_request() {
     assert!(is_ok(&insert_resp));
 
     // Query all attributes for the entity
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![

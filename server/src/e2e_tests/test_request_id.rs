@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_request_id_preserved() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     for request_id in [1, 100, 999, u32::MAX] {
         let req = proto::ClientMessage {
@@ -15,14 +15,14 @@ fn test_request_id_preserved() {
             )),
         };
 
-        let resp = test.handle_message(req);
+        let resp = client.handle_message(req);
         assert_eq!(resp.request_id, Some(request_id));
     }
 }
 
 #[test]
 fn test_request_id_none() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: None,
@@ -31,6 +31,6 @@ fn test_request_id_none() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(resp.request_id, None);
 }

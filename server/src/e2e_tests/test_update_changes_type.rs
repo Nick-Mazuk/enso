@@ -7,13 +7,13 @@ use crate::proto;
 
 #[test]
 fn test_update_changes_value_type() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(32);
     let attribute_id = new_attribute_id(32);
 
     // Insert as string
-    let resp1 = test.handle_message(proto::ClientMessage {
+    let resp1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -31,7 +31,7 @@ fn test_update_changes_value_type() {
     assert!(is_ok(&resp1));
 
     // Update to number
-    let resp2 = test.handle_message(proto::ClientMessage {
+    let resp2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -49,7 +49,7 @@ fn test_update_changes_value_type() {
     assert!(is_ok(&resp2));
 
     // Query should return number
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

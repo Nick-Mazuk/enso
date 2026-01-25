@@ -7,13 +7,13 @@ use crate::proto;
 
 #[test]
 fn test_insert_boolean_then_query() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(3);
     let attribute_id = new_attribute_id(3);
 
     // Insert a boolean value
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -32,7 +32,7 @@ fn test_insert_boolean_then_query() {
     assert!(is_ok(&insert_resp));
 
     // Query it back
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

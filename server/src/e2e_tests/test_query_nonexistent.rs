@@ -5,14 +5,14 @@ use crate::proto;
 
 #[test]
 fn test_query_nonexistent_entity() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let other_entity_id = new_entity_id(99);
     let entity_id = new_entity_id(40);
     let attribute_id = new_attribute_id(40);
 
     // Insert some data
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -30,7 +30,7 @@ fn test_query_nonexistent_entity() {
     assert!(is_ok(&resp));
 
     // Query for a different entity
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

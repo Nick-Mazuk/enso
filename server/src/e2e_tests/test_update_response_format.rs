@@ -8,13 +8,13 @@ use crate::proto;
 
 #[test]
 fn test_insert_response_returns_written_triples() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(80);
     let attribute_id = new_attribute_id(80);
 
     // Insert a triple
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -55,13 +55,13 @@ fn test_insert_response_returns_written_triples() {
 
 #[test]
 fn test_update_response_returns_current_value() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(81);
     let attribute_id = new_attribute_id(81);
 
     // Insert initial value
-    let insert_resp = test.handle_message(proto::ClientMessage {
+    let insert_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -80,7 +80,7 @@ fn test_update_response_returns_current_value() {
     assert_eq!(insert_resp.triples.len(), 1);
 
     // Update with new value
-    let update_resp = test.handle_message(proto::ClientMessage {
+    let update_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -121,10 +121,10 @@ fn test_update_response_returns_current_value() {
 
 #[test]
 fn test_multi_triple_update_returns_all_values() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     // Insert multiple triples in one request
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -193,10 +193,10 @@ fn test_multi_triple_update_returns_all_values() {
 
 #[test]
 fn test_empty_update_returns_no_triples() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     // Send empty update request
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest { triples: vec![] },

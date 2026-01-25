@@ -5,13 +5,13 @@ use crate::proto;
 
 #[test]
 fn test_query_returns_correct_columns() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(90);
     let attribute_id = new_attribute_id(90);
 
     // Insert a value
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -29,7 +29,7 @@ fn test_query_returns_correct_columns() {
     assert!(is_ok(&resp));
 
     // Point query returns column "value"
-    let point_resp = test.handle_message(proto::ClientMessage {
+    let point_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
@@ -54,7 +54,7 @@ fn test_query_returns_correct_columns() {
     assert_eq!(point_resp.columns, vec!["value"]);
 
     // Entity scan returns columns "attribute" and "value"
-    let scan_resp = test.handle_message(proto::ClientMessage {
+    let scan_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![

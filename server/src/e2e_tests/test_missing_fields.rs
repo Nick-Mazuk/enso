@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_missing_entity_id() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -23,7 +23,7 @@ fn test_missing_entity_id() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -32,7 +32,7 @@ fn test_missing_entity_id() {
 
 #[test]
 fn test_missing_attribute_id() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -50,7 +50,7 @@ fn test_missing_attribute_id() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -59,7 +59,7 @@ fn test_missing_attribute_id() {
 
 #[test]
 fn test_missing_value() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -75,7 +75,7 @@ fn test_missing_value() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
@@ -84,14 +84,14 @@ fn test_missing_value() {
 
 #[test]
 fn test_no_payload() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
         payload: None,
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32

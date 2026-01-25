@@ -7,14 +7,14 @@ use crate::proto;
 
 #[test]
 fn test_insert_multiple_entities() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id_1 = new_entity_id(20);
     let entity_id_2 = new_entity_id(21);
     let attribute_id = new_attribute_id(22);
 
     // Insert for entity 1
-    let resp1 = test.handle_message(proto::ClientMessage {
+    let resp1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -32,7 +32,7 @@ fn test_insert_multiple_entities() {
     assert!(is_ok(&resp1));
 
     // Insert for entity 2
-    let resp2 = test.handle_message(proto::ClientMessage {
+    let resp2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -50,7 +50,7 @@ fn test_insert_multiple_entities() {
     assert!(is_ok(&resp2));
 
     // Query entity 1
-    let query1 = test.handle_message(proto::ClientMessage {
+    let query1 = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
@@ -76,7 +76,7 @@ fn test_insert_multiple_entities() {
     assert_eq!(get_string_value(&query1, 0), Some("entity one"));
 
     // Query entity 2
-    let query2 = test.handle_message(proto::ClientMessage {
+    let query2 = client.handle_message(proto::ClientMessage {
         request_id: Some(4),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

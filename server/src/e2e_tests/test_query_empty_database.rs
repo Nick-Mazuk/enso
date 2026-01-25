@@ -5,12 +5,12 @@ use crate::proto;
 
 #[test]
 fn test_query_empty_database() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(99);
     let attribute_id = new_attribute_id(99);
 
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

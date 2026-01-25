@@ -7,13 +7,13 @@ use crate::proto;
 
 #[test]
 fn test_sequence_insert_query_update_query() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(50);
     let attribute_id = new_attribute_id(50);
 
     // Step 1: Insert
-    let resp1 = test.handle_message(proto::ClientMessage {
+    let resp1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -31,7 +31,7 @@ fn test_sequence_insert_query_update_query() {
     assert!(is_ok(&resp1));
 
     // Step 2: Query (should see 1.0)
-    let resp2 = test.handle_message(proto::ClientMessage {
+    let resp2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
@@ -57,7 +57,7 @@ fn test_sequence_insert_query_update_query() {
     assert_eq!(get_number_value(&resp2, 0), Some(1.0));
 
     // Step 3: Update
-    let resp3 = test.handle_message(proto::ClientMessage {
+    let resp3 = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -75,7 +75,7 @@ fn test_sequence_insert_query_update_query() {
     assert!(is_ok(&resp3));
 
     // Step 4: Query (should see 2.0)
-    let resp4 = test.handle_message(proto::ClientMessage {
+    let resp4 = client.handle_message(proto::ClientMessage {
         request_id: Some(4),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {

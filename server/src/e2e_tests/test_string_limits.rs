@@ -7,7 +7,7 @@ use crate::proto;
 
 #[test]
 fn test_max_length_string_value() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(70);
     let attribute_id = new_attribute_id(70);
@@ -15,7 +15,7 @@ fn test_max_length_string_value() {
     // Create a string at max length (1024 chars)
     let max_string: String = "x".repeat(1024);
 
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -33,7 +33,7 @@ fn test_max_length_string_value() {
     assert!(is_ok(&resp));
 
     // Query and verify
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
@@ -61,7 +61,7 @@ fn test_max_length_string_value() {
 
 #[test]
 fn test_string_too_long_rejected() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(71);
     let attribute_id = new_attribute_id(71);
@@ -69,7 +69,7 @@ fn test_string_too_long_rejected() {
     // Create a string exceeding max length (1025 chars)
     let too_long_string: String = "y".repeat(1025);
 
-    let resp = test.handle_message(proto::ClientMessage {
+    let resp = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {

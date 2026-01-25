@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_many_sequential_inserts() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     let entity_id = new_entity_id(60);
 
@@ -13,7 +13,7 @@ fn test_many_sequential_inserts() {
     for i in 0..100u8 {
         let attribute_id = new_attribute_id(i);
 
-        let resp = test.handle_message(proto::ClientMessage {
+        let resp = client.handle_message(proto::ClientMessage {
             request_id: Some(u32::from(i) + 1),
             payload: Some(proto::client_message::Payload::TripleUpdateRequest(
                 proto::TripleUpdateRequest {
@@ -32,7 +32,7 @@ fn test_many_sequential_inserts() {
     }
 
     // Query all attributes
-    let query_resp = test.handle_message(proto::ClientMessage {
+    let query_resp = client.handle_message(proto::ClientMessage {
         request_id: Some(101),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![

@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_invalid_attribute_id_length() {
-    let mut test = TestClient::new();
+    let mut client = TestClient::new();
 
     // Attribute ID with wrong length
     let req = proto::ClientMessage {
@@ -24,7 +24,7 @@ fn test_invalid_attribute_id_length() {
         )),
     };
 
-    let resp = test.handle_message(req);
+    let resp = client.handle_message(req);
     assert_eq!(
         status_code(&resp),
         proto::google::rpc::Code::InvalidArgument as i32
