@@ -6,8 +6,11 @@ use crate::{
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
     storage::{
-        ConnectionId, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord,
-        SystemTimeSource,
+        ConnectionId, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord, SystemTimeSource,
+    },
+    subscription::{
+        ClientSubscriptions, Subscription, convert_log_records_to_changes, create_error_response,
+        create_ok_response, create_subscription_update, proto_hlc_to_storage,
     },
     types::{
         ProtoDeserializable, ProtoSerializable,
@@ -30,6 +33,8 @@ pub struct ClientConnection {
     database: Arc<Mutex<Database>>,
     /// Unique identifier for this connection.
     connection_id: ConnectionId,
+    /// Per-connection subscription tracking.
+    subscriptions: ClientSubscriptions,
 }
 
 impl ClientConnection {
@@ -41,6 +46,7 @@ impl ClientConnection {
         Self {
             database: Arc::new(Mutex::new(database)),
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
+            subscriptions: ClientSubscriptions::new(),
         }
     }
 
@@ -54,6 +60,7 @@ impl ClientConnection {
         Self {
             database,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
+            subscriptions: ClientSubscriptions::new(),
         }
     }
 
@@ -103,6 +110,92 @@ impl ClientConnection {
             .lock()
             .map_err(|_| DatabaseError::LockPoisoned)?;
         db.changes_since(since)
+    }
+
+    /// Handle a subscribe request.
+    ///
+    /// Returns a list of messages to send to the client:
+    /// - On success: optionally a subscription update with historical changes, then an OK response
+    /// - On error: an error response
+    pub fn handle_subscribe(
+        &mut self,
+        request_id: Option<u32>,
+        req: &proto::SubscribeRequest,
+    ) -> Vec<proto::ServerMessage> {
+        let subscription_id = req.subscription_id;
+        let since_hlc = req.since_hlc.as_ref().map(proto_hlc_to_storage);
+
+        // Add the subscription
+        if let Err(e) = self.subscriptions.add(subscription_id, since_hlc) {
+            return vec![create_error_response(request_id, &format!("{e}"))];
+        }
+
+        let mut messages = Vec::new();
+
+        // If since_hlc was provided, send historical changes
+        if let Some(hlc) = since_hlc {
+            if let Some(update_msg) = self.get_backfill_update(subscription_id, hlc) {
+                messages.push(update_msg);
+            }
+        }
+
+        // Send success response
+        messages.push(create_ok_response(request_id));
+        tracing::debug!("subscription {} registered", subscription_id);
+
+        messages
+    }
+
+    /// Get historical changes for backfill when subscribing with `since_hlc`.
+    ///
+    /// Returns a subscription update message if there are changes, or `None` if
+    /// there are no changes or an error occurred.
+    fn get_backfill_update(
+        &self,
+        subscription_id: u32,
+        since_hlc: HlcTimestamp,
+    ) -> Option<proto::ServerMessage> {
+        let log_records = match self.get_changes_since(since_hlc) {
+            Ok(records) => records,
+            Err(e) => {
+                tracing::warn!("failed to get changes since HLC: {e}");
+                return None;
+            }
+        };
+
+        let changes = convert_log_records_to_changes(&log_records);
+        if changes.is_empty() {
+            return None;
+        }
+
+        let update = create_subscription_update(subscription_id, &changes);
+        Some(proto::ServerMessage {
+            payload: Some(proto::server_message::Payload::SubscriptionUpdate(update)),
+        })
+    }
+
+    /// Handle an unsubscribe request.
+    ///
+    /// Returns the response message to send to the client.
+    #[must_use]
+    pub fn handle_unsubscribe(
+        &mut self,
+        request_id: Option<u32>,
+        req: &proto::UnsubscribeRequest,
+    ) -> proto::ServerMessage {
+        let subscription_id = req.subscription_id;
+
+        if let Err(e) = self.subscriptions.remove(subscription_id) {
+            return create_error_response(request_id, &format!("{e}"));
+        }
+
+        tracing::debug!("subscription {} removed", subscription_id);
+        create_ok_response(request_id)
+    }
+
+    /// Iterate over all active subscriptions for this connection.
+    pub fn subscriptions(&self) -> impl Iterator<Item = &Subscription> {
+        self.subscriptions.iter()
     }
 
     pub async fn handle_message(
