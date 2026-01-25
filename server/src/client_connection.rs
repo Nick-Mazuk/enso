@@ -1,13 +1,15 @@
 use std::cmp::Ordering;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 
 use crate::{
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
-    storage::{Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord, SystemTimeSource},
-    subscription::ChangeNotification,
+    storage::{
+        ChangeNotification, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord,
+        SystemTimeSource,
+    },
     types::{
         ProtoDeserializable, ProtoSerializable,
         client_message::{ClientMessage, ClientMessagePayload},
@@ -15,19 +17,58 @@ use crate::{
     },
 };
 
+/// A connection to the database for a single client.
+///
+/// Multiple `ClientConnection` instances can share the same underlying database
+/// by using `new_shared()` with a shared `Arc<Mutex<Database>>`.
 pub struct ClientConnection {
-    database: Mutex<Database>,
-    /// Broadcast sender for notifying subscribers of changes.
-    change_tx: broadcast::Sender<ChangeNotification>,
+    database: Arc<Mutex<Database>>,
 }
 
 impl ClientConnection {
+    /// Create a new `ClientConnection` with exclusive ownership of the database.
+    ///
+    /// Use this when only one connection will access the database.
     #[must_use]
-    pub const fn new(database: Database, change_tx: broadcast::Sender<ChangeNotification>) -> Self {
+    pub fn new(database: Database) -> Self {
         Self {
-            database: Mutex::new(database),
-            change_tx,
+            database: Arc::new(Mutex::new(database)),
         }
+    }
+
+    /// Create a new `ClientConnection` with shared access to a database.
+    ///
+    /// Use this when multiple connections need to share the same database.
+    /// All connections sharing the database will receive change notifications
+    /// when any connection commits a transaction.
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // Arc is not const-compatible
+    pub fn new_shared(database: Arc<Mutex<Database>>) -> Self {
+        Self { database }
+    }
+
+    /// Get a clone of the shared database reference.
+    ///
+    /// This can be used to create additional `ClientConnection` instances
+    /// that share the same database.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    pub fn shared_database(&self) -> Arc<Mutex<Database>> {
+        Arc::clone(&self.database)
+    }
+
+    /// Subscribe to change notifications from the database.
+    ///
+    /// Returns a receiver that will receive all change notifications broadcast
+    /// by the database when transactions commit.
+    pub fn subscribe_to_changes(
+        &self,
+    ) -> Result<broadcast::Receiver<ChangeNotification>, DatabaseError> {
+        let db = self
+            .database
+            .lock()
+            .map_err(|_| DatabaseError::LockPoisoned)?;
+        Ok(db.subscribe_to_changes())
     }
 
     /// Get changes since a given HLC timestamp.
@@ -154,25 +195,25 @@ impl ClientConnection {
             }
         };
 
-        // Track the keys and change types for triples we're processing
+        // Track the keys for reading back current values
         let keys: Vec<([u8; 16], [u8; 16])> = triples
             .iter()
             .map(|t| (t.entity_id, t.attribute_id))
             .collect();
 
-        // Track which updates were actually applied for broadcasting
-        let mut applied_updates: Vec<(&crate::types::triple::Triple, bool)> = Vec::new();
-
-        // Insert only triples where client HLC is newer
+        // Insert or update triples where client HLC is newer
         for (triple, should_update, is_insert) in updates_to_apply {
             if should_update {
                 let value = value_to_storage(triple.value.clone_value());
-                txn.insert_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
-                applied_updates.push((triple, is_insert));
+                if is_insert {
+                    txn.insert_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
+                } else {
+                    txn.update_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
+                }
             }
         }
 
-        // Commit the transaction
+        // Commit the transaction (broadcasting happens automatically in the database)
         if let Err(e) = txn.commit() {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
@@ -182,47 +223,6 @@ impl ClientConnection {
                 }),
                 ..Default::default()
             };
-        }
-
-        // Broadcast changes to subscribers
-        if !applied_updates.is_empty() {
-            let changes: Vec<proto::ChangeRecord> = applied_updates
-                .iter()
-                .map(|(triple, is_insert)| {
-                    let change_type = if *is_insert {
-                        proto::ChangeType::Insert
-                    } else {
-                        proto::ChangeType::Update
-                    };
-                    let value = match &triple.value {
-                        crate::types::triple::TripleValue::String(s) => Some(proto::TripleValue {
-                            value: Some(proto::triple_value::Value::String(s.as_str().to_owned())),
-                        }),
-                        crate::types::triple::TripleValue::Number(n) => Some(proto::TripleValue {
-                            value: Some(proto::triple_value::Value::Number(*n)),
-                        }),
-                        crate::types::triple::TripleValue::Boolean(b) => Some(proto::TripleValue {
-                            value: Some(proto::triple_value::Value::Boolean(*b)),
-                        }),
-                    };
-                    proto::ChangeRecord {
-                        change_type: change_type.into(),
-                        triple: Some(proto::Triple {
-                            entity_id: Some(triple.entity_id.to_vec()),
-                            attribute_id: Some(triple.attribute_id.to_vec()),
-                            value,
-                            hlc: Some(proto::HlcTimestamp {
-                                physical_time_ms: triple.hlc.physical_time,
-                                logical_counter: triple.hlc.logical_counter,
-                                node_id: triple.hlc.node_id,
-                            }),
-                        }),
-                    }
-                })
-                .collect();
-
-            // Ignore send errors - no subscribers is not an error
-            let _ = self.change_tx.send(ChangeNotification { changes });
         }
 
         // Read back the current values and return them in the response
@@ -345,11 +345,10 @@ mod tests {
     use crate::proto;
     use crate::testing::new_test_database;
 
-    /// Create a test `ClientConnection` with a broadcast channel.
+    /// Create a test `ClientConnection`.
     fn new_test_client() -> ClientConnection {
         let database = new_test_database().expect("Failed to create test db");
-        let (change_tx, _) = broadcast::channel(100);
-        ClientConnection::new(database, change_tx)
+        ClientConnection::new(database)
     }
 
     /// Extract the `ServerResponse` from a `ServerMessage`.

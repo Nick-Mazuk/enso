@@ -66,3 +66,45 @@ pub use time::{SystemTimeSource, TimeSource};
 pub use transaction::{Transaction, TransactionError};
 pub use triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};
 pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};
+
+// =============================================================================
+// Change Notification Types
+// =============================================================================
+
+/// Type of change to a triple.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeType {
+    /// A new triple was created.
+    Insert,
+    /// An existing triple was modified with a newer HLC.
+    Update,
+    /// A triple was removed.
+    Delete,
+}
+
+/// A record of a single triple change.
+#[derive(Debug, Clone)]
+#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
+pub struct ChangeRecord {
+    /// The type of change.
+    pub change_type: ChangeType,
+    /// The entity ID of the affected triple.
+    pub entity_id: EntityId,
+    /// The attribute ID of the affected triple.
+    pub attribute_id: AttributeId,
+    /// The value of the triple. `None` for Delete operations.
+    pub value: Option<TripleValue>,
+    /// The HLC timestamp of the change.
+    pub hlc: HlcTimestamp,
+}
+
+/// Notification of changes, broadcast to all subscribers.
+///
+/// This is sent via the broadcast channel when triples are modified.
+/// Subscribers receive this and can convert to protocol-specific formats.
+#[derive(Debug, Clone)]
+#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
+pub struct ChangeNotification {
+    /// The changes that occurred in this transaction.
+    pub changes: Vec<ChangeRecord>,
+}

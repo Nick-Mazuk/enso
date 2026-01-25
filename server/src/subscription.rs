@@ -128,18 +128,6 @@ impl std::fmt::Display for SubscriptionError {
 
 impl std::error::Error for SubscriptionError {}
 
-/// A notification of changes to be sent to subscribers.
-///
-/// This is broadcast to all connections when triples are modified.
-/// Each connection filters based on its subscription criteria.
-/// Contains proto types for direct serialization to clients.
-#[derive(Debug, Clone)]
-#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
-pub struct ChangeNotification {
-    /// The changes that occurred (as proto messages).
-    pub changes: Vec<proto::ChangeRecord>,
-}
-
 /// Convert a WAL `LogRecord` to a proto `ChangeRecord`.
 ///
 /// Returns `None` for non-change records (BEGIN, COMMIT, CHECKPOINT).

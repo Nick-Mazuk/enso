@@ -13,6 +13,10 @@ This repository consists of client code in ./client and the server in ./server.
 
 ## Code style
 
+Naming:
+
+- Never abbreviate
+
 Safety:
 
 - Design by contract: on all functions / classes, document pre-conditions, post-conditions, and invariants.

@@ -1,11 +1,11 @@
 //! End-to-end tests for subscription/change notification operations.
 //!
 //! These tests verify that change notifications are properly broadcast
-//! when triples are inserted, updated, or deleted through the ClientConnection.
+//! when triples are inserted, updated, or deleted through the `ClientConnection`.
 
 use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
-use crate::storage::HlcTimestamp;
+use crate::storage::{ChangeType, HlcTimestamp, TripleValue};
 
 /// Test that inserting a triple broadcasts a change notification.
 #[test]
@@ -40,18 +40,12 @@ fn test_insert_broadcasts_change_notification() {
     assert_eq!(notification.changes.len(), 1);
 
     let change = &notification.changes[0];
-    assert_eq!(change.change_type, proto::ChangeType::Insert as i32);
-
-    let triple = change.triple.as_ref().expect("should have triple");
-    assert_eq!(triple.entity_id.as_ref(), Some(&entity_id.to_vec()));
-    assert_eq!(triple.attribute_id.as_ref(), Some(&attribute_id.to_vec()));
+    assert_eq!(change.change_type, ChangeType::Insert);
+    assert_eq!(change.entity_id, entity_id);
+    assert_eq!(change.attribute_id, attribute_id);
 
     // Assert the value is correct
-    let value = triple.value.as_ref().expect("should have value");
-    assert_eq!(
-        value.value,
-        Some(proto::triple_value::Value::String("test".to_string()))
-    );
+    assert_eq!(change.value, Some(TripleValue::String("test".to_string())));
 }
 
 /// Test that updating a triple broadcasts a change notification with Update type.
@@ -107,17 +101,14 @@ fn test_update_broadcasts_change_notification() {
     assert_eq!(notification.changes.len(), 1);
 
     let change = &notification.changes[0];
-    assert_eq!(change.change_type, proto::ChangeType::Update as i32);
-
-    let triple = change.triple.as_ref().expect("should have triple");
-    assert_eq!(triple.entity_id.as_ref(), Some(&entity_id.to_vec()));
-    assert_eq!(triple.attribute_id.as_ref(), Some(&attribute_id.to_vec()));
+    assert_eq!(change.change_type, ChangeType::Update);
+    assert_eq!(change.entity_id, entity_id);
+    assert_eq!(change.attribute_id, attribute_id);
 
     // Assert the updated value is correct
-    let value = triple.value.as_ref().expect("should have value");
     assert_eq!(
-        value.value,
-        Some(proto::triple_value::Value::String("updated".to_string()))
+        change.value,
+        Some(TripleValue::String("updated".to_string()))
     );
 }
 
@@ -165,31 +156,18 @@ fn test_batch_insert_broadcasts_multiple_changes() {
     assert_eq!(notification.changes.len(), 2);
 
     // First change
+    assert_eq!(notification.changes[0].change_type, ChangeType::Insert);
     assert_eq!(
-        notification.changes[0].change_type,
-        proto::ChangeType::Insert as i32
-    );
-    let triple1 = notification.changes[0]
-        .triple
-        .as_ref()
-        .expect("should have triple");
-    let value1 = triple1.value.as_ref().expect("should have value");
-    assert_eq!(
-        value1.value,
-        Some(proto::triple_value::Value::String("first".to_string()))
+        notification.changes[0].value,
+        Some(TripleValue::String("first".to_string()))
     );
 
     // Second change
+    assert_eq!(notification.changes[1].change_type, ChangeType::Insert);
     assert_eq!(
-        notification.changes[1].change_type,
-        proto::ChangeType::Insert as i32
+        notification.changes[1].value,
+        Some(TripleValue::Number(42.0))
     );
-    let triple2 = notification.changes[1]
-        .triple
-        .as_ref()
-        .expect("should have triple");
-    let value2 = triple2.value.as_ref().expect("should have value");
-    assert_eq!(value2.value, Some(proto::triple_value::Value::Number(42.0)));
 }
 
 /// Test that `get_changes_since` returns changes after a given HLC.
@@ -356,10 +334,9 @@ fn test_insert_boolean_broadcasts_correctly() {
 
     // Verify the boolean value is correct in the notification
     let notification = change_rx.try_recv().expect("should receive notification");
-    let triple = notification.changes[0]
-        .triple
-        .as_ref()
-        .expect("should have triple");
-    let value = triple.value.as_ref().expect("should have value");
-    assert_eq!(value.value, Some(proto::triple_value::Value::Boolean(true)));
+    assert_eq!(notification.changes[0].change_type, ChangeType::Insert);
+    assert_eq!(
+        notification.changes[0].value,
+        Some(TripleValue::Boolean(true))
+    );
 }

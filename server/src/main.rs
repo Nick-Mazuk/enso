@@ -18,25 +18,19 @@ use axum::{
 use prost::Message as ProstMessage;
 use server::{
     ClientConnection, proto,
-    storage::Database,
+    storage::{ChangeRecord, ChangeType, Database},
     subscription::{
-        ChangeNotification, ClientSubscriptions, create_subscription_update,
-        log_record_to_change_record, proto_hlc_to_storage,
+        ClientSubscriptions, create_subscription_update, log_record_to_change_record,
+        proto_hlc_to_storage,
     },
 };
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Capacity for the broadcast channel.
-/// If a subscriber falls behind by this many notifications, they will start missing updates.
-const BROADCAST_CHANNEL_CAPACITY: usize = 1000;
-
 #[derive(Clone)]
 #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected for shared state
 struct AppState {
     client_connection: Arc<ClientConnection>,
-    /// Broadcast sender for change notifications.
-    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 #[tokio::main]
@@ -66,15 +60,8 @@ async fn main() {
         );
     }
 
-    // Create broadcast channel for change notifications
-    let (change_tx, _) = broadcast::channel(BROADCAST_CHANNEL_CAPACITY);
-
-    #[allow(clippy::disallowed_methods)] // Clone needed for broadcast sender
-    let client_connection = Arc::new(ClientConnection::new(database, change_tx.clone()));
-    let state = AppState {
-        client_connection,
-        change_tx,
-    };
+    let client_connection = Arc::new(ClientConnection::new(database));
+    let state = AppState { client_connection };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
@@ -102,11 +89,19 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
+#[allow(clippy::too_many_lines, clippy::disallowed_methods)]
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
     // Per-connection subscription tracking
     let mut subscriptions = ClientSubscriptions::new();
-    // Subscribe to the broadcast channel for change notifications
-    let mut change_rx = state.change_tx.subscribe();
+
+    // Subscribe to the broadcast channel for change notifications (from the database)
+    let mut change_rx = match state.client_connection.subscribe_to_changes() {
+        Ok(rx) => rx,
+        Err(e) => {
+            tracing::error!("Failed to subscribe to changes: {e}");
+            return;
+        }
+    };
 
     loop {
         tokio::select! {
@@ -189,12 +184,18 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             notification = change_rx.recv() => {
                 match notification {
                     Ok(change) => {
+                        // Convert storage change records to proto format
+                        let proto_changes: Vec<proto::ChangeRecord> = change.changes.iter().map(storage_change_to_proto).collect();
+
                         // Forward changes to all matching subscriptions
                         for sub in subscriptions.iter() {
                             // Filter changes based on subscription's since_hlc if applicable
                             // For now, send all changes to all subscriptions
                             // (since_hlc filtering was already done during initial backfill)
-                            let update = create_subscription_update(sub.id, &change.changes);
+                            let update = proto::SubscriptionUpdate {
+                                subscription_id: sub.id,
+                                changes: proto_changes.clone(),
+                            };
                             let msg = proto::ServerMessage {
                                 payload: Some(proto::server_message::Payload::SubscriptionUpdate(update)),
                             };
@@ -354,4 +355,40 @@ async fn handle_unsubscribe(
 
     tracing::debug!("subscription {} removed", subscription_id);
     Ok(())
+}
+
+/// Convert a storage change record to a proto change record.
+#[allow(clippy::disallowed_methods)] // Clone needed for String conversion
+fn storage_change_to_proto(change: &ChangeRecord) -> proto::ChangeRecord {
+    let change_type = match change.change_type {
+        ChangeType::Insert => proto::ChangeType::Insert,
+        ChangeType::Update => proto::ChangeType::Update,
+        ChangeType::Delete => proto::ChangeType::Delete,
+    };
+
+    let value = change.value.as_ref().map(|v| {
+        use server::storage::TripleValue;
+        proto::TripleValue {
+            value: Some(match v {
+                TripleValue::Null => proto::triple_value::Value::String(String::new()), // Null not directly representable
+                TripleValue::String(s) => proto::triple_value::Value::String(s.clone()),
+                TripleValue::Number(n) => proto::triple_value::Value::Number(*n),
+                TripleValue::Boolean(b) => proto::triple_value::Value::Boolean(*b),
+            }),
+        }
+    });
+
+    proto::ChangeRecord {
+        change_type: change_type.into(),
+        triple: Some(proto::Triple {
+            entity_id: Some(change.entity_id.to_vec()),
+            attribute_id: Some(change.attribute_id.to_vec()),
+            value,
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: change.hlc.physical_time,
+                logical_counter: change.hlc.logical_counter,
+                node_id: change.hlc.node_id,
+            }),
+        }),
+    }
 }

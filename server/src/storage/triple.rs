@@ -44,7 +44,8 @@ impl TryFrom<u8> for ValueType {
 }
 
 /// A triple value.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
 pub enum TripleValue {
     Null,
     Boolean(bool),

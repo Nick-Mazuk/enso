@@ -2,13 +2,13 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 
 use crate::client_connection::ClientConnection;
 use crate::proto;
-use crate::storage::Database;
-use crate::subscription::ChangeNotification;
+use crate::storage::{ChangeNotification, Database};
 
 /// Counter for generating unique test database IDs.
 static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -18,8 +18,8 @@ pub struct TestClient {
     pub client: ClientConnection,
     pub runtime: tokio::runtime::Runtime,
     db_path: PathBuf,
-    /// Broadcast sender for subscriptions.
-    change_tx: broadcast::Sender<ChangeNotification>,
+    /// Shared database reference for creating sibling clients.
+    shared_db: Arc<Mutex<Database>>,
 }
 
 impl TestClient {
@@ -36,9 +36,9 @@ impl TestClient {
         #[allow(clippy::expect_used)]
         let database = Database::create(&db_path).expect("Failed to create test database");
 
-        // Create broadcast channel for subscriptions
-        let (change_tx, _) = broadcast::channel::<ChangeNotification>(100);
-        let client = ClientConnection::new(database, change_tx.clone());
+        // Database now handles broadcast channel internally
+        let client = ClientConnection::new(database);
+        let shared_db = client.shared_database();
 
         #[allow(clippy::expect_used)]
         let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
@@ -47,8 +47,20 @@ impl TestClient {
             client,
             runtime,
             db_path,
-            change_tx,
+            shared_db,
         }
+    }
+
+    /// Create a sibling client that shares the same database.
+    ///
+    /// This simulates multiple WebSocket connections to the same server,
+    /// each with their own `ClientConnection` but sharing the same database.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    pub fn create_sibling(&self) -> SiblingClient {
+        let shared_db = Arc::clone(&self.shared_db);
+        let client = ClientConnection::new_shared(shared_db);
+        SiblingClient { client }
     }
 
     /// Send a message and return the response.
@@ -70,9 +82,16 @@ impl TestClient {
     ///
     /// Returns a receiver that will receive all change notifications broadcast
     /// after this call.
+    ///
+    /// # Panics
+    ///
+    /// Panics if subscribing to the database fails.
     #[must_use]
     pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
-        self.change_tx.subscribe()
+        #[allow(clippy::expect_used)]
+        self.client
+            .subscribe_to_changes()
+            .expect("Failed to subscribe to changes")
     }
 
     /// Get changes since a given HLC timestamp.
@@ -89,6 +108,42 @@ impl TestClient {
 impl Drop for TestClient {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.db_path);
+    }
+}
+
+/// A sibling client that shares the same database as its parent `TestClient`.
+///
+/// This represents a separate WebSocket connection to the same server.
+/// It does not own the database file and does not clean it up on drop.
+pub struct SiblingClient {
+    pub client: ClientConnection,
+}
+
+impl SiblingClient {
+    /// Send a message and return the response.
+    ///
+    /// Uses a new runtime for each call since siblings don't own a runtime.
+    pub fn handle_message(&self, message: proto::ClientMessage) -> proto::ServerResponse {
+        #[allow(clippy::expect_used)]
+        let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+        let response = runtime.block_on(async { self.client.handle_message(message).await });
+
+        #[allow(clippy::expect_used)]
+        match response.payload.expect("Response should be present") {
+            proto::server_message::Payload::Response(r) => r,
+            proto::server_message::Payload::SubscriptionUpdate(_) => {
+                panic!("Expected Response, got SubscriptionUpdate")
+            }
+        }
+    }
+
+    /// Subscribe to change notifications.
+    #[must_use]
+    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
+        #[allow(clippy::expect_used)]
+        self.client
+            .subscribe_to_changes()
+            .expect("Failed to subscribe to changes")
     }
 }
 

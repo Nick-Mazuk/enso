@@ -28,6 +28,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use tokio::sync::broadcast;
+
 use crate::storage::checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
     maybe_checkpoint,
@@ -44,6 +46,7 @@ use crate::storage::triple::{
     AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
 };
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
+use crate::storage::{ChangeNotification, ChangeRecord, ChangeType};
 
 /// Trait for applying operations to secondary indexes (attribute and entity-attribute).
 ///
@@ -208,6 +211,9 @@ impl ActiveSnapshots {
 /// Default node ID for single-node deployments.
 const DEFAULT_NODE_ID: u32 = 0;
 
+/// Default capacity for the change notification broadcast channel.
+const DEFAULT_BROADCAST_CAPACITY: usize = 1000;
+
 /// A database instance with WAL and crash recovery.
 ///
 /// This is the main entry point for working with the storage engine.
@@ -218,6 +224,11 @@ const DEFAULT_NODE_ID: u32 = 0;
 /// The database supports multiple concurrent read-only snapshots via `begin_readonly()`.
 /// Each snapshot sees a consistent view of the database at its creation time.
 /// Write transactions via `begin()` are still single-threaded.
+///
+/// # Change Notifications
+///
+/// The database broadcasts change notifications when transactions commit.
+/// Use `subscribe_to_changes()` to receive notifications of all committed changes.
 pub struct Database {
     file: DatabaseFile,
     checkpoint_state: CheckpointState,
@@ -225,6 +236,8 @@ pub struct Database {
     clock: Clock<SystemTimeSource>,
     /// Tracks active read-only snapshots for garbage collection.
     active_snapshots: ActiveSnapshots,
+    /// Broadcast sender for change notifications.
+    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 impl Database {
@@ -262,11 +275,15 @@ impl Database {
         let checkpoint_state = CheckpointState::from_database(&file, checkpoint_config);
         let clock = Clock::new(node_id, SystemTimeSource);
 
+        // Create broadcast channel for change notifications
+        let (change_tx, _) = broadcast::channel(DEFAULT_BROADCAST_CAPACITY);
+
         Ok(Self {
             file,
             checkpoint_state,
             clock,
             active_snapshots: ActiveSnapshots::default(),
+            change_tx,
         })
     }
 
@@ -304,12 +321,16 @@ impl Database {
         let last_hlc = file.superblock().last_checkpoint_hlc;
         let clock = Clock::from_timestamp(node_id, last_hlc, SystemTimeSource);
 
+        // Create broadcast channel for change notifications
+        let (change_tx, _) = broadcast::channel(DEFAULT_BROADCAST_CAPACITY);
+
         Ok((
             Self {
                 file,
                 checkpoint_state,
                 clock,
                 active_snapshots: ActiveSnapshots::default(),
+                change_tx,
             },
             recovery_result,
         ))
@@ -334,6 +355,7 @@ impl Database {
     ///
     /// # Panics
     /// Panics if transaction ID is 0 (indicates uninitialized database state).
+    #[allow(clippy::disallowed_methods)] // Clone needed for broadcast sender
     pub fn begin(&mut self) -> Result<WalTransaction<'_>, DatabaseError> {
         // Get next transaction ID
         let txn_id = self.file.superblock().next_txn_id;
@@ -353,6 +375,7 @@ impl Database {
             &mut self.clock,
             txn_id,
             hlc,
+            self.change_tx.clone(),
         ))
     }
 
@@ -593,6 +616,17 @@ impl Database {
         let mut wal = self.file.wal()?;
         Ok(wal.changes_since(since)?)
     }
+
+    /// Subscribe to change notifications.
+    ///
+    /// Returns a receiver that will receive all change notifications broadcast
+    /// after this call. Use this to implement real-time subscriptions.
+    ///
+    /// Multiple subscribers can exist simultaneously - each receives all changes.
+    #[must_use]
+    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
+        self.change_tx.subscribe()
+    }
 }
 
 /// A buffered operation for WAL transaction.
@@ -610,6 +644,9 @@ enum BufferedOp {
         entity_id: EntityId,
         attribute_id: AttributeId,
         value: TripleValue,
+        /// Optional client-provided HLC for conflict resolution.
+        /// If None, uses the transaction's HLC.
+        hlc: Option<HlcTimestamp>,
     },
     Delete {
         entity_id: EntityId,
@@ -631,15 +668,19 @@ pub struct WalTransaction<'a> {
     operations: Vec<BufferedOp>,
     /// Whether this transaction has been finalized
     finalized: bool,
+    /// Broadcast sender for change notifications.
+    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 impl<'a> WalTransaction<'a> {
-    const fn new(
+    #[allow(clippy::missing_const_for_fn)] // broadcast::Sender is not const
+    fn new(
         file: &'a mut DatabaseFile,
         checkpoint_state: &'a mut CheckpointState,
         clock: &'a mut Clock<SystemTimeSource>,
         txn_id: TxnId,
         hlc: HlcTimestamp,
+        change_tx: broadcast::Sender<ChangeNotification>,
     ) -> Self {
         Self {
             file,
@@ -649,6 +690,7 @@ impl<'a> WalTransaction<'a> {
             hlc,
             operations: Vec::new(),
             finalized: false,
+            change_tx,
         }
     }
 
@@ -799,8 +841,31 @@ impl<'a> WalTransaction<'a> {
             entity_id,
             attribute_id,
             value,
+            hlc: None,
         });
         Ok(())
+    }
+
+    /// Update a triple with a specific HLC timestamp.
+    ///
+    /// Similar to `update()` but uses the provided HLC instead of the
+    /// transaction's clock. Used for client-provided updates where the
+    /// client's HLC should be preserved.
+    ///
+    /// The operation is buffered until commit.
+    pub fn update_with_hlc(
+        &mut self,
+        entity_id: EntityId,
+        attribute_id: AttributeId,
+        value: TripleValue,
+        hlc: HlcTimestamp,
+    ) {
+        self.operations.push(BufferedOp::Update {
+            entity_id,
+            attribute_id,
+            value,
+            hlc: Some(hlc),
+        });
     }
 
     /// Delete a triple.
@@ -831,8 +896,9 @@ impl<'a> WalTransaction<'a> {
     /// 3. Writes COMMIT record to WAL
     /// 4. Syncs WAL
     /// 5. Applies operations to the index
-    /// 6. Updates superblock
-    /// 7. Optionally triggers checkpoint
+    /// 6. Broadcasts change notifications
+    /// 7. Updates superblock
+    /// 8. Optionally triggers checkpoint
     ///
     /// # Panics
     /// Panics if the transaction was already finalized.
@@ -863,12 +929,15 @@ impl<'a> WalTransaction<'a> {
         // Step 5: Apply operations to index
         self.apply_to_index(txn_id, hlc)?;
 
-        // Step 6: Update superblock
+        // Step 6: Broadcast change notifications
+        self.broadcast_changes(hlc);
+
+        // Step 7: Update superblock
         self.file.superblock_mut().next_txn_id = txn_id + 1;
         self.file.write_superblock()?;
         self.file.sync()?;
 
-        // Step 7: Update checkpoint state and maybe checkpoint
+        // Step 8: Update checkpoint state and maybe checkpoint
         self.checkpoint_state.record_commit();
         self.checkpoint_state.record_wal_write(wal_bytes_written);
 
@@ -916,17 +985,20 @@ impl<'a> WalTransaction<'a> {
                     entity_id,
                     attribute_id,
                     value,
+                    hlc: op_hlc,
                 } => {
+                    // Use per-op HLC if provided, otherwise use transaction HLC
+                    let record_hlc = op_hlc.unwrap_or(hlc);
                     let record = TripleRecord::new(
                         *entity_id,
                         *attribute_id,
                         txn_id,
-                        hlc,
+                        record_hlc,
                         value.clone_value(),
                     );
                     let payload = LogRecordPayload::update(&record);
                     total_bytes += payload.serialized_size() as u64;
-                    wal.append(txn_id, hlc, payload)?;
+                    wal.append(txn_id, record_hlc, payload)?;
                 }
                 BufferedOp::Delete {
                     entity_id,
@@ -987,12 +1059,15 @@ impl<'a> WalTransaction<'a> {
                         entity_id,
                         attribute_id,
                         value,
+                        hlc: op_hlc,
                     } => {
+                        // Use per-op HLC if provided, otherwise use transaction HLC
+                        let record_hlc = op_hlc.unwrap_or(hlc);
                         let record = TripleRecord::new(
                             *entity_id,
                             *attribute_id,
                             txn_id,
-                            hlc,
+                            record_hlc,
                             value.clone_value(),
                         );
                         index.insert(&record)?;
@@ -1045,6 +1120,57 @@ impl<'a> WalTransaction<'a> {
         self.file.superblock_mut().entity_attribute_index_root = entity_attribute_root;
 
         Ok(())
+    }
+
+    /// Broadcast change notifications to all subscribers.
+    fn broadcast_changes(&self, hlc: HlcTimestamp) {
+        if self.operations.is_empty() {
+            return;
+        }
+
+        let changes: Vec<ChangeRecord> = self
+            .operations
+            .iter()
+            .map(|op| match op {
+                BufferedOp::Insert {
+                    entity_id,
+                    attribute_id,
+                    value,
+                    hlc: op_hlc,
+                } => ChangeRecord {
+                    change_type: ChangeType::Insert,
+                    entity_id: *entity_id,
+                    attribute_id: *attribute_id,
+                    value: Some(value.clone_value()),
+                    hlc: op_hlc.unwrap_or(hlc),
+                },
+                BufferedOp::Update {
+                    entity_id,
+                    attribute_id,
+                    value,
+                    hlc: op_hlc,
+                } => ChangeRecord {
+                    change_type: ChangeType::Update,
+                    entity_id: *entity_id,
+                    attribute_id: *attribute_id,
+                    value: Some(value.clone_value()),
+                    hlc: op_hlc.unwrap_or(hlc),
+                },
+                BufferedOp::Delete {
+                    entity_id,
+                    attribute_id,
+                } => ChangeRecord {
+                    change_type: ChangeType::Delete,
+                    entity_id: *entity_id,
+                    attribute_id: *attribute_id,
+                    value: None,
+                    hlc,
+                },
+            })
+            .collect();
+
+        // Ignore send errors - no subscribers is not an error
+        let _ = self.change_tx.send(ChangeNotification { changes });
     }
 
     /// Abort the transaction.

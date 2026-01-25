@@ -8,12 +8,9 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use tokio::sync::broadcast;
-
 use crate::client_connection::ClientConnection;
 use crate::proto;
 use crate::storage::Database;
-use crate::subscription::ChangeNotification;
 
 /// Counter for generating unique simulator instance IDs.
 static SIMULATOR_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -184,9 +181,8 @@ impl Simulator {
             }
         };
 
-        // Create a broadcast channel for subscriptions (not used in simulation tests)
-        let (change_tx, _) = broadcast::channel::<ChangeNotification>(1);
-        let client_connection = ClientConnection::new(database, change_tx);
+        // Create client connection (database now handles broadcasting internally)
+        let client_connection = ClientConnection::new(database);
 
         // Run the simulation
         let result = self.run_with_connection(&client_connection, message_count);
