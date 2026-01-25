@@ -1,7 +1,7 @@
 //! Test string length limits.
 
 use crate::e2e_tests::helpers::{
-    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id, status_code,
+    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id, new_hlc, status_code,
 };
 use crate::proto;
 
@@ -25,6 +25,7 @@ fn test_max_length_string_value() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(max_string.clone())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -78,6 +79,7 @@ fn test_string_too_long_rejected() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(too_long_string)),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

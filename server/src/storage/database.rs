@@ -602,6 +602,9 @@ enum BufferedOp {
         entity_id: EntityId,
         attribute_id: AttributeId,
         value: TripleValue,
+        /// Optional client-provided HLC for conflict resolution.
+        /// If None, uses the transaction's HLC.
+        hlc: Option<HlcTimestamp>,
     },
     Update {
         entity_id: EntityId,
@@ -749,11 +752,32 @@ impl<'a> WalTransaction<'a> {
     /// Insert a triple.
     ///
     /// The operation is buffered until commit.
+    /// Uses the transaction's HLC timestamp.
     pub fn insert(&mut self, entity_id: EntityId, attribute_id: AttributeId, value: TripleValue) {
         self.operations.push(BufferedOp::Insert {
             entity_id,
             attribute_id,
             value,
+            hlc: None,
+        });
+    }
+
+    /// Insert a triple with a client-provided HLC timestamp.
+    ///
+    /// The operation is buffered until commit.
+    /// Uses the provided HLC instead of the transaction's HLC for conflict resolution.
+    pub fn insert_with_hlc(
+        &mut self,
+        entity_id: EntityId,
+        attribute_id: AttributeId,
+        value: TripleValue,
+        hlc: HlcTimestamp,
+    ) {
+        self.operations.push(BufferedOp::Insert {
+            entity_id,
+            attribute_id,
+            value,
+            hlc: Some(hlc),
         });
     }
 
@@ -873,17 +897,20 @@ impl<'a> WalTransaction<'a> {
                     entity_id,
                     attribute_id,
                     value,
+                    hlc: op_hlc,
                 } => {
+                    // Use per-op HLC if provided, otherwise use transaction HLC
+                    let record_hlc = op_hlc.unwrap_or(hlc);
                     let record = TripleRecord::new(
                         *entity_id,
                         *attribute_id,
                         txn_id,
-                        hlc,
+                        record_hlc,
                         value.clone_value(),
                     );
                     let payload = LogRecordPayload::insert(&record);
                     total_bytes += payload.serialized_size() as u64;
-                    wal.append(txn_id, hlc, payload)?;
+                    wal.append(txn_id, record_hlc, payload)?;
                 }
                 BufferedOp::Update {
                     entity_id,
@@ -943,8 +970,20 @@ impl<'a> WalTransaction<'a> {
                         entity_id,
                         attribute_id,
                         value,
+                        hlc: op_hlc,
+                    } => {
+                        // Use per-op HLC if provided, otherwise use transaction HLC
+                        let record_hlc = op_hlc.unwrap_or(hlc);
+                        let record = TripleRecord::new(
+                            *entity_id,
+                            *attribute_id,
+                            txn_id,
+                            record_hlc,
+                            value.clone_value(),
+                        );
+                        index.insert(&record)?;
                     }
-                    | BufferedOp::Update {
+                    BufferedOp::Update {
                         entity_id,
                         attribute_id,
                         value,

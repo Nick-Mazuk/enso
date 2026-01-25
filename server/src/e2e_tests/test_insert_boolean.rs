@@ -1,7 +1,7 @@
 //! Test inserting and querying a boolean value.
 
 use crate::e2e_tests::helpers::{
-    TestClient, get_bool_value, is_ok, new_attribute_id, new_entity_id,
+    TestClient, get_bool_value, is_ok, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
@@ -23,6 +23,7 @@ fn test_insert_boolean_then_query() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Boolean(true)),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

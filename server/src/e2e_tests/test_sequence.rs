@@ -1,7 +1,7 @@
 //! Test a sequence of operations: insert, query, update, query.
 
 use crate::e2e_tests::helpers::{
-    TestClient, get_number_value, is_ok, new_attribute_id, new_entity_id,
+    TestClient, get_number_value, is_ok, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
@@ -23,6 +23,7 @@ fn test_sequence_insert_query_update_query() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(1.0)),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -66,6 +67,7 @@ fn test_sequence_insert_query_update_query() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(2.0)),
                     }),
+                    hlc: Some(new_hlc(2)),
                 }],
             },
         )),

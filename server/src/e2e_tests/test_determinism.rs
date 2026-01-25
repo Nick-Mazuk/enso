@@ -1,6 +1,8 @@
 //! Test that the same sequence of operations produces identical results.
 
-use crate::e2e_tests::helpers::{TestClient, new_attribute_id, new_entity_id, status_code};
+use crate::e2e_tests::helpers::{
+    TestClient, new_attribute_id, new_entity_id, new_hlc, status_code,
+};
 use crate::proto;
 
 #[allow(clippy::too_many_lines)]
@@ -23,6 +25,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("first".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -38,6 +41,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(42.0)),
                     }),
+                    hlc: Some(new_hlc(2)),
                 }],
             },
         )),
@@ -84,6 +88,7 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("updated".to_string())),
                     }),
+                    hlc: Some(new_hlc(3)),
                 }],
             },
         )),

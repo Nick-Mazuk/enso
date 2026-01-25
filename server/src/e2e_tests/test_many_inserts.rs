@@ -1,6 +1,6 @@
 //! Test inserting many triples sequentially.
 
-use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 
 #[test]
@@ -23,6 +23,7 @@ fn test_many_sequential_inserts() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Number(f64::from(i))),
                         }),
+                        hlc: Some(new_hlc(u64::from(i) + 1)),
                     }],
                 },
             )),

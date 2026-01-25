@@ -169,3 +169,19 @@ pub fn get_bool_value(response: &proto::ServerResponse, row: usize) -> Option<bo
         _ => None,
     })
 }
+
+// =============================================================================
+// HLC Helpers
+// =============================================================================
+
+/// Create a new HLC timestamp for testing.
+///
+/// Uses a simple pattern where the seed value is used to create a unique HLC.
+#[must_use]
+pub fn new_hlc(seed: u64) -> proto::HlcTimestamp {
+    proto::HlcTimestamp {
+        physical_time_ms: seed * 1000,
+        logical_counter: 0,
+        node_id: 1,
+    }
+}

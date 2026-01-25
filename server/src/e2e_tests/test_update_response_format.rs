@@ -3,7 +3,7 @@
 //! Per the protocol specification, update responses return the most up-to-date
 //! values for all triples that were written.
 
-use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 
 #[test]
@@ -24,6 +24,7 @@ fn test_insert_response_returns_written_triples() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("hello".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -70,6 +71,7 @@ fn test_update_response_returns_current_value() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("original".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -88,6 +90,7 @@ fn test_update_response_returns_current_value() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("updated".to_string())),
                     }),
+                    hlc: Some(new_hlc(2)),
                 }],
             },
         )),
@@ -132,6 +135,7 @@ fn test_multi_triple_update_returns_all_values() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::String("value1".to_string())),
                         }),
+                        hlc: Some(new_hlc(1)),
                     },
                     proto::Triple {
                         entity_id: Some(new_entity_id(83).to_vec()),
@@ -139,6 +143,7 @@ fn test_multi_triple_update_returns_all_values() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Number(42.0)),
                         }),
+                        hlc: Some(new_hlc(2)),
                     },
                     proto::Triple {
                         entity_id: Some(new_entity_id(84).to_vec()),
@@ -146,6 +151,7 @@ fn test_multi_triple_update_returns_all_values() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Boolean(true)),
                         }),
+                        hlc: Some(new_hlc(3)),
                     },
                 ],
             },

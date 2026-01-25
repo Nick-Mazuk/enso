@@ -10,6 +10,7 @@ mod helpers;
 mod test_columns;
 mod test_determinism;
 mod test_empty_triples;
+mod test_hlc_conflict_resolution;
 mod test_insert_boolean;
 mod test_insert_multiple_entities;
 mod test_insert_multiple_triples;

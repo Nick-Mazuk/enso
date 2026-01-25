@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file protocol.proto.
  */
 export const file_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wigAEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZCJNCgtUcmlwbGVWYWx1ZRIQCgZzdHJpbmcYAyABKAlIABIQCgZudW1iZXIYBCABKAFIABIRCgdib29sZWFuGAUgASgISABCBwoFdmFsdWUiqwEKDUNsaWVudE1lc3NhZ2USFwoKcmVxdWVzdF9pZBgBIAEoDUgBiAEBEj4KFXRyaXBsZV91cGRhdGVfcmVxdWVzdBgCIAEoCzIdLnByb3RvY29sLlRyaXBsZVVwZGF0ZVJlcXVlc3RIABInCgVxdWVyeRgDIAEoCzIWLnByb3RvY29sLlF1ZXJ5UmVxdWVzdEgAQgkKB3BheWxvYWRCDQoLX3JlcXVlc3RfaWQiuAEKDFF1ZXJ5UmVxdWVzdBIsCgRmaW5kGAEgAygLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGUSJQoFd2hlcmUYAiADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKAoIb3B0aW9uYWwYAyADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKQoJd2hlcmVfbm90GAQgAygLMhYucHJvdG9jb2wuUXVlcnlQYXR0ZXJuIrwCCgxRdWVyeVBhdHRlcm4SEwoJZW50aXR5X2lkGAEgASgMSAASOQoPZW50aXR5X3ZhcmlhYmxlGAIgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIABIWCgxhdHRyaWJ1dGVfaWQYAyABKAxIARI8ChJhdHRyaWJ1dGVfdmFyaWFibGUYBCABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgBEiYKBXZhbHVlGAUgASgLMhUucHJvdG9jb2wuVHJpcGxlVmFsdWVIAhI4Cg52YWx1ZV92YXJpYWJsZRgGIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAJCCAoGZW50aXR5QgsKCWF0dHJpYnV0ZUINCgt2YWx1ZV9ncm91cCI0ChRRdWVyeVBhdHRlcm5WYXJpYWJsZRISCgVsYWJlbBgBIAEoCUgAiAEBQggKBl9sYWJlbCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlIm4KEFF1ZXJ5UmVzdWx0VmFsdWUSDAoCaWQYASABKAlIABItCgx0cmlwbGVfdmFsdWUYAiABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgAEhQKDGlzX3VuZGVmaW5lZBgDIAEoCEIHCgV2YWx1ZSI8Cg5RdWVyeVJlc3VsdFJvdxIqCgZ2YWx1ZXMYASADKAsyGi5wcm90b2NvbC5RdWVyeVJlc3VsdFZhbHVlIsgBCg5TZXJ2ZXJSZXNwb25zZRIXCgpyZXF1ZXN0X2lkGAEgASgNSACIAQESJwoGc3RhdHVzGAIgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXNIAYgBARIhCgd0cmlwbGVzGAMgAygLMhAucHJvdG9jb2wuVHJpcGxlEg8KB2NvbHVtbnMYBCADKAkSJgoEcm93cxgFIAMoCzIYLnByb3RvY29sLlF1ZXJ5UmVzdWx0Um93Qg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
+  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wisgEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlEigKA2hsYxgEIAEoCzIWLnByb3RvY29sLkhsY1RpbWVzdGFtcEgCiAEBQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZEIGCgRfaGxjIlIKDEhsY1RpbWVzdGFtcBIYChBwaHlzaWNhbF90aW1lX21zGAEgASgEEhcKD2xvZ2ljYWxfY291bnRlchgCIAEoDRIPCgdub2RlX2lkGAMgASgNIk0KC1RyaXBsZVZhbHVlEhAKBnN0cmluZxgDIAEoCUgAEhAKBm51bWJlchgEIAEoAUgAEhEKB2Jvb2xlYW4YBSABKAhIAEIHCgV2YWx1ZSKrAQoNQ2xpZW50TWVzc2FnZRIXCgpyZXF1ZXN0X2lkGAEgASgNSAGIAQESPgoVdHJpcGxlX3VwZGF0ZV9yZXF1ZXN0GAIgASgLMh0ucHJvdG9jb2wuVHJpcGxlVXBkYXRlUmVxdWVzdEgAEicKBXF1ZXJ5GAMgASgLMhYucHJvdG9jb2wuUXVlcnlSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCK4AQoMUXVlcnlSZXF1ZXN0EiwKBGZpbmQYASADKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZRIlCgV3aGVyZRgCIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIoCghvcHRpb25hbBgDIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIpCgl3aGVyZV9ub3QYBCADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4ivAIKDFF1ZXJ5UGF0dGVybhITCgllbnRpdHlfaWQYASABKAxIABI5Cg9lbnRpdHlfdmFyaWFibGUYAiABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgAEhYKDGF0dHJpYnV0ZV9pZBgDIAEoDEgBEjwKEmF0dHJpYnV0ZV92YXJpYWJsZRgEIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAESJgoFdmFsdWUYBSABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgCEjgKDnZhbHVlX3ZhcmlhYmxlGAYgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIAkIICgZlbnRpdHlCCwoJYXR0cmlidXRlQg0KC3ZhbHVlX2dyb3VwIjQKFFF1ZXJ5UGF0dGVyblZhcmlhYmxlEhIKBWxhYmVsGAEgASgJSACIAQFCCAoGX2xhYmVsIjgKE1RyaXBsZVVwZGF0ZVJlcXVlc3QSIQoHdHJpcGxlcxgBIAMoCzIQLnByb3RvY29sLlRyaXBsZSI7Cg1TZXJ2ZXJNZXNzYWdlEioKCHJlc3BvbnNlGAEgASgLMhgucHJvdG9jb2wuU2VydmVyUmVzcG9uc2UibgoQUXVlcnlSZXN1bHRWYWx1ZRIMCgJpZBgBIAEoCUgAEi0KDHRyaXBsZV92YWx1ZRgCIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlSAASFAoMaXNfdW5kZWZpbmVkGAMgASgIQgcKBXZhbHVlIjwKDlF1ZXJ5UmVzdWx0Um93EioKBnZhbHVlcxgBIAMoCzIaLnByb3RvY29sLlF1ZXJ5UmVzdWx0VmFsdWUiyAEKDlNlcnZlclJlc3BvbnNlEhcKCnJlcXVlc3RfaWQYASABKA1IAIgBARInCgZzdGF0dXMYAiABKAsyEi5nb29nbGUucnBjLlN0YXR1c0gBiAEBEiEKB3RyaXBsZXMYAyADKAsyEC5wcm90b2NvbC5UcmlwbGUSDwoHY29sdW1ucxgEIAMoCRImCgRyb3dzGAUgAygLMhgucHJvdG9jb2wuUXVlcnlSZXN1bHRSb3dCDQoLX3JlcXVlc3RfaWRCCQoHX3N0YXR1c2IGcHJvdG8z", [file_google_rpc_status]);
 
 /**
  * Represents a single triple (entity, attribute, value) in the database.
@@ -33,7 +33,6 @@ export type Triple = Message<"protocol.Triple"> & {
    * Unique identifier for the attribute. Must be exactly 16 bytes.
    * Requests with attribute IDs of other lengths will be rejected with
    * InvalidArgument.
-   * TODO: describe the hashing algorithm used to get this id
    *
    * @generated from field: optional bytes attribute_id = 2;
    */
@@ -45,6 +44,14 @@ export type Triple = Message<"protocol.Triple"> & {
    * @generated from field: protocol.TripleValue value = 3;
    */
   value?: TripleValue;
+
+  /**
+   * HLC timestamp for conflict resolution. Required for update requests.
+   * In responses, contains the current timestamp of the stored value.
+   *
+   * @generated from field: optional protocol.HlcTimestamp hlc = 4;
+   */
+  hlc?: HlcTimestamp;
 };
 
 /**
@@ -53,6 +60,41 @@ export type Triple = Message<"protocol.Triple"> & {
  */
 export const TripleSchema: GenMessage<Triple> = /*@__PURE__*/
   messageDesc(file_protocol, 0);
+
+/**
+ * Hybrid Logical Clock timestamp for conflict resolution.
+ *
+ * @generated from message protocol.HlcTimestamp
+ */
+export type HlcTimestamp = Message<"protocol.HlcTimestamp"> & {
+  /**
+   * Physical time in milliseconds since Unix epoch.
+   *
+   * @generated from field: uint64 physical_time_ms = 1;
+   */
+  physicalTimeMs: bigint;
+
+  /**
+   * Logical counter for ordering events at the same physical time.
+   *
+   * @generated from field: uint32 logical_counter = 2;
+   */
+  logicalCounter: number;
+
+  /**
+   * Node identifier for distributed uniqueness.
+   *
+   * @generated from field: uint32 node_id = 3;
+   */
+  nodeId: number;
+};
+
+/**
+ * Describes the message protocol.HlcTimestamp.
+ * Use `create(HlcTimestampSchema)` to create a new message.
+ */
+export const HlcTimestampSchema: GenMessage<HlcTimestamp> = /*@__PURE__*/
+  messageDesc(file_protocol, 1);
 
 /**
  * The value component of a triple. Supports string, number, and boolean types.
@@ -96,7 +138,7 @@ export type TripleValue = Message<"protocol.TripleValue"> & {
  * Use `create(TripleValueSchema)` to create a new message.
  */
 export const TripleValueSchema: GenMessage<TripleValue> = /*@__PURE__*/
-  messageDesc(file_protocol, 1);
+  messageDesc(file_protocol, 2);
 
 /**
  * @generated from message protocol.ClientMessage
@@ -136,7 +178,7 @@ export type ClientMessage = Message<"protocol.ClientMessage"> & {
  * Use `create(ClientMessageSchema)` to create a new message.
  */
 export const ClientMessageSchema: GenMessage<ClientMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 2);
+  messageDesc(file_protocol, 3);
 
 /**
  * @generated from message protocol.QueryRequest
@@ -176,7 +218,7 @@ export type QueryRequest = Message<"protocol.QueryRequest"> & {
  * Use `create(QueryRequestSchema)` to create a new message.
  */
 export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 3);
+  messageDesc(file_protocol, 4);
 
 /**
  * @generated from message protocol.QueryPattern
@@ -239,7 +281,7 @@ export type QueryPattern = Message<"protocol.QueryPattern"> & {
  * Use `create(QueryPatternSchema)` to create a new message.
  */
 export const QueryPatternSchema: GenMessage<QueryPattern> = /*@__PURE__*/
-  messageDesc(file_protocol, 4);
+  messageDesc(file_protocol, 5);
 
 /**
  * @generated from message protocol.QueryPatternVariable
@@ -256,7 +298,7 @@ export type QueryPatternVariable = Message<"protocol.QueryPatternVariable"> & {
  * Use `create(QueryPatternVariableSchema)` to create a new message.
  */
 export const QueryPatternVariableSchema: GenMessage<QueryPatternVariable> = /*@__PURE__*/
-  messageDesc(file_protocol, 5);
+  messageDesc(file_protocol, 6);
 
 /**
  * @generated from message protocol.TripleUpdateRequest
@@ -273,7 +315,7 @@ export type TripleUpdateRequest = Message<"protocol.TripleUpdateRequest"> & {
  * Use `create(TripleUpdateRequestSchema)` to create a new message.
  */
 export const TripleUpdateRequestSchema: GenMessage<TripleUpdateRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 6);
+  messageDesc(file_protocol, 7);
 
 /**
  * @generated from message protocol.ServerMessage
@@ -296,7 +338,7 @@ export type ServerMessage = Message<"protocol.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 7);
+  messageDesc(file_protocol, 8);
 
 /**
  * A single value in a query result row
@@ -338,7 +380,7 @@ export type QueryResultValue = Message<"protocol.QueryResultValue"> & {
  * Use `create(QueryResultValueSchema)` to create a new message.
  */
 export const QueryResultValueSchema: GenMessage<QueryResultValue> = /*@__PURE__*/
-  messageDesc(file_protocol, 8);
+  messageDesc(file_protocol, 9);
 
 /**
  * A row of query results
@@ -357,7 +399,7 @@ export type QueryResultRow = Message<"protocol.QueryResultRow"> & {
  * Use `create(QueryResultRowSchema)` to create a new message.
  */
 export const QueryResultRowSchema: GenMessage<QueryResultRow> = /*@__PURE__*/
-  messageDesc(file_protocol, 9);
+  messageDesc(file_protocol, 10);
 
 /**
  * @generated from message protocol.ServerResponse
@@ -398,5 +440,5 @@ export type ServerResponse = Message<"protocol.ServerResponse"> & {
  * Use `create(ServerResponseSchema)` to create a new message.
  */
 export const ServerResponseSchema: GenMessage<ServerResponse> = /*@__PURE__*/
-  messageDesc(file_protocol, 10);
+  messageDesc(file_protocol, 11);
 

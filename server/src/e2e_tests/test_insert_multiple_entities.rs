@@ -1,7 +1,7 @@
 //! Test inserting triples for multiple entities.
 
 use crate::e2e_tests::helpers::{
-    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id,
+    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
@@ -24,6 +24,7 @@ fn test_insert_multiple_entities() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("entity one".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -41,6 +42,7 @@ fn test_insert_multiple_entities() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("entity two".to_string())),
                     }),
+                    hlc: Some(new_hlc(2)),
                 }],
             },
         )),

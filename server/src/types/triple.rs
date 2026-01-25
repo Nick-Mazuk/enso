@@ -1,6 +1,7 @@
 use crate::{
     constants::MAX_TRIPLE_STRING_VALUE_LENGTH,
     proto,
+    storage::HlcTimestamp,
     types::{ProtoDeserializable, ProtoSerializable},
 };
 
@@ -14,6 +15,18 @@ pub enum TripleValue {
     Number(f64),
 }
 
+impl TripleValue {
+    /// Create a copy of this value.
+    #[must_use]
+    pub fn clone_value(&self) -> Self {
+        match self {
+            Self::String(s) => Self::String(s.as_str().to_owned()),
+            Self::Boolean(b) => Self::Boolean(*b),
+            Self::Number(n) => Self::Number(*n),
+        }
+    }
+}
+
 #[derive(Debug)]
 /// A triple, readonly.
 ///
@@ -22,6 +35,8 @@ pub struct Triple {
     pub entity_id: ID,
     pub attribute_id: ID,
     pub value: TripleValue,
+    /// HLC timestamp for conflict resolution.
+    pub hlc: HlcTimestamp,
 }
 
 fn validate_proto_string<S: Into<Option<prost::alloc::string::String>>>(
@@ -88,10 +103,19 @@ impl ProtoDeserializable<proto::Triple> for Triple {
             Some(proto::triple_value::Value::Number(number)) => TripleValue::Number(number),
             None => return Err("Triple proto did not contain an object.".into()),
         };
+        let proto_hlc = proto_triple
+            .hlc
+            .ok_or("Triple proto did not contain an hlc timestamp.")?;
+        let hlc = HlcTimestamp {
+            physical_time: proto_hlc.physical_time_ms,
+            logical_counter: proto_hlc.logical_counter,
+            node_id: proto_hlc.node_id,
+        };
         Ok(Self {
             entity_id,
             attribute_id,
             value,
+            hlc,
         })
     }
 }
@@ -109,6 +133,11 @@ impl ProtoSerializable<proto::Triple> for Triple {
                     }
                     TripleValue::Number(number) => Some(proto::triple_value::Value::Number(number)),
                 },
+            }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: self.hlc.physical_time,
+                logical_counter: self.hlc.logical_counter,
+                node_id: self.hlc.node_id,
             }),
         }
     }

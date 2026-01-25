@@ -1,6 +1,6 @@
 //! Test that query responses include correct column names.
 
-use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 
 #[test]
@@ -21,6 +21,7 @@ fn test_query_returns_correct_columns() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("test".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

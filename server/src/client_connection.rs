@@ -1,9 +1,10 @@
+use std::cmp::Ordering;
 use std::sync::Mutex;
 
 use crate::{
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
-    storage::Database,
+    storage::{Database, HlcClock, SystemTimeSource},
     types::{
         ProtoDeserializable, ProtoSerializable,
         client_message::{ClientMessage, ClientMessagePayload},
@@ -54,6 +55,7 @@ impl ClientConnection {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn update(&self, request: TripleUpdateRequest) -> proto::ServerResponse {
         let triples = request.triples;
         if triples.is_empty() {
@@ -78,6 +80,27 @@ impl ClientConnection {
             };
         };
 
+        // First, read existing values to compare HLCs
+        let mut snapshot = db.begin_readonly();
+        let mut updates_to_apply = Vec::with_capacity(triples.len());
+
+        for triple in &triples {
+            let existing = snapshot.get(&triple.entity_id, &triple.attribute_id);
+            let should_update = match existing {
+                Ok(Some(record)) => {
+                    // Update only if client HLC is strictly newer than stored HLC
+                    HlcClock::<SystemTimeSource>::compare(triple.hlc, record.created_hlc)
+                        == Ordering::Greater
+                }
+                // No existing value or error reading - always insert
+                Ok(None) | Err(_) => true,
+            };
+            updates_to_apply.push((triple, should_update));
+        }
+
+        let txn_id = snapshot.close();
+        db.release_snapshot(txn_id);
+
         // Begin a transaction
         let mut txn = match db.begin() {
             Ok(txn) => txn,
@@ -93,16 +116,18 @@ impl ClientConnection {
             }
         };
 
-        // Track the keys we're inserting so we can return current values
+        // Track the keys we're processing so we can return current values
         let keys: Vec<([u8; 16], [u8; 16])> = triples
             .iter()
             .map(|t| (t.entity_id, t.attribute_id))
             .collect();
 
-        // Insert all triples
-        for triple in triples {
-            let value = value_to_storage(triple.value);
-            txn.insert(triple.entity_id, triple.attribute_id, value);
+        // Insert only triples where client HLC is newer
+        for (triple, should_update) in updates_to_apply {
+            if should_update {
+                let value = value_to_storage(triple.value.clone_value());
+                txn.insert_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
+            }
         }
 
         // Commit the transaction
@@ -141,6 +166,11 @@ impl ClientConnection {
                                 proto::triple_value::Value::Boolean(b)
                             }
                         }),
+                    }),
+                    hlc: Some(proto::HlcTimestamp {
+                        physical_time_ms: record.created_hlc.physical_time,
+                        logical_counter: record.created_hlc.logical_counter,
+                        node_id: record.created_hlc.node_id,
                     }),
                 });
             }
@@ -247,6 +277,11 @@ mod tests {
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test_value".to_string())),
             }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -300,6 +335,11 @@ mod tests {
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::Boolean(true)),
             }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -335,6 +375,11 @@ mod tests {
             attribute_id: Some(attribute_id),
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::Number(123.456)),
+            }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
             }),
         };
 
@@ -395,6 +440,11 @@ mod tests {
             attribute_id: Some(attribute_id.clone()),
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("query_test".to_string())),
+            }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
             }),
         };
 
@@ -485,6 +535,11 @@ mod tests {
                 attribute_id: Some(attr.to_vec()),
                 value: Some(proto::TripleValue {
                     value: Some(proto::triple_value::Value::Number(f64::from(i))),
+                }),
+                hlc: Some(proto::HlcTimestamp {
+                    physical_time_ms: 1000 + u64::from(i),
+                    logical_counter: 0,
+                    node_id: 1,
                 }),
             });
         }
@@ -582,6 +637,11 @@ mod tests {
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test".to_string())),
             }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -616,6 +676,11 @@ mod tests {
             attribute_id: Some(vec![2u8; 8]), // Wrong length
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
             }),
         };
 
@@ -652,6 +717,11 @@ mod tests {
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test".to_string())),
             }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
+            }),
         };
 
         let update_request = proto::TripleUpdateRequest {
@@ -686,6 +756,11 @@ mod tests {
             attribute_id: None,
             value: Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String("test".to_string())),
+            }),
+            hlc: Some(proto::HlcTimestamp {
+                physical_time_ms: 1000,
+                logical_counter: 0,
+                node_id: 1,
             }),
         };
 

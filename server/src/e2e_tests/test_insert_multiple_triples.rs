@@ -1,6 +1,6 @@
 //! Test inserting multiple triples in a single request.
 
-use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 
 #[test]
@@ -24,6 +24,7 @@ fn test_insert_multiple_triples_single_request() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::String("name".to_string())),
                         }),
+                        hlc: Some(new_hlc(1)),
                     },
                     proto::Triple {
                         entity_id: Some(entity_id.to_vec()),
@@ -31,6 +32,7 @@ fn test_insert_multiple_triples_single_request() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Number(25.0)),
                         }),
+                        hlc: Some(new_hlc(2)),
                     },
                     proto::Triple {
                         entity_id: Some(entity_id.to_vec()),
@@ -38,6 +40,7 @@ fn test_insert_multiple_triples_single_request() {
                         value: Some(proto::TripleValue {
                             value: Some(proto::triple_value::Value::Boolean(false)),
                         }),
+                        hlc: Some(new_hlc(3)),
                     },
                 ],
             },

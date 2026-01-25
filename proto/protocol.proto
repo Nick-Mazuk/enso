@@ -16,6 +16,19 @@ message Triple {
   optional bytes attribute_id = 2;
   // The value associated with this entity-attribute pair.
   TripleValue value = 3;
+  // HLC timestamp for conflict resolution. Required for update requests.
+  // In responses, contains the current timestamp of the stored value.
+  optional HlcTimestamp hlc = 4;
+}
+
+// Hybrid Logical Clock timestamp for conflict resolution.
+message HlcTimestamp {
+  // Physical time in milliseconds since Unix epoch.
+  uint64 physical_time_ms = 1;
+  // Logical counter for ordering events at the same physical time.
+  uint32 logical_counter = 2;
+  // Node identifier for distributed uniqueness.
+  uint32 node_id = 3;
 }
 
 // The value component of a triple. Supports string, number, and boolean types.

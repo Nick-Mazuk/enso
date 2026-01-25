@@ -28,3 +28,7 @@ Testing:
 Simplicity:
 
 - Minimize dependencies. Do not add new dependencies without approval.
+
+## Tools
+
+- Do not use `ZDOTDIR=/dev/null /bin/bash` or try to `cd` into the repository directory. The repository root is the current working directly, just use the commands directly.

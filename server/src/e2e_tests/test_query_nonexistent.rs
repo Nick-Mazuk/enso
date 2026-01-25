@@ -1,6 +1,6 @@
 //! Test querying a nonexistent entity returns no results.
 
-use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id};
+use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 
 #[test]
@@ -22,6 +22,7 @@ fn test_query_nonexistent_entity() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("exists".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

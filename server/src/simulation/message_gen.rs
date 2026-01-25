@@ -202,10 +202,12 @@ impl MessageGenerator {
     ) -> proto::ClientMessage {
         match malformation {
             MalformationType::WrongLengthEntityId => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(vec![1, 2, 3]), // Wrong length (3 instead of 16)
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(self.random_value()),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -217,10 +219,12 @@ impl MessageGenerator {
                 }
             }
             MalformationType::WrongLengthAttributeId => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(vec![1, 2, 3, 4, 5]), // Wrong length (5 instead of 16)
                     value: Some(self.random_value()),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -232,10 +236,12 @@ impl MessageGenerator {
                 }
             }
             MalformationType::MissingEntityId => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: None, // Missing
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(self.random_value()),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -247,10 +253,12 @@ impl MessageGenerator {
                 }
             }
             MalformationType::MissingAttributeId => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: None, // Missing
                     value: Some(self.random_value()),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -262,10 +270,12 @@ impl MessageGenerator {
                 }
             }
             MalformationType::MissingValue => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: None, // Missing
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -285,12 +295,14 @@ impl MessageGenerator {
             MalformationType::OverflowStringValue => {
                 // Generate a very long string (10KB)
                 let long_string: String = (0..10_000).map(|_| 'x').collect();
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(long_string)),
                     }),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -302,12 +314,14 @@ impl MessageGenerator {
                 }
             }
             MalformationType::NanNumberValue => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(f64::NAN)),
                     }),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -319,12 +333,14 @@ impl MessageGenerator {
                 }
             }
             MalformationType::InfinityNumberValue => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::Number(f64::INFINITY)),
                     }),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -336,12 +352,14 @@ impl MessageGenerator {
                 }
             }
             MalformationType::EmptyStringValue => {
+                let hlc = Some(self.random_hlc());
                 let triple = proto::Triple {
                     entity_id: Some(self.random_entity_id().to_vec()),
                     attribute_id: Some(self.random_attribute_id().to_vec()),
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String(String::new())),
                     }),
+                    hlc,
                 };
                 proto::ClientMessage {
                     request_id: Some(request_id),
@@ -399,6 +417,7 @@ impl MessageGenerator {
             entity_id: Some(self.random_entity_id().to_vec()),
             attribute_id: Some(self.random_attribute_id().to_vec()),
             value: Some(self.random_value()),
+            hlc: Some(self.random_hlc()),
         }
     }
 
@@ -412,6 +431,15 @@ impl MessageGenerator {
     fn random_attribute_id(&mut self) -> [u8; 16] {
         let idx = self.rng.random_range(0..self.attribute_pool.len());
         self.attribute_pool[idx]
+    }
+
+    /// Generate a random HLC timestamp.
+    fn random_hlc(&mut self) -> proto::HlcTimestamp {
+        proto::HlcTimestamp {
+            physical_time_ms: self.rng.random(),
+            logical_counter: self.rng.random(),
+            node_id: self.rng.random(),
+        }
     }
 
     /// Generate a random value.

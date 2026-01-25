@@ -67,6 +67,7 @@ fn triple_from_record(record: TripleRecord) -> Triple {
         entity_id: record.entity_id,
         attribute_id: record.attribute_id,
         value: value_from_storage(record.value),
+        hlc: record.created_hlc,
     }
 }
 

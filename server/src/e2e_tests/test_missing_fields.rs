@@ -1,6 +1,6 @@
 //! Test that missing required fields are rejected.
 
-use crate::e2e_tests::helpers::{TestClient, status_code};
+use crate::e2e_tests::helpers::{TestClient, new_hlc, status_code};
 use crate::proto;
 
 #[test]
@@ -17,6 +17,7 @@ fn test_missing_entity_id() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("test".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -43,6 +44,7 @@ fn test_missing_attribute_id() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("test".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
@@ -67,6 +69,7 @@ fn test_missing_value() {
                     entity_id: Some(vec![0u8; 16]),
                     attribute_id: Some(vec![0u8; 16]),
                     value: None,
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

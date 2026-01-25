@@ -1,7 +1,7 @@
 //! Test inserting and querying a string value.
 
 use crate::e2e_tests::helpers::{
-    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id,
+    TestClient, get_string_value, is_ok, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
@@ -25,6 +25,7 @@ fn test_insert_string_then_query() {
                             "hello world".to_string(),
                         )),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),

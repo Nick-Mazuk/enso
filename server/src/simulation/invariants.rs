@@ -348,6 +348,11 @@ mod tests {
                 value: Some(proto::TripleValue {
                     value: Some(proto::triple_value::Value::String("test".to_string())),
                 }),
+                hlc: Some(proto::HlcTimestamp {
+                    physical_time_ms: 1000,
+                    logical_counter: 0,
+                    node_id: 1,
+                }),
             }],
         };
 

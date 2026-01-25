@@ -1,6 +1,6 @@
 //! Test that invalid entity IDs are rejected.
 
-use crate::e2e_tests::helpers::{TestClient, status_code};
+use crate::e2e_tests::helpers::{TestClient, new_hlc, status_code};
 use crate::proto;
 
 #[test]
@@ -18,6 +18,7 @@ fn test_invalid_entity_id_length() {
                     value: Some(proto::TripleValue {
                         value: Some(proto::triple_value::Value::String("test".to_string())),
                     }),
+                    hlc: Some(new_hlc(1)),
                 }],
             },
         )),
