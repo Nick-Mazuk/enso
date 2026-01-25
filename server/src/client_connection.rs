@@ -345,14 +345,14 @@ mod tests {
     use crate::proto;
     use crate::testing::new_test_database;
 
-    /// Create a test ClientConnection with a broadcast channel.
+    /// Create a test `ClientConnection` with a broadcast channel.
     fn new_test_client() -> ClientConnection {
         let database = new_test_database().expect("Failed to create test db");
         let (change_tx, _) = broadcast::channel(100);
         ClientConnection::new(database, change_tx)
     }
 
-    /// Extract the ServerResponse from a ServerMessage.
+    /// Extract the `ServerResponse` from a `ServerMessage`.
     fn extract_response(msg: proto::ServerMessage) -> proto::ServerResponse {
         match msg.payload {
             Some(proto::server_message::Payload::Response(r)) => r,
