@@ -7,7 +7,7 @@ use crate::proto;
 
 #[test]
 fn test_sequence_insert_query_update_query() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(50);
     let attribute_id = new_attribute_id(50);

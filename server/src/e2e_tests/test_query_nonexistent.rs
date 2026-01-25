@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_query_nonexistent_entity() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let other_entity_id = new_entity_id(99);
     let entity_id = new_entity_id(40);

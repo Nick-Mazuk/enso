@@ -7,7 +7,7 @@ use crate::proto;
 
 #[test]
 fn test_insert_multiple_entities() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id_1 = new_entity_id(20);
     let entity_id_2 = new_entity_id(21);

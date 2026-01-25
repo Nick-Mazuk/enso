@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_empty_triples_request() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),

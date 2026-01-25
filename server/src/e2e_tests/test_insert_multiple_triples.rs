@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_insert_multiple_triples_single_request() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(10);
     let attribute_id_1 = new_attribute_id(11);

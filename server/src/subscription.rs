@@ -386,12 +386,17 @@ mod tests {
         let db = crate::testing::new_test_database().expect("create test db");
         let mut client = ClientConnection::new(db);
 
-        let req = proto::SubscribeRequest {
-            subscription_id: 1,
-            since_hlc: None,
+        let msg = proto::ClientMessage {
+            request_id: Some(42),
+            payload: Some(proto::client_message::Payload::Subscribe(
+                proto::SubscribeRequest {
+                    subscription_id: 1,
+                    since_hlc: None,
+                },
+            )),
         };
 
-        let messages = client.handle_subscribe(Some(42), &req);
+        let messages = client.handle_message(msg);
         assert_eq!(messages.len(), 1);
 
         // Verify it's an OK response
@@ -416,14 +421,28 @@ mod tests {
         let mut client = ClientConnection::new(db);
 
         // First subscribe succeeds
-        let req = proto::SubscribeRequest {
-            subscription_id: 1,
-            since_hlc: None,
+        let msg1 = proto::ClientMessage {
+            request_id: Some(1),
+            payload: Some(proto::client_message::Payload::Subscribe(
+                proto::SubscribeRequest {
+                    subscription_id: 1,
+                    since_hlc: None,
+                },
+            )),
         };
-        let _ = client.handle_subscribe(None, &req);
+        let _ = client.handle_message(msg1);
 
         // Second subscribe with same ID fails
-        let messages = client.handle_subscribe(Some(42), &req);
+        let msg2 = proto::ClientMessage {
+            request_id: Some(42),
+            payload: Some(proto::client_message::Payload::Subscribe(
+                proto::SubscribeRequest {
+                    subscription_id: 1,
+                    since_hlc: None,
+                },
+            )),
+        };
+        let messages = client.handle_message(msg2);
         assert_eq!(messages.len(), 1);
 
         // Verify it's an error response
@@ -452,18 +471,29 @@ mod tests {
         let mut client = ClientConnection::new(db);
 
         // First subscribe
-        let sub_req = proto::SubscribeRequest {
-            subscription_id: 1,
-            since_hlc: None,
+        let sub_msg = proto::ClientMessage {
+            request_id: Some(1),
+            payload: Some(proto::client_message::Payload::Subscribe(
+                proto::SubscribeRequest {
+                    subscription_id: 1,
+                    since_hlc: None,
+                },
+            )),
         };
-        let _ = client.handle_subscribe(None, &sub_req);
+        let _ = client.handle_message(sub_msg);
 
         // Then unsubscribe
-        let unsub_req = proto::UnsubscribeRequest { subscription_id: 1 };
-        let message = client.handle_unsubscribe(Some(42), &unsub_req);
+        let unsub_msg = proto::ClientMessage {
+            request_id: Some(42),
+            payload: Some(proto::client_message::Payload::Unsubscribe(
+                proto::UnsubscribeRequest { subscription_id: 1 },
+            )),
+        };
+        let messages = client.handle_message(unsub_msg);
+        assert_eq!(messages.len(), 1);
 
         // Verify it's an OK response
-        match &message.payload {
+        match &messages[0].payload {
             Some(proto::server_message::Payload::Response(resp)) => {
                 assert_eq!(resp.request_id, Some(42));
                 assert_eq!(
@@ -483,11 +513,17 @@ mod tests {
         let db = crate::testing::new_test_database().expect("create test db");
         let mut client = ClientConnection::new(db);
 
-        let req = proto::UnsubscribeRequest { subscription_id: 1 };
-        let message = client.handle_unsubscribe(Some(42), &req);
+        let msg = proto::ClientMessage {
+            request_id: Some(42),
+            payload: Some(proto::client_message::Payload::Unsubscribe(
+                proto::UnsubscribeRequest { subscription_id: 1 },
+            )),
+        };
+        let messages = client.handle_message(msg);
+        assert_eq!(messages.len(), 1);
 
         // Verify it's an error response
-        match &message.payload {
+        match &messages[0].payload {
             Some(proto::server_message::Payload::Response(resp)) => {
                 assert_eq!(resp.request_id, Some(42));
                 assert_eq!(

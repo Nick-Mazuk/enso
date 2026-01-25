@@ -182,10 +182,10 @@ impl Simulator {
         };
 
         // Create client connection (database now handles broadcasting internally)
-        let client_connection = ClientConnection::new(database);
+        let mut client_connection = ClientConnection::new(database);
 
         // Run the simulation
-        let result = self.run_with_connection(&client_connection, message_count);
+        let result = self.run_with_connection(&mut client_connection, message_count);
 
         // Cleanup
         let _ = std::fs::remove_file(&db_path);
@@ -196,20 +196,27 @@ impl Simulator {
     /// Run simulation with an existing client connection.
     fn run_with_connection(
         &mut self,
-        client_connection: &ClientConnection,
+        client_connection: &mut ClientConnection,
         message_count: usize,
     ) -> SimulationResult {
-        #[allow(clippy::expect_used)] // Runtime creation failure is fatal
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-
         for _ in 0..message_count {
             // Generate next message
             let message = self.message_generator.next_message();
             self.messages_processed += 1;
 
-            // Process the message
-            let response =
-                runtime.block_on(async { client_connection.handle_message(message.clone()).await });
+            // Process the message (handle_message is now sync and returns Vec)
+            let responses = client_connection.handle_message(message.clone());
+
+            // For simulation purposes, we expect exactly one response for most messages
+            // (Subscribe may return multiple, but we only check the last one which is the status)
+            let Some(response) = responses.last() else {
+                self.checker.add_violation(InvariantViolation {
+                    description: "No response returned".to_string(),
+                    operation_index: self.history.len(),
+                    context: String::new(),
+                });
+                continue;
+            };
 
             // Extract the server response
             let Some(proto::server_message::Payload::Response(server_response)) = &response.payload

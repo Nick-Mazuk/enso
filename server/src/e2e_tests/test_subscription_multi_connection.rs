@@ -18,8 +18,8 @@ use crate::storage::{ChangeType, TripleValue};
 /// writes, the other's subscriber receives the notification.
 #[test]
 fn test_sibling_connection_receives_notification() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
 
     // Subscribe on client2 (the sibling)
     let mut rx2 = client2.subscribe_to_changes();
@@ -66,8 +66,8 @@ fn test_sibling_connection_receives_notification() {
 /// but NOT from themselves (filtered by `FilteredChangeReceiver`).
 #[test]
 fn test_bidirectional_notifications() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
 
     // Both subscribe
     let mut rx1 = client1.subscribe_to_changes();
@@ -148,8 +148,8 @@ fn test_bidirectional_notifications() {
 /// `FilteredChangeReceiver`), but all other connections do.
 #[test]
 fn test_multiple_siblings_all_receive_notifications() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
     let client3 = client1.create_sibling();
 
     // All three subscribe
@@ -210,8 +210,8 @@ fn test_multiple_siblings_all_receive_notifications() {
 /// to verify the late subscriber behavior.
 #[test]
 fn test_late_sibling_subscriber() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
     let client3 = client1.create_sibling();
 
     // Only client2 subscribes initially (to receive client1's writes)
@@ -293,8 +293,8 @@ fn test_late_sibling_subscriber() {
 /// (filtered by `FilteredChangeReceiver`).
 #[test]
 fn test_notification_includes_source_connection_id() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
 
     // Get connection IDs
     let client1_id = client1.connection_id();
@@ -346,8 +346,8 @@ fn test_notification_includes_source_connection_id() {
 /// never from itself. This is handled automatically by `FilteredChangeReceiver`.
 #[test]
 fn test_filter_own_writes() {
-    let client1 = TestClient::new();
-    let client2 = client1.create_sibling();
+    let mut client1 = TestClient::new();
+    let mut client2 = client1.create_sibling();
 
     let client1_id = client1.connection_id();
     let client2_id = client2.connection_id();

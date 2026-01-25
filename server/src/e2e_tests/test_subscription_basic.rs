@@ -17,7 +17,7 @@ use crate::storage::{ChangeType, HlcTimestamp, TripleValue};
 /// filters out a connection's own writes.
 #[test]
 fn test_insert_broadcasts_change_notification() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     // Create a sibling connection to receive notifications
     let sibling = test.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();
@@ -65,7 +65,7 @@ fn test_insert_broadcasts_change_notification() {
 /// filters out a connection's own writes.
 #[test]
 fn test_update_broadcasts_change_notification() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     // Create a sibling connection to receive notifications
     let sibling = test.create_sibling();
 
@@ -136,7 +136,7 @@ fn test_update_broadcasts_change_notification() {
 /// filters out a connection's own writes.
 #[test]
 fn test_batch_insert_broadcasts_multiple_changes() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     // Create a sibling connection to receive notifications
     let sibling = test.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();
@@ -198,7 +198,7 @@ fn test_batch_insert_broadcasts_multiple_changes() {
 /// Test that `get_changes_since` returns changes after a given HLC.
 #[test]
 fn test_get_changes_since_returns_changes() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(6);
     let attribute_id = new_attribute_id(6);
@@ -243,7 +243,7 @@ fn test_get_changes_since_returns_changes() {
 /// Test that failed operations do not broadcast notifications.
 #[test]
 fn test_failed_operation_does_not_broadcast() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     let mut change_rx = test.subscribe_to_changes();
 
     // Send an invalid request (missing entity_id)
@@ -276,7 +276,7 @@ fn test_failed_operation_does_not_broadcast() {
 /// Test that an older HLC update does not broadcast (conflict resolution).
 #[test]
 fn test_older_hlc_update_does_not_broadcast() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(8);
     let attribute_id = new_attribute_id(8);
@@ -335,7 +335,7 @@ fn test_older_hlc_update_does_not_broadcast() {
 /// filters out a connection's own writes.
 #[test]
 fn test_insert_boolean_broadcasts_correctly() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     // Create a sibling connection to receive notifications
     let sibling = test.create_sibling();
     let mut change_rx = sibling.subscribe_to_changes();

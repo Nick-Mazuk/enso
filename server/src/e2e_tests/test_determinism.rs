@@ -7,7 +7,7 @@ use crate::proto;
 
 #[allow(clippy::too_many_lines)]
 fn run_sequence() -> Vec<proto::ServerResponse> {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
     let mut responses = Vec::new();
 
     let entity_id = new_entity_id(80);

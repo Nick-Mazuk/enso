@@ -7,7 +7,7 @@ use crate::proto;
 
 #[test]
 fn test_max_length_string_value() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(70);
     let attribute_id = new_attribute_id(70);
@@ -61,7 +61,7 @@ fn test_max_length_string_value() {
 
 #[test]
 fn test_string_too_long_rejected() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(71);
     let attribute_id = new_attribute_id(71);

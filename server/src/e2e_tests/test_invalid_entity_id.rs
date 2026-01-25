@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_invalid_entity_id_length() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     // Entity ID with wrong length (not 16 bytes)
     let req = proto::ClientMessage {

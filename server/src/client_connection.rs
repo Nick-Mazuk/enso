@@ -117,7 +117,7 @@ impl ClientConnection {
     /// Returns a list of messages to send to the client:
     /// - On success: optionally a subscription update with historical changes, then an OK response
     /// - On error: an error response
-    pub fn handle_subscribe(
+    fn handle_subscribe(
         &mut self,
         request_id: Option<u32>,
         req: &proto::SubscribeRequest,
@@ -177,11 +177,10 @@ impl ClientConnection {
     /// Handle an unsubscribe request.
     ///
     /// Returns the response message to send to the client.
-    #[must_use]
-    pub fn handle_unsubscribe(
+    fn handle_unsubscribe(
         &mut self,
         request_id: Option<u32>,
-        req: &proto::UnsubscribeRequest,
+        req: proto::UnsubscribeRequest,
     ) -> proto::ServerMessage {
         let subscription_id = req.subscription_id;
 
@@ -198,48 +197,44 @@ impl ClientConnection {
         self.subscriptions.iter()
     }
 
-    pub async fn handle_message(
-        &self,
+    /// Handle a client message and return response messages.
+    ///
+    /// Returns a list of messages to send to the client. Most message types
+    /// return a single response, but Subscribe may return multiple messages
+    /// (backfill update + OK response).
+    pub fn handle_message(
+        &mut self,
         proto_message: proto::ClientMessage,
-    ) -> proto::ServerMessage {
+    ) -> Vec<proto::ServerMessage> {
         let request_id = proto_message.request_id;
         let message = match ClientMessage::from_proto(proto_message) {
             Ok(message) => message,
             Err(err) => {
-                return proto::ServerMessage {
-                    payload: Some(proto::server_message::Payload::Response(
-                        proto::ServerResponse {
-                            request_id,
-                            status: Some(proto::google::rpc::Status {
-                                code: proto::google::rpc::Code::InvalidArgument.into(),
-                                message: err,
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    )),
-                };
+                return vec![create_error_response(request_id, &err)];
             }
         };
-        let mut response = match message.payload {
-            ClientMessagePayload::TripleUpdateRequest(request) => self.update(request),
-            ClientMessagePayload::Query(ref request) => self.query(request),
-            ClientMessagePayload::Subscribe(_) | ClientMessagePayload::Unsubscribe(_) => {
-                // Subscriptions are handled separately in the WebSocket handler
-                proto::ServerResponse {
-                    request_id,
-                    status: Some(proto::google::rpc::Status {
-                        code: proto::google::rpc::Code::Unimplemented.into(),
-                        message: "Subscriptions not yet implemented".to_string(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }
+
+        match message.payload {
+            ClientMessagePayload::TripleUpdateRequest(request) => {
+                let mut response = self.update(request);
+                response.request_id = request_id;
+                vec![proto::ServerMessage {
+                    payload: Some(proto::server_message::Payload::Response(response)),
+                }]
             }
-        };
-        response.request_id = request_id;
-        proto::ServerMessage {
-            payload: Some(proto::server_message::Payload::Response(response)),
+            ClientMessagePayload::Query(ref request) => {
+                let mut response = self.query(request);
+                response.request_id = request_id;
+                vec![proto::ServerMessage {
+                    payload: Some(proto::server_message::Payload::Response(response)),
+                }]
+            }
+            ClientMessagePayload::Subscribe(ref request) => {
+                self.handle_subscribe(request_id, request)
+            }
+            ClientMessagePayload::Unsubscribe(request) => {
+                vec![self.handle_unsubscribe(request_id, request)]
+            }
         }
     }
 
@@ -463,8 +458,13 @@ mod tests {
         ClientConnection::new(database)
     }
 
-    /// Extract the `ServerResponse` from a `ServerMessage`.
-    fn extract_response(msg: proto::ServerMessage) -> proto::ServerResponse {
+    /// Extract the `ServerResponse` from a list of `ServerMessage`s.
+    /// Takes the last message, which is typically the final response.
+    fn extract_response(messages: Vec<proto::ServerMessage>) -> proto::ServerResponse {
+        let msg = messages
+            .into_iter()
+            .last()
+            .expect("Expected at least one message");
         match msg.payload {
             Some(proto::server_message::Payload::Response(r)) => r,
             Some(proto::server_message::Payload::SubscriptionUpdate(_)) => {
@@ -474,10 +474,10 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test]
     #[allow(clippy::significant_drop_tightening)]
-    async fn test_handle_message_insert_string_triple() {
-        let client_conn = new_test_client();
+    fn test_handle_message_insert_string_triple() {
+        let mut client_conn = new_test_client();
 
         let entity_id = vec![1u8; 16];
         let attribute_id = vec![2u8; 16];
@@ -506,7 +506,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(123));
         assert!(server_response.status.is_some());
@@ -530,9 +530,9 @@ mod tests {
         txn.abort();
     }
 
-    #[tokio::test]
-    async fn test_handle_message_insert_boolean_triple() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_insert_boolean_triple() {
+        let mut client_conn = new_test_client();
 
         let entity_id = vec![3u8; 16];
         let attribute_id = vec![4u8; 16];
@@ -561,7 +561,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(
@@ -570,9 +570,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_insert_number_triple() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_insert_number_triple() {
+        let mut client_conn = new_test_client();
 
         let entity_id = vec![5u8; 16];
         let attribute_id = vec![6u8; 16];
@@ -601,7 +601,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(
@@ -610,9 +610,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_empty_triples() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_empty_triples() {
+        let mut client_conn = new_test_client();
 
         let update_request = proto::TripleUpdateRequest { triples: vec![] };
 
@@ -623,7 +623,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(
@@ -632,9 +632,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_insert_then_query_triple() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_insert_then_query_triple() {
+        let mut client_conn = new_test_client();
 
         let entity_id = vec![10u8; 16];
         let attribute_id = vec![20u8; 16];
@@ -664,7 +664,7 @@ mod tests {
             )),
         };
 
-        let insert_response = client_conn.handle_message(insert_message).await;
+        let insert_response = client_conn.handle_message(insert_message);
         assert_eq!(
             extract_response(insert_response).status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
@@ -697,7 +697,7 @@ mod tests {
             payload: Some(proto::client_message::Payload::Query(query_request)),
         };
 
-        let query_response = client_conn.handle_message(query_message).await;
+        let query_response = client_conn.handle_message(query_message);
         let server_response = extract_response(query_response);
 
         assert_eq!(
@@ -723,9 +723,9 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_query_entity_scan() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_query_entity_scan() {
+        let mut client_conn = new_test_client();
 
         let entity_id = vec![30u8; 16];
 
@@ -757,7 +757,7 @@ mod tests {
             )),
         };
 
-        let insert_response = client_conn.handle_message(insert_message).await;
+        let insert_response = client_conn.handle_message(insert_message);
         assert_eq!(
             extract_response(insert_response).status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
@@ -795,7 +795,7 @@ mod tests {
             payload: Some(proto::client_message::Payload::Query(query_request)),
         };
 
-        let query_response = client_conn.handle_message(query_message).await;
+        let query_response = client_conn.handle_message(query_message);
         let server_response = extract_response(query_response);
 
         assert_eq!(
@@ -808,9 +808,9 @@ mod tests {
 
     // Error path tests
 
-    #[tokio::test]
-    async fn test_handle_message_missing_payload() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_missing_payload() {
+        let mut client_conn = new_test_client();
 
         // Send a message with no payload
         let client_message = proto::ClientMessage {
@@ -818,7 +818,7 @@ mod tests {
             payload: None,
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(400));
@@ -828,9 +828,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_invalid_entity_id_length() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_invalid_entity_id_length() {
+        let mut client_conn = new_test_client();
 
         // Entity ID is wrong length (should be 16 bytes)
         let triple = proto::Triple {
@@ -857,7 +857,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(401));
@@ -867,9 +867,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_invalid_attribute_id_length() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_invalid_attribute_id_length() {
+        let mut client_conn = new_test_client();
 
         // Attribute ID is wrong length (should be 16 bytes)
         let triple = proto::Triple {
@@ -896,7 +896,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(402));
@@ -906,9 +906,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_missing_entity_id() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_missing_entity_id() {
+        let mut client_conn = new_test_client();
 
         // Triple with missing entity_id
         let triple = proto::Triple {
@@ -935,7 +935,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(403));
@@ -945,9 +945,9 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_handle_message_missing_attribute_id() {
-        let client_conn = new_test_client();
+    #[test]
+    fn test_handle_message_missing_attribute_id() {
+        let mut client_conn = new_test_client();
 
         // Triple with missing attribute_id
         let triple = proto::Triple {
@@ -974,7 +974,7 @@ mod tests {
             )),
         };
 
-        let response = client_conn.handle_message(client_message).await;
+        let response = client_conn.handle_message(client_message);
 
         let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(404));

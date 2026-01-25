@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_missing_entity_id() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -32,7 +32,7 @@ fn test_missing_entity_id() {
 
 #[test]
 fn test_missing_attribute_id() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -59,7 +59,7 @@ fn test_missing_attribute_id() {
 
 #[test]
 fn test_missing_value() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),
@@ -84,7 +84,7 @@ fn test_missing_value() {
 
 #[test]
 fn test_no_payload() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let req = proto::ClientMessage {
         request_id: Some(1),

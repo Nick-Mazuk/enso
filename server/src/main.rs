@@ -150,37 +150,15 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                     }
                 };
 
-                let request_id = client_message.request_id;
-                tracing::debug!("received ClientMessage with request_id: {:?}", request_id);
+                tracing::debug!("received ClientMessage with request_id: {:?}", client_message.request_id);
 
-                // Handle subscribe/unsubscribe specially
-                match &client_message.payload {
-                    Some(proto::client_message::Payload::Subscribe(req)) => {
-                        let messages = client_connection.handle_subscribe(request_id, req);
-                        for msg in messages {
-                            let bytes = msg.encode_to_vec();
-                            if socket.send(Message::Binary(bytes.into())).await.is_err() {
-                                tracing::debug!("client disconnected");
-                                return;
-                            }
-                        }
-                    }
-                    Some(proto::client_message::Payload::Unsubscribe(req)) => {
-                        let msg = client_connection.handle_unsubscribe(request_id, req);
-                        let bytes = msg.encode_to_vec();
-                        if socket.send(Message::Binary(bytes.into())).await.is_err() {
-                            tracing::debug!("client disconnected");
-                            return;
-                        }
-                    }
-                    _ => {
-                        // Handle other messages (query, update) through ClientConnection
-                        let server_message = client_connection.handle_message(client_message).await;
-                        let response_bytes = server_message.encode_to_vec();
-                        if socket.send(Message::Binary(response_bytes.into())).await.is_err() {
-                            tracing::debug!("client disconnected");
-                            return;
-                        }
+                // Handle the message through ClientConnection
+                let messages = client_connection.handle_message(client_message);
+                for msg in messages {
+                    let bytes = msg.encode_to_vec();
+                    if socket.send(Message::Binary(bytes.into())).await.is_err() {
+                        tracing::debug!("client disconnected");
+                        return;
                     }
                 }
             }

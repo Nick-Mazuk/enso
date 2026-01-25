@@ -37,7 +37,7 @@ fn make_triple(
 
 /// Helper to query a triple and return the response.
 fn query_triple(
-    test: &TestClient,
+    test: &mut TestClient,
     entity_id: [u8; 16],
     attribute_id: [u8; 16],
     request_id: u32,
@@ -80,7 +80,7 @@ fn get_query_string(resp: &proto::ServerResponse) -> Option<&str> {
 
 #[test]
 fn test_insert_new_triple_succeeds() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(100);
     let attribute_id = new_attribute_id(100);
@@ -107,7 +107,7 @@ fn test_insert_new_triple_succeeds() {
     assert!(resp.triples[0].hlc.is_some());
 
     // Verify query returns the correct value
-    let query_resp = query_triple(&test, entity_id, attribute_id, 2);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 2);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("initial"));
@@ -115,7 +115,7 @@ fn test_insert_new_triple_succeeds() {
 
 #[test]
 fn test_newer_hlc_wins() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(101);
     let attribute_id = new_attribute_id(101);
@@ -154,7 +154,7 @@ fn test_newer_hlc_wins() {
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("updated"));
@@ -162,7 +162,7 @@ fn test_newer_hlc_wins() {
 
 #[test]
 fn test_older_hlc_loses() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(102);
     let attribute_id = new_attribute_id(102);
@@ -201,7 +201,7 @@ fn test_older_hlc_loses() {
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("initial"));
@@ -209,7 +209,7 @@ fn test_older_hlc_loses() {
 
 #[test]
 fn test_equal_hlc_rejected() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(103);
     let attribute_id = new_attribute_id(103);
@@ -248,7 +248,7 @@ fn test_equal_hlc_rejected() {
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("initial"));
@@ -256,7 +256,7 @@ fn test_equal_hlc_rejected() {
 
 #[test]
 fn test_logical_counter_newer_wins() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(104);
     let attribute_id = new_attribute_id(104);
@@ -293,7 +293,7 @@ fn test_logical_counter_newer_wins() {
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("updated"));
@@ -301,7 +301,7 @@ fn test_logical_counter_newer_wins() {
 
 #[test]
 fn test_logical_counter_older_loses() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(110);
     let attribute_id = new_attribute_id(110);
@@ -340,7 +340,7 @@ fn test_logical_counter_older_loses() {
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("initial"));
@@ -348,7 +348,7 @@ fn test_logical_counter_older_loses() {
 
 #[test]
 fn test_node_id_newer_wins() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(111);
     let attribute_id = new_attribute_id(111);
@@ -386,7 +386,7 @@ fn test_node_id_newer_wins() {
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("updated"));
@@ -394,7 +394,7 @@ fn test_node_id_newer_wins() {
 
 #[test]
 fn test_node_id_older_loses() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(112);
     let attribute_id = new_attribute_id(112);
@@ -433,7 +433,7 @@ fn test_node_id_older_loses() {
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&test, entity_id, attribute_id, 3);
+    let query_resp = query_triple(&mut test, entity_id, attribute_id, 3);
     assert!(is_ok(&query_resp));
     assert_eq!(query_resp.rows.len(), 1);
     assert_eq!(get_query_string(&query_resp), Some("initial"));
@@ -441,7 +441,7 @@ fn test_node_id_older_loses() {
 
 #[test]
 fn test_mixed_batch_some_update_some_reject() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity1 = new_entity_id(105);
     let attr1 = new_attribute_id(105);
@@ -497,12 +497,12 @@ fn test_mixed_batch_some_update_some_reject() {
     );
 
     // Verify queries return the correct values
-    let query1 = query_triple(&test, entity1, attr1, 3);
+    let query1 = query_triple(&mut test, entity1, attr1, 3);
     assert!(is_ok(&query1));
     assert_eq!(query1.rows.len(), 1);
     assert_eq!(get_query_string(&query1), Some("updated1"));
 
-    let query2 = query_triple(&test, entity2, attr2, 4);
+    let query2 = query_triple(&mut test, entity2, attr2, 4);
     assert!(is_ok(&query2));
     assert_eq!(query2.rows.len(), 1);
     assert_eq!(get_query_string(&query2), Some("value2"));
@@ -510,7 +510,7 @@ fn test_mixed_batch_some_update_some_reject() {
 
 #[test]
 fn test_response_includes_hlc() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(107);
     let attribute_id = new_attribute_id(107);
@@ -540,7 +540,7 @@ fn test_response_includes_hlc() {
 
 #[test]
 fn test_missing_hlc_rejected() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(108);
     let attribute_id = new_attribute_id(108);

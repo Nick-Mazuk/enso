@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_many_sequential_inserts() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(60);
 

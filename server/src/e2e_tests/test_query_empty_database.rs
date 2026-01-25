@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_query_empty_database() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(99);
     let attribute_id = new_attribute_id(99);

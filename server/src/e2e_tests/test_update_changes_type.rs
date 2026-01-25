@@ -7,7 +7,7 @@ use crate::proto;
 
 #[test]
 fn test_update_changes_value_type() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(32);
     let attribute_id = new_attribute_id(32);

@@ -5,7 +5,7 @@ use crate::proto;
 
 #[test]
 fn test_invalid_attribute_id_length() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     // Attribute ID with wrong length
     let req = proto::ClientMessage {

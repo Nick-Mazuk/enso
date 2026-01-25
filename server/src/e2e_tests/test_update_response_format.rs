@@ -8,7 +8,7 @@ use crate::proto;
 
 #[test]
 fn test_insert_response_returns_written_triples() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(80);
     let attribute_id = new_attribute_id(80);
@@ -55,7 +55,7 @@ fn test_insert_response_returns_written_triples() {
 
 #[test]
 fn test_update_response_returns_current_value() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     let entity_id = new_entity_id(81);
     let attribute_id = new_attribute_id(81);
@@ -121,7 +121,7 @@ fn test_update_response_returns_current_value() {
 
 #[test]
 fn test_multi_triple_update_returns_all_values() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     // Insert multiple triples in one request
     let resp = test.handle_message(proto::ClientMessage {
@@ -193,7 +193,7 @@ fn test_multi_triple_update_returns_all_values() {
 
 #[test]
 fn test_empty_update_returns_no_triples() {
-    let test = TestClient::new();
+    let mut test = TestClient::new();
 
     // Send empty update request
     let resp = test.handle_message(proto::ClientMessage {

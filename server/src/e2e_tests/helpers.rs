@@ -62,11 +62,12 @@ impl TestClient {
     }
 
     /// Send a message and return the response.
-    pub fn handle_message(&self, message: proto::ClientMessage) -> proto::ServerResponse {
-        let response = self
-            .runtime
-            .block_on(async { self.client.handle_message(message).await });
+    pub fn handle_message(&mut self, message: proto::ClientMessage) -> proto::ServerResponse {
+        let responses = self.client.handle_message(message);
+        let response = responses.into_iter().last();
 
+        #[allow(clippy::expect_used)]
+        let response = response.expect("Expected at least one response");
         #[allow(clippy::expect_used)]
         match response.payload.expect("Response should be present") {
             proto::server_message::Payload::Response(r) => r,
@@ -128,13 +129,12 @@ pub struct SiblingClient {
 
 impl SiblingClient {
     /// Send a message and return the response.
-    ///
-    /// Uses a new runtime for each call since siblings don't own a runtime.
-    pub fn handle_message(&self, message: proto::ClientMessage) -> proto::ServerResponse {
-        #[allow(clippy::expect_used)]
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-        let response = runtime.block_on(async { self.client.handle_message(message).await });
+    pub fn handle_message(&mut self, message: proto::ClientMessage) -> proto::ServerResponse {
+        let responses = self.client.handle_message(message);
+        let response = responses.into_iter().last();
 
+        #[allow(clippy::expect_used)]
+        let response = response.expect("Expected at least one response");
         #[allow(clippy::expect_used)]
         match response.payload.expect("Response should be present") {
             proto::server_message::Payload::Response(r) => r,
