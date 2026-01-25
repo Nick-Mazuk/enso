@@ -7,6 +7,8 @@ use crate::{
 pub enum ClientMessagePayload {
     TripleUpdateRequest(TripleUpdateRequest),
     Query(proto::QueryRequest),
+    Subscribe(proto::SubscribeRequest),
+    Unsubscribe(proto::UnsubscribeRequest),
 }
 
 #[derive(Debug)]
@@ -25,6 +27,12 @@ impl ProtoDeserializable<proto::ClientMessage> for ClientMessage {
             }
             Some(proto::client_message::Payload::Query(request)) => {
                 ClientMessagePayload::Query(request)
+            }
+            Some(proto::client_message::Payload::Subscribe(request)) => {
+                ClientMessagePayload::Subscribe(request)
+            }
+            Some(proto::client_message::Payload::Unsubscribe(request)) => {
+                ClientMessagePayload::Unsubscribe(request)
             }
             None => return Err("Client message must have a payload".to_string()),
         };

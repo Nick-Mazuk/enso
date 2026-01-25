@@ -1271,6 +1271,8 @@ pub enum DatabaseError {
     Clock(ClockError),
     /// Triple not found for update/delete.
     NotFound,
+    /// Mutex lock was poisoned.
+    LockPoisoned,
 }
 
 impl std::fmt::Display for DatabaseError {
@@ -1286,6 +1288,7 @@ impl std::fmt::Display for DatabaseError {
             Self::Checkpoint(e) => write!(f, "checkpoint error: {e}"),
             Self::Clock(e) => write!(f, "clock error: {e}"),
             Self::NotFound => write!(f, "triple not found"),
+            Self::LockPoisoned => write!(f, "database lock poisoned"),
         }
     }
 }
@@ -1302,7 +1305,7 @@ impl std::error::Error for DatabaseError {
             Self::Recovery(e) => Some(e),
             Self::Checkpoint(e) => Some(e),
             Self::Clock(e) => Some(e),
-            Self::NotFound => None,
+            Self::NotFound | Self::LockPoisoned => None,
         }
     }
 }

@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
 use std::sync::Mutex;
 
+use tokio::sync::broadcast;
+
 use crate::{
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
-    storage::{Database, HlcClock, SystemTimeSource},
+    storage::{Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord, SystemTimeSource},
+    subscription::ChangeNotification,
     types::{
         ProtoDeserializable, ProtoSerializable,
         client_message::{ClientMessage, ClientMessagePayload},
@@ -14,14 +17,32 @@ use crate::{
 
 pub struct ClientConnection {
     database: Mutex<Database>,
+    /// Broadcast sender for notifying subscribers of changes.
+    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 impl ClientConnection {
     #[must_use]
-    pub const fn new(database: Database) -> Self {
+    pub const fn new(database: Database, change_tx: broadcast::Sender<ChangeNotification>) -> Self {
         Self {
             database: Mutex::new(database),
+            change_tx,
         }
+    }
+
+    /// Get changes since a given HLC timestamp.
+    ///
+    /// This is used for subscription backfill when a client subscribes with a `since_hlc`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database lock is poisoned or if reading changes fails.
+    pub fn get_changes_since(&self, since: HlcTimestamp) -> Result<Vec<LogRecord>, DatabaseError> {
+        let mut db = self
+            .database
+            .lock()
+            .map_err(|_| DatabaseError::LockPoisoned)?;
+        db.changes_since(since)
     }
 
     pub async fn handle_message(
@@ -33,25 +54,39 @@ impl ClientConnection {
             Ok(message) => message,
             Err(err) => {
                 return proto::ServerMessage {
-                    response: Some(proto::ServerResponse {
-                        request_id,
-                        status: Some(proto::google::rpc::Status {
-                            code: proto::google::rpc::Code::InvalidArgument.into(),
-                            message: err,
+                    payload: Some(proto::server_message::Payload::Response(
+                        proto::ServerResponse {
+                            request_id,
+                            status: Some(proto::google::rpc::Status {
+                                code: proto::google::rpc::Code::InvalidArgument.into(),
+                                message: err,
+                                ..Default::default()
+                            }),
                             ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
+                        },
+                    )),
                 };
             }
         };
         let mut response = match message.payload {
             ClientMessagePayload::TripleUpdateRequest(request) => self.update(request),
             ClientMessagePayload::Query(ref request) => self.query(request),
+            ClientMessagePayload::Subscribe(_) | ClientMessagePayload::Unsubscribe(_) => {
+                // Subscriptions are handled separately in the WebSocket handler
+                proto::ServerResponse {
+                    request_id,
+                    status: Some(proto::google::rpc::Status {
+                        code: proto::google::rpc::Code::Unimplemented.into(),
+                        message: "Subscriptions not yet implemented".to_string(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }
+            }
         };
         response.request_id = request_id;
         proto::ServerMessage {
-            response: Some(response),
+            payload: Some(proto::server_message::Payload::Response(response)),
         }
     }
 
@@ -82,20 +117,23 @@ impl ClientConnection {
 
         // First, read existing values to compare HLCs
         let mut snapshot = db.begin_readonly();
-        let mut updates_to_apply = Vec::with_capacity(triples.len());
+        // Track: (triple, should_update, is_insert)
+        let mut updates_to_apply: Vec<(_, bool, bool)> = Vec::with_capacity(triples.len());
 
         for triple in &triples {
             let existing = snapshot.get(&triple.entity_id, &triple.attribute_id);
-            let should_update = match existing {
+            let (should_update, is_insert) = match existing {
                 Ok(Some(record)) => {
                     // Update only if client HLC is strictly newer than stored HLC
-                    HlcClock::<SystemTimeSource>::compare(triple.hlc, record.created_hlc)
-                        == Ordering::Greater
+                    let should =
+                        HlcClock::<SystemTimeSource>::compare(triple.hlc, record.created_hlc)
+                            == Ordering::Greater;
+                    (should, false) // exists, so it's an update
                 }
                 // No existing value or error reading - always insert
-                Ok(None) | Err(_) => true,
+                Ok(None) | Err(_) => (true, true),
             };
-            updates_to_apply.push((triple, should_update));
+            updates_to_apply.push((triple, should_update, is_insert));
         }
 
         let txn_id = snapshot.close();
@@ -116,17 +154,21 @@ impl ClientConnection {
             }
         };
 
-        // Track the keys we're processing so we can return current values
+        // Track the keys and change types for triples we're processing
         let keys: Vec<([u8; 16], [u8; 16])> = triples
             .iter()
             .map(|t| (t.entity_id, t.attribute_id))
             .collect();
 
+        // Track which updates were actually applied for broadcasting
+        let mut applied_updates: Vec<(&crate::types::triple::Triple, bool)> = Vec::new();
+
         // Insert only triples where client HLC is newer
-        for (triple, should_update) in updates_to_apply {
+        for (triple, should_update, is_insert) in updates_to_apply {
             if should_update {
                 let value = value_to_storage(triple.value.clone_value());
                 txn.insert_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
+                applied_updates.push((triple, is_insert));
             }
         }
 
@@ -140,6 +182,47 @@ impl ClientConnection {
                 }),
                 ..Default::default()
             };
+        }
+
+        // Broadcast changes to subscribers
+        if !applied_updates.is_empty() {
+            let changes: Vec<proto::ChangeRecord> = applied_updates
+                .iter()
+                .map(|(triple, is_insert)| {
+                    let change_type = if *is_insert {
+                        proto::ChangeType::Insert
+                    } else {
+                        proto::ChangeType::Update
+                    };
+                    let value = match &triple.value {
+                        crate::types::triple::TripleValue::String(s) => Some(proto::TripleValue {
+                            value: Some(proto::triple_value::Value::String(s.as_str().to_owned())),
+                        }),
+                        crate::types::triple::TripleValue::Number(n) => Some(proto::TripleValue {
+                            value: Some(proto::triple_value::Value::Number(*n)),
+                        }),
+                        crate::types::triple::TripleValue::Boolean(b) => Some(proto::TripleValue {
+                            value: Some(proto::triple_value::Value::Boolean(*b)),
+                        }),
+                    };
+                    proto::ChangeRecord {
+                        change_type: change_type.into(),
+                        triple: Some(proto::Triple {
+                            entity_id: Some(triple.entity_id.to_vec()),
+                            attribute_id: Some(triple.attribute_id.to_vec()),
+                            value,
+                            hlc: Some(proto::HlcTimestamp {
+                                physical_time_ms: triple.hlc.physical_time,
+                                logical_counter: triple.hlc.logical_counter,
+                                node_id: triple.hlc.node_id,
+                            }),
+                        }),
+                    }
+                })
+                .collect();
+
+            // Ignore send errors - no subscribers is not an error
+            let _ = self.change_tx.send(ChangeNotification { changes });
         }
 
         // Read back the current values and return them in the response
@@ -262,11 +345,28 @@ mod tests {
     use crate::proto;
     use crate::testing::new_test_database;
 
+    /// Create a test ClientConnection with a broadcast channel.
+    fn new_test_client() -> ClientConnection {
+        let database = new_test_database().expect("Failed to create test db");
+        let (change_tx, _) = broadcast::channel(100);
+        ClientConnection::new(database, change_tx)
+    }
+
+    /// Extract the ServerResponse from a ServerMessage.
+    fn extract_response(msg: proto::ServerMessage) -> proto::ServerResponse {
+        match msg.payload {
+            Some(proto::server_message::Payload::Response(r)) => r,
+            Some(proto::server_message::Payload::SubscriptionUpdate(_)) => {
+                panic!("Expected Response, got SubscriptionUpdate")
+            }
+            None => panic!("Expected Response, got None"),
+        }
+    }
+
     #[tokio::test]
     #[allow(clippy::significant_drop_tightening)]
     async fn test_handle_message_insert_string_triple() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let entity_id = vec![1u8; 16];
         let attribute_id = vec![2u8; 16];
@@ -296,9 +396,7 @@ mod tests {
         };
 
         let response = client_conn.handle_message(client_message).await;
-
-        assert!(response.response.is_some());
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(123));
         assert!(server_response.status.is_some());
         assert_eq!(
@@ -323,8 +421,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_insert_boolean_triple() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let entity_id = vec![3u8; 16];
         let attribute_id = vec![4u8; 16];
@@ -355,7 +452,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
@@ -364,8 +461,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_insert_number_triple() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let entity_id = vec![5u8; 16];
         let attribute_id = vec![6u8; 16];
@@ -396,7 +492,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
@@ -405,8 +501,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_empty_triples() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let update_request = proto::TripleUpdateRequest { triples: vec![] };
 
@@ -419,7 +514,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(
             server_response.status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
@@ -428,8 +523,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_then_query_triple() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let entity_id = vec![10u8; 16];
         let attribute_id = vec![20u8; 16];
@@ -461,7 +555,7 @@ mod tests {
 
         let insert_response = client_conn.handle_message(insert_message).await;
         assert_eq!(
-            insert_response.response.unwrap().status.unwrap().code,
+            extract_response(insert_response).status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
 
@@ -493,7 +587,7 @@ mod tests {
         };
 
         let query_response = client_conn.handle_message(query_message).await;
-        let server_response = query_response.response.unwrap();
+        let server_response = extract_response(query_response);
 
         assert_eq!(
             server_response.status.unwrap().code,
@@ -520,8 +614,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_entity_scan() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         let entity_id = vec![30u8; 16];
 
@@ -555,7 +648,7 @@ mod tests {
 
         let insert_response = client_conn.handle_message(insert_message).await;
         assert_eq!(
-            insert_response.response.unwrap().status.unwrap().code,
+            extract_response(insert_response).status.unwrap().code,
             proto::google::rpc::Code::Ok as i32
         );
 
@@ -592,7 +685,7 @@ mod tests {
         };
 
         let query_response = client_conn.handle_message(query_message).await;
-        let server_response = query_response.response.unwrap();
+        let server_response = extract_response(query_response);
 
         assert_eq!(
             server_response.status.unwrap().code,
@@ -606,8 +699,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_missing_payload() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         // Send a message with no payload
         let client_message = proto::ClientMessage {
@@ -617,7 +709,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(400));
         assert_eq!(
             server_response.status.unwrap().code,
@@ -627,8 +719,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_invalid_entity_id_length() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         // Entity ID is wrong length (should be 16 bytes)
         let triple = proto::Triple {
@@ -657,7 +748,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(401));
         assert_eq!(
             server_response.status.unwrap().code,
@@ -667,8 +758,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_invalid_attribute_id_length() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         // Attribute ID is wrong length (should be 16 bytes)
         let triple = proto::Triple {
@@ -697,7 +787,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(402));
         assert_eq!(
             server_response.status.unwrap().code,
@@ -707,8 +797,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_missing_entity_id() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         // Triple with missing entity_id
         let triple = proto::Triple {
@@ -737,7 +826,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(403));
         assert_eq!(
             server_response.status.unwrap().code,
@@ -747,8 +836,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_message_missing_attribute_id() {
-        let database = new_test_database().expect("Failed to create test db");
-        let client_conn = ClientConnection::new(database);
+        let client_conn = new_test_client();
 
         // Triple with missing attribute_id
         let triple = proto::Triple {
@@ -777,7 +865,7 @@ mod tests {
 
         let response = client_conn.handle_message(client_message).await;
 
-        let server_response = response.response.unwrap();
+        let server_response = extract_response(response);
         assert_eq!(server_response.request_id, Some(404));
         assert_eq!(
             server_response.status.unwrap().code,

@@ -51,8 +51,8 @@ message ClientMessage {
   oneof payload {
     TripleUpdateRequest triple_update_request = 2;
     QueryRequest query = 3;
-    // SubscribeRequest subscribe = 3; // Reactive subscription
-    // uint32 unsubscribe_id = 4; // subscription_id to stop
+    SubscribeRequest subscribe = 4;
+    UnsubscribeRequest unsubscribe = 5;
   }
 }
 
@@ -88,23 +88,58 @@ message QueryPatternVariable {
   optional string label = 1;
 }
 
-// message SubscribeRequest {
-//   uint32 subscription_id = 1;
-//   // repeated Pattern patterns = 2;
-//   string since_hlc = 3; // Optional: Resume from this point
-// }
+// Request to subscribe to triple changes.
+message SubscribeRequest {
+  // Client-assigned subscription identifier. Used to match updates and for
+  // unsubscribing. Must be unique per connection.
+  uint32 subscription_id = 1;
+  // Optional HLC timestamp to resume from. If provided, the server will first
+  // send all changes since this timestamp, then continue with real-time updates.
+  optional HlcTimestamp since_hlc = 2;
+}
+
+// Request to cancel an active subscription.
+message UnsubscribeRequest {
+  // The subscription identifier to cancel.
+  uint32 subscription_id = 1;
+}
+
+// Types of changes that can occur to triples.
+enum ChangeType {
+  CHANGE_TYPE_UNSPECIFIED = 0;
+  CHANGE_TYPE_INSERT = 1;
+  CHANGE_TYPE_UPDATE = 2;
+  CHANGE_TYPE_DELETE = 3;
+}
+
+// A single change record representing a triple modification.
+message ChangeRecord {
+  // The type of change.
+  ChangeType change_type = 1;
+  // The affected triple. For DELETE operations, only entity_id, attribute_id,
+  // and hlc are populated; value is not included.
+  Triple triple = 2;
+}
+
+// Streaming update sent to subscribers when triples change.
+message SubscriptionUpdate {
+  // The subscription this update belongs to.
+  uint32 subscription_id = 1;
+  // The change records. May contain multiple changes per message.
+  repeated ChangeRecord changes = 2;
+}
 
 message TripleUpdateRequest {
   repeated Triple triples = 1;
 }
 
 message ServerMessage {
-  ServerResponse response = 1;
-  // oneof payload {
-  //   // QueryResult result = 2; // Response to QueryRequest
-  //   // TripleUpdate update = 3; // Streamed update from subscription
-  //   // Ack ack = 4; // Response to TransactRequest
-  // }
+  oneof payload {
+    // Response to a client request (query, update, subscribe, unsubscribe).
+    ServerResponse response = 1;
+    // Streaming update pushed to subscribers when triples change.
+    SubscriptionUpdate subscription_update = 2;
+  }
 }
 
 // A single value in a query result row

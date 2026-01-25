@@ -3,9 +3,12 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use tokio::sync::broadcast;
+
 use crate::client_connection::ClientConnection;
 use crate::proto;
 use crate::storage::Database;
+use crate::subscription::ChangeNotification;
 
 /// Counter for generating unique test database IDs.
 static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -15,6 +18,8 @@ pub struct TestClient {
     pub client: ClientConnection,
     pub runtime: tokio::runtime::Runtime,
     db_path: PathBuf,
+    /// Broadcast sender for subscriptions.
+    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 impl TestClient {
@@ -30,7 +35,10 @@ impl TestClient {
 
         #[allow(clippy::expect_used)]
         let database = Database::create(&db_path).expect("Failed to create test database");
-        let client = ClientConnection::new(database);
+
+        // Create broadcast channel for subscriptions
+        let (change_tx, _) = broadcast::channel::<ChangeNotification>(100);
+        let client = ClientConnection::new(database, change_tx.clone());
 
         #[allow(clippy::expect_used)]
         let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
@@ -39,6 +47,7 @@ impl TestClient {
             client,
             runtime,
             db_path,
+            change_tx,
         }
     }
 
@@ -49,7 +58,31 @@ impl TestClient {
             .block_on(async { self.client.handle_message(message).await });
 
         #[allow(clippy::expect_used)]
-        response.response.expect("Response should be present")
+        match response.payload.expect("Response should be present") {
+            proto::server_message::Payload::Response(r) => r,
+            proto::server_message::Payload::SubscriptionUpdate(_) => {
+                panic!("Expected Response, got SubscriptionUpdate")
+            }
+        }
+    }
+
+    /// Subscribe to change notifications.
+    ///
+    /// Returns a receiver that will receive all change notifications broadcast
+    /// after this call.
+    #[must_use]
+    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
+        self.change_tx.subscribe()
+    }
+
+    /// Get changes since a given HLC timestamp.
+    ///
+    /// This is used for subscription backfill.
+    pub fn get_changes_since(
+        &self,
+        hlc: crate::storage::HlcTimestamp,
+    ) -> Result<Vec<crate::storage::LogRecord>, crate::storage::DatabaseError> {
+        self.client.get_changes_since(hlc)
     }
 }
 

@@ -25,6 +25,7 @@ mod test_query_nonexistent;
 mod test_request_id;
 mod test_sequence;
 mod test_string_limits;
+mod test_subscription_basic;
 mod test_update_changes_type;
 mod test_update_overwrites;
 mod test_update_response_format;

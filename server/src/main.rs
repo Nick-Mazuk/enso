@@ -16,13 +16,27 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, proto, storage::Database};
+use server::{
+    ClientConnection, proto,
+    storage::Database,
+    subscription::{
+        ChangeNotification, ClientSubscriptions, create_subscription_update,
+        log_record_to_change_record, proto_hlc_to_storage,
+    },
+};
+use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Capacity for the broadcast channel.
+/// If a subscriber falls behind by this many notifications, they will start missing updates.
+const BROADCAST_CHANNEL_CAPACITY: usize = 1000;
 
 #[derive(Clone)]
 #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected for shared state
 struct AppState {
     client_connection: Arc<ClientConnection>,
+    /// Broadcast sender for change notifications.
+    change_tx: broadcast::Sender<ChangeNotification>,
 }
 
 #[tokio::main]
@@ -52,8 +66,15 @@ async fn main() {
         );
     }
 
-    let client_connection = Arc::new(ClientConnection::new(database));
-    let state = AppState { client_connection };
+    // Create broadcast channel for change notifications
+    let (change_tx, _) = broadcast::channel(BROADCAST_CHANNEL_CAPACITY);
+
+    #[allow(clippy::disallowed_methods)] // Clone needed for broadcast sender
+    let client_connection = Arc::new(ClientConnection::new(database, change_tx.clone()));
+    let state = AppState {
+        client_connection,
+        change_tx,
+    };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
@@ -82,81 +103,255 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
-    while let Some(msg) = socket.recv().await {
-        let msg = match msg {
-            Ok(msg) => msg,
-            Err(e) => {
-                tracing::warn!("websocket receive error: {e}");
-                return;
-            }
-        };
+    // Per-connection subscription tracking
+    let mut subscriptions = ClientSubscriptions::new();
+    // Subscribe to the broadcast channel for change notifications
+    let mut change_rx = state.change_tx.subscribe();
 
-        // Only process binary messages (protobuf)
-        let data = match msg {
-            Message::Binary(data) => data,
-            Message::Text(text) => {
-                tracing::debug!("received text message (ignoring): {text}");
-                continue;
-            }
-            Message::Ping(data) => {
-                if socket.send(Message::Pong(data)).await.is_err() {
-                    return;
-                }
-                continue;
-            }
-            Message::Pong(_) => continue,
-            Message::Close(_) => {
-                tracing::debug!("client sent close");
-                return;
-            }
-        };
-
-        // Decode the ClientMessage
-        let client_message = match proto::ClientMessage::decode(data.as_ref()) {
-            Ok(msg) => msg,
-            Err(e) => {
-                tracing::warn!("failed to decode ClientMessage: {e}");
-                // Send an error response
-                let error_response = proto::ServerMessage {
-                    response: Some(proto::ServerResponse {
-                        request_id: None,
-                        status: Some(proto::google::rpc::Status {
-                            code: proto::google::rpc::Code::InvalidArgument.into(),
-                            message: format!("Failed to decode message: {e}"),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
+    loop {
+        tokio::select! {
+            // Handle incoming WebSocket messages
+            msg = socket.recv() => {
+                let msg = match msg {
+                    Some(Ok(msg)) => msg,
+                    Some(Err(e)) => {
+                        tracing::warn!("websocket receive error: {e}");
+                        return;
+                    }
+                    None => {
+                        tracing::debug!("client disconnected");
+                        return;
+                    }
                 };
-                let response_bytes = error_response.encode_to_vec();
-                if socket
-                    .send(Message::Binary(response_bytes.into()))
-                    .await
-                    .is_err()
-                {
-                    return;
+
+                // Only process binary messages (protobuf)
+                let data = match msg {
+                    Message::Binary(data) => data,
+                    Message::Text(text) => {
+                        tracing::debug!("received text message (ignoring): {text}");
+                        continue;
+                    }
+                    Message::Ping(data) => {
+                        if socket.send(Message::Pong(data)).await.is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                    Message::Pong(_) => continue,
+                    Message::Close(_) => {
+                        tracing::debug!("client sent close");
+                        return;
+                    }
+                };
+
+                // Decode the ClientMessage
+                let client_message = match proto::ClientMessage::decode(data.as_ref()) {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        tracing::warn!("failed to decode ClientMessage: {e}");
+                        if send_error_response(&mut socket, None, &format!("Failed to decode message: {e}")).await.is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                };
+
+                let request_id = client_message.request_id;
+                tracing::debug!("received ClientMessage with request_id: {:?}", request_id);
+
+                // Handle subscribe/unsubscribe specially
+                match &client_message.payload {
+                    Some(proto::client_message::Payload::Subscribe(req)) => {
+                        if let Err(e) = handle_subscribe(&mut socket, &state, &mut subscriptions, request_id, req).await {
+                            tracing::debug!("subscribe handling failed: {e}");
+                            return;
+                        }
+                    }
+                    Some(proto::client_message::Payload::Unsubscribe(req)) => {
+                        if let Err(e) = handle_unsubscribe(&mut socket, &mut subscriptions, request_id, req).await {
+                            tracing::debug!("unsubscribe handling failed: {e}");
+                            return;
+                        }
+                    }
+                    _ => {
+                        // Handle other messages (query, update) through ClientConnection
+                        let server_message = state.client_connection.handle_message(client_message).await;
+                        let response_bytes = server_message.encode_to_vec();
+                        if socket.send(Message::Binary(response_bytes.into())).await.is_err() {
+                            tracing::debug!("client disconnected");
+                            return;
+                        }
+                    }
                 }
-                continue;
             }
-        };
 
-        tracing::debug!(
-            "received ClientMessage with request_id: {:?}",
-            client_message.request_id
-        );
-
-        // Handle the message
-        let server_message = state.client_connection.handle_message(client_message).await;
-
-        // Encode and send the response
-        let response_bytes = server_message.encode_to_vec();
-        if socket
-            .send(Message::Binary(response_bytes.into()))
-            .await
-            .is_err()
-        {
-            tracing::debug!("client disconnected");
-            return;
+            // Handle broadcast notifications for subscriptions
+            notification = change_rx.recv() => {
+                match notification {
+                    Ok(change) => {
+                        // Forward changes to all matching subscriptions
+                        for sub in subscriptions.iter() {
+                            // Filter changes based on subscription's since_hlc if applicable
+                            // For now, send all changes to all subscriptions
+                            // (since_hlc filtering was already done during initial backfill)
+                            let update = create_subscription_update(sub.id, &change.changes);
+                            let msg = proto::ServerMessage {
+                                payload: Some(proto::server_message::Payload::SubscriptionUpdate(update)),
+                            };
+                            let bytes = msg.encode_to_vec();
+                            if socket.send(Message::Binary(bytes.into())).await.is_err() {
+                                tracing::debug!("client disconnected during subscription update");
+                                return;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        tracing::warn!("subscription receiver lagged by {count} messages");
+                        // Continue processing - we may have missed some updates
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        tracing::debug!("broadcast channel closed");
+                        return;
+                    }
+                }
+            }
         }
     }
+}
+
+/// Send an error response to the client.
+async fn send_error_response(
+    socket: &mut WebSocket,
+    request_id: Option<u32>,
+    message: &str,
+) -> Result<(), ()> {
+    let error_response = proto::ServerMessage {
+        payload: Some(proto::server_message::Payload::Response(
+            proto::ServerResponse {
+                request_id,
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::InvalidArgument.into(),
+                    message: message.to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+    };
+    let response_bytes = error_response.encode_to_vec();
+    socket
+        .send(Message::Binary(response_bytes.into()))
+        .await
+        .map_err(|_| ())
+}
+
+/// Send a success response to the client.
+async fn send_ok_response(socket: &mut WebSocket, request_id: Option<u32>) -> Result<(), ()> {
+    let response = proto::ServerMessage {
+        payload: Some(proto::server_message::Payload::Response(
+            proto::ServerResponse {
+                request_id,
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Ok.into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+    };
+    let response_bytes = response.encode_to_vec();
+    socket
+        .send(Message::Binary(response_bytes.into()))
+        .await
+        .map_err(|_| ())
+}
+
+/// Handle a subscribe request.
+async fn handle_subscribe(
+    socket: &mut WebSocket,
+    state: &AppState,
+    subscriptions: &mut ClientSubscriptions,
+    request_id: Option<u32>,
+    req: &proto::SubscribeRequest,
+) -> Result<(), &'static str> {
+    let subscription_id = req.subscription_id;
+    let since_hlc = req.since_hlc.as_ref().map(proto_hlc_to_storage);
+
+    // Add the subscription
+    if let Err(e) = subscriptions.add(subscription_id, since_hlc) {
+        let msg = format!("{e}");
+        send_error_response(socket, request_id, &msg)
+            .await
+            .map_err(|()| "failed to send error response")?;
+        return Ok(());
+    }
+
+    // If since_hlc was provided, send historical changes
+    if let Some(hlc) = since_hlc {
+        match state.client_connection.get_changes_since(hlc) {
+            Ok(log_records) => {
+                // Convert log records to change records
+                let mut changes = Vec::new();
+                for record in &log_records {
+                    match log_record_to_change_record(record) {
+                        Ok(Some(change)) => changes.push(change),
+                        Ok(None) => {} // Skip non-change records
+                        Err(e) => {
+                            tracing::warn!("failed to convert log record: {e}");
+                        }
+                    }
+                }
+
+                if !changes.is_empty() {
+                    // Send initial subscription update with historical changes
+                    let update = create_subscription_update(subscription_id, &changes);
+                    let msg = proto::ServerMessage {
+                        payload: Some(proto::server_message::Payload::SubscriptionUpdate(update)),
+                    };
+                    let bytes = msg.encode_to_vec();
+                    socket
+                        .send(Message::Binary(bytes.into()))
+                        .await
+                        .map_err(|_| "failed to send initial subscription update")?;
+                }
+            }
+            Err(e) => {
+                tracing::warn!("failed to get changes since HLC: {e}");
+                // Continue anyway - subscription is registered, just no backfill
+            }
+        }
+    }
+
+    // Send success response
+    send_ok_response(socket, request_id)
+        .await
+        .map_err(|()| "failed to send ok response")?;
+
+    tracing::debug!("subscription {} registered", subscription_id);
+    Ok(())
+}
+
+/// Handle an unsubscribe request.
+async fn handle_unsubscribe(
+    socket: &mut WebSocket,
+    subscriptions: &mut ClientSubscriptions,
+    request_id: Option<u32>,
+    req: &proto::UnsubscribeRequest,
+) -> Result<(), &'static str> {
+    let subscription_id = req.subscription_id;
+
+    if let Err(e) = subscriptions.remove(subscription_id) {
+        let msg = format!("{e}");
+        send_error_response(socket, request_id, &msg)
+            .await
+            .map_err(|()| "failed to send error response")?;
+        return Ok(());
+    }
+
+    send_ok_response(socket, request_id)
+        .await
+        .map_err(|()| "failed to send ok response")?;
+
+    tracing::debug!("subscription {} removed", subscription_id);
+    Ok(())
 }

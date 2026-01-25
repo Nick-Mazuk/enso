@@ -8,9 +8,12 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use tokio::sync::broadcast;
+
 use crate::client_connection::ClientConnection;
 use crate::proto;
 use crate::storage::Database;
+use crate::subscription::ChangeNotification;
 
 /// Counter for generating unique simulator instance IDs.
 static SIMULATOR_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -181,7 +184,9 @@ impl Simulator {
             }
         };
 
-        let client_connection = ClientConnection::new(database);
+        // Create a broadcast channel for subscriptions (not used in simulation tests)
+        let (change_tx, _) = broadcast::channel::<ChangeNotification>(1);
+        let client_connection = ClientConnection::new(database, change_tx);
 
         // Run the simulation
         let result = self.run_with_connection(&client_connection, message_count);
@@ -211,7 +216,8 @@ impl Simulator {
                 runtime.block_on(async { client_connection.handle_message(message.clone()).await });
 
             // Extract the server response
-            let Some(server_response) = &response.response else {
+            let Some(proto::server_message::Payload::Response(server_response)) = &response.payload
+            else {
                 self.checker.add_violation(InvariantViolation {
                     description: "No response returned".to_string(),
                     operation_index: self.history.len(),
@@ -251,6 +257,13 @@ impl Simulator {
                     } else {
                         self.failed_operations += 1;
                     }
+                }
+                Some(
+                    proto::client_message::Payload::Subscribe(_)
+                    | proto::client_message::Payload::Unsubscribe(_),
+                ) => {
+                    // Subscriptions not supported in simulation yet
+                    self.failed_operations += 1;
                 }
                 None => {
                     // Message with no payload - this is an error

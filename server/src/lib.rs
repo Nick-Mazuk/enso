@@ -26,6 +26,7 @@ pub mod proto;
 mod query;
 pub mod simulation;
 pub mod storage;
+pub mod subscription;
 #[cfg(test)]
 mod testing;
 mod types;

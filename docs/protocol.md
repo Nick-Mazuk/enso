@@ -3,9 +3,9 @@
 ## Operations
 
 - Clients do 1-time queries
-- Clients can subscribe to triple updates ("send me triples that look like X"). *(Not yet implemented)*
-- On subscribing to triple updates, clients can optionally say "and start providing updates from HLC X" *(Not yet implemented)*
-- Clients can unsubscribe from triple updates *(Not yet implemented)*
+- Clients can subscribe to triple updates and receive streaming notifications
+- On subscribing, clients can optionally specify a `since_hlc` to receive historical changes
+- Clients can unsubscribe from triple updates
 - Clients can send triple updates. Each triple must include an HLC timestamp. The server uses the HLC to determine whether the update should be applied (see HLC-Based Conflict Resolution below). On success, the server responds with OK status and returns the current values of all written triples (which may differ from the submitted values if the submitted HLC was older). On failure, the server returns an error status.
 
 ## Data Constraints
@@ -68,3 +68,54 @@ Conflict resolution is applied independently to each triple in a batch update re
 ### Missing HLC Validation
 
 All triples in an update request must include an HLC timestamp. Requests containing triples without HLC timestamps are rejected with `InvalidArgument`.
+
+## Subscriptions
+
+Clients can subscribe to receive real-time notifications when triples are modified.
+
+### SubscribeRequest
+
+To subscribe, send a `SubscribeRequest` with:
+
+- **subscription_id** (uint32): Client-assigned identifier for this subscription. Must be unique per connection. Used for matching updates and unsubscribing.
+- **since_hlc** (optional HlcTimestamp): If provided, the server will first send all changes since this timestamp as an initial `SubscriptionUpdate`, then continue with real-time updates.
+
+On success, the server responds with `ServerResponse` containing OK status.
+
+### SubscriptionUpdate
+
+When triples are modified, the server sends `SubscriptionUpdate` messages to all subscribers:
+
+- **subscription_id** (uint32): The subscription this update belongs to
+- **changes** (repeated ChangeRecord): The changes that occurred
+
+Each `ChangeRecord` contains:
+
+- **change_type** (ChangeType): One of `INSERT`, `UPDATE`, or `DELETE`
+- **triple** (Triple): The affected triple. For `DELETE` operations, only `entity_id`, `attribute_id`, and `hlc` are populated; `value` is not included.
+
+### UnsubscribeRequest
+
+To stop receiving updates, send an `UnsubscribeRequest` with:
+
+- **subscription_id** (uint32): The subscription to cancel
+
+On success, the server responds with OK status. On failure (e.g., subscription not found), the server returns an error status.
+
+### Subscription Lifecycle
+
+1. Client sends `SubscribeRequest` with a unique `subscription_id`
+2. Server validates the ID is not already in use for this connection
+3. If `since_hlc` is provided, server sends historical changes as initial `SubscriptionUpdate`
+4. Server sends ongoing `SubscriptionUpdate` messages as changes occur
+5. Client sends `UnsubscribeRequest` to cancel, or subscription ends on disconnect
+
+### Change Types
+
+- **INSERT**: A new triple was created
+- **UPDATE**: An existing triple was modified with a newer HLC
+- **DELETE**: A triple was removed
+
+### Broadcast Semantics
+
+All subscriptions on a connection receive the same change notifications. Changes are broadcast immediately after the transaction is committed, ensuring durability before notification.
