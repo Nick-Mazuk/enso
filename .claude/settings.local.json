@@ -10,7 +10,9 @@
       "Bash(cargo check:*)",
       "WebSearch",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(buf lint:*)",
+      "Bash(bun proto-gen:*)"
     ]
   }
 }

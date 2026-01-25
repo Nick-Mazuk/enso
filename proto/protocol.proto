@@ -4,17 +4,29 @@ package protocol;
 
 import "google/rpc/status.proto";
 
+// Represents a single triple (entity, attribute, value) in the database.
 message Triple {
+  // Unique identifier for the entity. Must be exactly 16 bytes.
+  // Requests with entity IDs of other lengths will be rejected with
+  // InvalidArgument.
   optional bytes entity_id = 1;
-  // TODO: describe the hashing algorithm used to get this id
+  // Unique identifier for the attribute. Must be exactly 16 bytes.
+  // Requests with attribute IDs of other lengths will be rejected with
+  // InvalidArgument.
   optional bytes attribute_id = 2;
+  // The value associated with this entity-attribute pair.
   TripleValue value = 3;
 }
 
+// The value component of a triple. Supports string, number, and boolean types.
 message TripleValue {
   oneof value {
+    // String value. Maximum length is 1024 characters.
+    // Strings exceeding this limit will be rejected with InvalidArgument.
     string string = 3;
+    // Numeric value (IEEE 754 double-precision floating point).
     double number = 4;
+    // Boolean value.
     bool boolean = 5;
   }
 }

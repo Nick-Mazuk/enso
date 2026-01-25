@@ -26,3 +26,4 @@ mod test_sequence;
 mod test_string_limits;
 mod test_update_changes_type;
 mod test_update_overwrites;
+mod test_update_response_format;

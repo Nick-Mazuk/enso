@@ -49,6 +49,6 @@ pub use types::{
 };
 
 // Legacy query executor (operates on storage transactions)
-pub use executor::value_to_storage;
 #[allow(unused_imports)]
 pub use executor::{QueryError, QueryExecutor};
+pub use executor::{value_from_storage, value_to_storage};

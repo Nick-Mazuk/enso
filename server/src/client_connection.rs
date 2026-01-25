@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use crate::{
     proto,
-    query::{Query, QueryEngine, value_to_storage},
+    query::{Query, QueryEngine, value_from_storage, value_to_storage},
     storage::Database,
     types::{
         ProtoDeserializable, ProtoSerializable,
@@ -93,6 +93,12 @@ impl ClientConnection {
             }
         };
 
+        // Track the keys we're inserting so we can return current values
+        let keys: Vec<([u8; 16], [u8; 16])> = triples
+            .iter()
+            .map(|t| (t.entity_id, t.attribute_id))
+            .collect();
+
         // Insert all triples
         for triple in triples {
             let value = value_to_storage(triple.value);
@@ -111,11 +117,44 @@ impl ClientConnection {
             };
         }
 
+        // Read back the current values and return them in the response
+        let mut response_triples = Vec::with_capacity(keys.len());
+
+        // Begin a read-only snapshot to get current values
+        let mut snapshot = db.begin_readonly();
+
+        for (entity_id, attribute_id) in keys {
+            if let Ok(Some(record)) = snapshot.get(&entity_id, &attribute_id) {
+                let types_value = value_from_storage(record.value);
+                response_triples.push(proto::Triple {
+                    entity_id: Some(entity_id.to_vec()),
+                    attribute_id: Some(attribute_id.to_vec()),
+                    value: Some(proto::TripleValue {
+                        value: Some(match types_value {
+                            crate::types::triple::TripleValue::String(s) => {
+                                proto::triple_value::Value::String(s)
+                            }
+                            crate::types::triple::TripleValue::Number(n) => {
+                                proto::triple_value::Value::Number(n)
+                            }
+                            crate::types::triple::TripleValue::Boolean(b) => {
+                                proto::triple_value::Value::Boolean(b)
+                            }
+                        }),
+                    }),
+                });
+            }
+        }
+
+        let txn_id = snapshot.close();
+        db.release_snapshot(txn_id);
+
         proto::ServerResponse {
             status: Some(proto::google::rpc::Status {
                 code: proto::google::rpc::Code::Ok.into(),
                 ..Default::default()
             }),
+            triples: response_triples,
             ..Default::default()
         }
     }

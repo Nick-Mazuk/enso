@@ -15,15 +15,24 @@ export const file_protocol: GenFile = /*@__PURE__*/
   fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wigAEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZCJNCgtUcmlwbGVWYWx1ZRIQCgZzdHJpbmcYAyABKAlIABIQCgZudW1iZXIYBCABKAFIABIRCgdib29sZWFuGAUgASgISABCBwoFdmFsdWUiqwEKDUNsaWVudE1lc3NhZ2USFwoKcmVxdWVzdF9pZBgBIAEoDUgBiAEBEj4KFXRyaXBsZV91cGRhdGVfcmVxdWVzdBgCIAEoCzIdLnByb3RvY29sLlRyaXBsZVVwZGF0ZVJlcXVlc3RIABInCgVxdWVyeRgDIAEoCzIWLnByb3RvY29sLlF1ZXJ5UmVxdWVzdEgAQgkKB3BheWxvYWRCDQoLX3JlcXVlc3RfaWQiuAEKDFF1ZXJ5UmVxdWVzdBIsCgRmaW5kGAEgAygLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGUSJQoFd2hlcmUYAiADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKAoIb3B0aW9uYWwYAyADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4SKQoJd2hlcmVfbm90GAQgAygLMhYucHJvdG9jb2wuUXVlcnlQYXR0ZXJuIrwCCgxRdWVyeVBhdHRlcm4SEwoJZW50aXR5X2lkGAEgASgMSAASOQoPZW50aXR5X3ZhcmlhYmxlGAIgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIABIWCgxhdHRyaWJ1dGVfaWQYAyABKAxIARI8ChJhdHRyaWJ1dGVfdmFyaWFibGUYBCABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgBEiYKBXZhbHVlGAUgASgLMhUucHJvdG9jb2wuVHJpcGxlVmFsdWVIAhI4Cg52YWx1ZV92YXJpYWJsZRgGIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAJCCAoGZW50aXR5QgsKCWF0dHJpYnV0ZUINCgt2YWx1ZV9ncm91cCI0ChRRdWVyeVBhdHRlcm5WYXJpYWJsZRISCgVsYWJlbBgBIAEoCUgAiAEBQggKBl9sYWJlbCI4ChNUcmlwbGVVcGRhdGVSZXF1ZXN0EiEKB3RyaXBsZXMYASADKAsyEC5wcm90b2NvbC5UcmlwbGUiOwoNU2VydmVyTWVzc2FnZRIqCghyZXNwb25zZRgBIAEoCzIYLnByb3RvY29sLlNlcnZlclJlc3BvbnNlIm4KEFF1ZXJ5UmVzdWx0VmFsdWUSDAoCaWQYASABKAlIABItCgx0cmlwbGVfdmFsdWUYAiABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgAEhQKDGlzX3VuZGVmaW5lZBgDIAEoCEIHCgV2YWx1ZSI8Cg5RdWVyeVJlc3VsdFJvdxIqCgZ2YWx1ZXMYASADKAsyGi5wcm90b2NvbC5RdWVyeVJlc3VsdFZhbHVlIsgBCg5TZXJ2ZXJSZXNwb25zZRIXCgpyZXF1ZXN0X2lkGAEgASgNSACIAQESJwoGc3RhdHVzGAIgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXNIAYgBARIhCgd0cmlwbGVzGAMgAygLMhAucHJvdG9jb2wuVHJpcGxlEg8KB2NvbHVtbnMYBCADKAkSJgoEcm93cxgFIAMoCzIYLnByb3RvY29sLlF1ZXJ5UmVzdWx0Um93Qg0KC19yZXF1ZXN0X2lkQgkKB19zdGF0dXNiBnByb3RvMw", [file_google_rpc_status]);
 
 /**
+ * Represents a single triple (entity, attribute, value) in the database.
+ *
  * @generated from message protocol.Triple
  */
 export type Triple = Message<"protocol.Triple"> & {
   /**
+   * Unique identifier for the entity. Must be exactly 16 bytes.
+   * Requests with entity IDs of other lengths will be rejected with
+   * InvalidArgument.
+   *
    * @generated from field: optional bytes entity_id = 1;
    */
   entityId?: Uint8Array;
 
   /**
+   * Unique identifier for the attribute. Must be exactly 16 bytes.
+   * Requests with attribute IDs of other lengths will be rejected with
+   * InvalidArgument.
    * TODO: describe the hashing algorithm used to get this id
    *
    * @generated from field: optional bytes attribute_id = 2;
@@ -31,6 +40,8 @@ export type Triple = Message<"protocol.Triple"> & {
   attributeId?: Uint8Array;
 
   /**
+   * The value associated with this entity-attribute pair.
+   *
    * @generated from field: protocol.TripleValue value = 3;
    */
   value?: TripleValue;
@@ -44,6 +55,8 @@ export const TripleSchema: GenMessage<Triple> = /*@__PURE__*/
   messageDesc(file_protocol, 0);
 
 /**
+ * The value component of a triple. Supports string, number, and boolean types.
+ *
  * @generated from message protocol.TripleValue
  */
 export type TripleValue = Message<"protocol.TripleValue"> & {
@@ -52,18 +65,25 @@ export type TripleValue = Message<"protocol.TripleValue"> & {
    */
   value: {
     /**
+     * String value. Maximum length is 1024 characters.
+     * Strings exceeding this limit will be rejected with InvalidArgument.
+     *
      * @generated from field: string string = 3;
      */
     value: string;
     case: "string";
   } | {
     /**
+     * Numeric value (IEEE 754 double-precision floating point).
+     *
      * @generated from field: double number = 4;
      */
     value: number;
     case: "number";
   } | {
     /**
+     * Boolean value.
+     *
      * @generated from field: bool boolean = 5;
      */
     value: boolean;

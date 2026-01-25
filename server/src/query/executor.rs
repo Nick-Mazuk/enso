@@ -71,7 +71,7 @@ fn triple_from_record(record: TripleRecord) -> Triple {
 }
 
 /// Convert a storage `TripleValue` to a protocol `TripleValue`.
-fn value_from_storage(value: crate::storage::TripleValue) -> TripleValue {
+pub fn value_from_storage(value: crate::storage::TripleValue) -> TripleValue {
     match value {
         crate::storage::TripleValue::Null => {
             // Protocol doesn't have null, use empty string as fallback
