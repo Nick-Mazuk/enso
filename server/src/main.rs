@@ -4,7 +4,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::{
     Router,
@@ -27,10 +27,15 @@ use server::{
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+/// Shared database for all connections.
+type SharedDatabase = Arc<Mutex<Database>>;
+
 #[derive(Clone)]
 #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected for shared state
 struct AppState {
-    client_connection: Arc<ClientConnection>,
+    /// Shared database - each WebSocket connection creates its own `ClientConnection`
+    /// using this shared database.
+    shared_database: SharedDatabase,
 }
 
 #[tokio::main]
@@ -60,8 +65,9 @@ async fn main() {
         );
     }
 
-    let client_connection = Arc::new(ClientConnection::new(database));
-    let state = AppState { client_connection };
+    // Create a shared database that all connections will use
+    let shared_database: SharedDatabase = Arc::new(Mutex::new(database));
+    let state = AppState { shared_database };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
@@ -91,11 +97,14 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 
 #[allow(clippy::too_many_lines, clippy::disallowed_methods)]
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
+    // Create a per-connection ClientConnection using the shared database
+    let client_connection = ClientConnection::new_shared(Arc::clone(&state.shared_database));
+
     // Per-connection subscription tracking
     let mut subscriptions = ClientSubscriptions::new();
 
     // Subscribe to the broadcast channel for change notifications (from the database)
-    let mut change_rx = match state.client_connection.subscribe_to_changes() {
+    let mut change_rx = match client_connection.subscribe_to_changes() {
         Ok(rx) => rx,
         Err(e) => {
             tracing::error!("Failed to subscribe to changes: {e}");
@@ -157,7 +166,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 // Handle subscribe/unsubscribe specially
                 match &client_message.payload {
                     Some(proto::client_message::Payload::Subscribe(req)) => {
-                        if let Err(e) = handle_subscribe(&mut socket, &state, &mut subscriptions, request_id, req).await {
+                        if let Err(e) = handle_subscribe(&mut socket, &client_connection, &mut subscriptions, request_id, req).await {
                             tracing::debug!("subscribe handling failed: {e}");
                             return;
                         }
@@ -170,7 +179,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                     }
                     _ => {
                         // Handle other messages (query, update) through ClientConnection
-                        let server_message = state.client_connection.handle_message(client_message).await;
+                        let server_message = client_connection.handle_message(client_message).await;
                         let response_bytes = server_message.encode_to_vec();
                         if socket.send(Message::Binary(response_bytes.into())).await.is_err() {
                             tracing::debug!("client disconnected");
@@ -181,6 +190,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             }
 
             // Handle broadcast notifications for subscriptions
+            // (FilteredChangeReceiver automatically excludes this connection's own writes)
             notification = change_rx.recv() => {
                 match notification {
                     Ok(change) => {
@@ -270,7 +280,7 @@ async fn send_ok_response(socket: &mut WebSocket, request_id: Option<u32>) -> Re
 /// Handle a subscribe request.
 async fn handle_subscribe(
     socket: &mut WebSocket,
-    state: &AppState,
+    client_connection: &ClientConnection,
     subscriptions: &mut ClientSubscriptions,
     request_id: Option<u32>,
     req: &proto::SubscribeRequest,
@@ -289,7 +299,7 @@ async fn handle_subscribe(
 
     // If since_hlc was provided, send historical changes
     if let Some(hlc) = since_hlc {
-        match state.client_connection.get_changes_since(hlc) {
+        match client_connection.get_changes_since(hlc) {
             Ok(log_records) => {
                 // Convert log records to change records
                 let mut changes = Vec::new();

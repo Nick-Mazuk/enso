@@ -1,13 +1,12 @@
 use std::cmp::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
-
-use tokio::sync::broadcast;
 
 use crate::{
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
     storage::{
-        ChangeNotification, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord,
+        ConnectionId, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord,
         SystemTimeSource,
     },
     types::{
@@ -17,12 +16,20 @@ use crate::{
     },
 };
 
+/// Global counter for generating unique connection IDs.
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+
 /// A connection to the database for a single client.
 ///
 /// Multiple `ClientConnection` instances can share the same underlying database
 /// by using `new_shared()` with a shared `Arc<Mutex<Database>>`.
+///
+/// Each connection has a unique ID that is included in change notifications,
+/// allowing subscribers to filter out their own writes.
 pub struct ClientConnection {
     database: Arc<Mutex<Database>>,
+    /// Unique identifier for this connection.
+    connection_id: ConnectionId,
 }
 
 impl ClientConnection {
@@ -33,6 +40,7 @@ impl ClientConnection {
     pub fn new(database: Database) -> Self {
         Self {
             database: Arc::new(Mutex::new(database)),
+            connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
         }
     }
 
@@ -42,9 +50,19 @@ impl ClientConnection {
     /// All connections sharing the database will receive change notifications
     /// when any connection commits a transaction.
     #[must_use]
-    #[allow(clippy::missing_const_for_fn)] // Arc is not const-compatible
     pub fn new_shared(database: Arc<Mutex<Database>>) -> Self {
-        Self { database }
+        Self {
+            database,
+            connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
+        }
+    }
+
+    /// Get the unique identifier for this connection.
+    ///
+    /// This can be used to filter out notifications from this connection's own writes.
+    #[must_use]
+    pub const fn connection_id(&self) -> ConnectionId {
+        self.connection_id
     }
 
     /// Get a clone of the shared database reference.
@@ -59,16 +77,17 @@ impl ClientConnection {
 
     /// Subscribe to change notifications from the database.
     ///
-    /// Returns a receiver that will receive all change notifications broadcast
-    /// by the database when transactions commit.
+    /// Returns a filtered receiver that will receive change notifications
+    /// from other connections only. Notifications from this connection's
+    /// own writes are automatically filtered out.
     pub fn subscribe_to_changes(
         &self,
-    ) -> Result<broadcast::Receiver<ChangeNotification>, DatabaseError> {
+    ) -> Result<crate::storage::FilteredChangeReceiver, DatabaseError> {
         let db = self
             .database
             .lock()
             .map_err(|_| DatabaseError::LockPoisoned)?;
-        Ok(db.subscribe_to_changes())
+        Ok(db.subscribe_to_changes(self.connection_id))
     }
 
     /// Get changes since a given HLC timestamp.
@@ -181,7 +200,7 @@ impl ClientConnection {
         db.release_snapshot(txn_id);
 
         // Begin a transaction
-        let mut txn = match db.begin() {
+        let mut txn = match db.begin(self.connection_id) {
             Ok(txn) => txn,
             Err(e) => {
                 return proto::ServerResponse {
@@ -406,7 +425,7 @@ mod tests {
         // Verify the triple was inserted by reading it back
 
         let mut db = client_conn.database.lock().unwrap();
-        let mut txn = db.begin().expect("begin txn");
+        let mut txn = db.begin(0).expect("begin txn"); // 0 = test connection ID
         let entity_arr: [u8; 16] = entity_id.try_into().unwrap();
         let attr_arr: [u8; 16] = attribute_id.try_into().unwrap();
         let record = txn.get(&entity_arr, &attr_arr).expect("get");

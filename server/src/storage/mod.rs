@@ -98,6 +98,9 @@ pub struct ChangeRecord {
     pub hlc: HlcTimestamp,
 }
 
+/// Unique identifier for a client connection.
+pub type ConnectionId = u64;
+
 /// Notification of changes, broadcast to all subscribers.
 ///
 /// This is sent via the broadcast channel when triples are modified.
@@ -105,6 +108,68 @@ pub struct ChangeRecord {
 #[derive(Debug, Clone)]
 #[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
 pub struct ChangeNotification {
+    /// The connection that originated this change.
+    /// Subscribers can use this to filter out their own writes.
+    pub source_connection_id: ConnectionId,
     /// The changes that occurred in this transaction.
     pub changes: Vec<ChangeRecord>,
+}
+
+/// A filtered receiver for change notifications.
+///
+/// This wraps a broadcast receiver and automatically filters out notifications
+/// that originated from the subscriber's own connection. This ensures that
+/// a connection never receives notifications for its own writes.
+pub struct FilteredChangeReceiver {
+    receiver: tokio::sync::broadcast::Receiver<ChangeNotification>,
+    /// The connection ID to filter out (this connection's own ID).
+    exclude_connection_id: ConnectionId,
+}
+
+impl FilteredChangeReceiver {
+    /// Create a new filtered receiver.
+    #[allow(clippy::missing_const_for_fn)] // broadcast::Receiver not const-compatible
+    pub(crate) fn new(
+        receiver: tokio::sync::broadcast::Receiver<ChangeNotification>,
+        exclude_connection_id: ConnectionId,
+    ) -> Self {
+        Self {
+            receiver,
+            exclude_connection_id,
+        }
+    }
+
+    /// Try to receive the next notification without blocking.
+    ///
+    /// Returns notifications from other connections only.
+    /// Notifications from this connection are automatically skipped.
+    pub fn try_recv(
+        &mut self,
+    ) -> Result<ChangeNotification, tokio::sync::broadcast::error::TryRecvError> {
+        loop {
+            let notification = self.receiver.try_recv()?;
+            // Skip notifications from our own connection
+            if notification.source_connection_id != self.exclude_connection_id {
+                return Ok(notification);
+            }
+            // Continue looping to get the next notification
+        }
+    }
+
+    /// Receive the next notification, waiting if necessary.
+    ///
+    /// Returns notifications from other connections only.
+    /// Notifications from this connection are automatically skipped.
+    pub async fn recv(
+        &mut self,
+    ) -> Result<ChangeNotification, tokio::sync::broadcast::error::RecvError> {
+        loop {
+            let notification = self.receiver.recv().await?;
+            // Skip notifications from our own connection
+            if notification.source_connection_id != self.exclude_connection_id {
+                return Ok(notification);
+            }
+            // Continue looping to get the next notification
+        }
+    }
 }

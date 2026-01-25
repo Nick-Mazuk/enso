@@ -409,7 +409,7 @@ mod tests {
 
         // Insert test data
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
 
             // Create field IDs
             let mut name_field = [0u8; 16];
@@ -739,7 +739,7 @@ mod tests {
 
         // Insert initial data
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let mut user1 = [0u8; 16];
             user1[..5].copy_from_slice(b"user1");
             txn.insert(

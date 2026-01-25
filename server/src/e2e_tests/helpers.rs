@@ -4,11 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::broadcast;
-
 use crate::client_connection::ClientConnection;
 use crate::proto;
-use crate::storage::{ChangeNotification, Database};
+use crate::storage::{Database, FilteredChangeReceiver};
 
 /// Counter for generating unique test database IDs.
 static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -85,9 +83,12 @@ impl TestClient {
     ///
     /// # Panics
     ///
+    /// The returned receiver automatically filters out notifications from
+    /// this client's own writes.
+    ///
     /// Panics if subscribing to the database fails.
     #[must_use]
-    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
+    pub fn subscribe_to_changes(&self) -> FilteredChangeReceiver {
         #[allow(clippy::expect_used)]
         self.client
             .subscribe_to_changes()
@@ -102,6 +103,12 @@ impl TestClient {
         hlc: crate::storage::HlcTimestamp,
     ) -> Result<Vec<crate::storage::LogRecord>, crate::storage::DatabaseError> {
         self.client.get_changes_since(hlc)
+    }
+
+    /// Get the connection ID for this client.
+    #[must_use]
+    pub fn connection_id(&self) -> crate::storage::ConnectionId {
+        self.client.connection_id()
     }
 }
 
@@ -138,12 +145,21 @@ impl SiblingClient {
     }
 
     /// Subscribe to change notifications.
+    ///
+    /// The returned receiver automatically filters out notifications from
+    /// this client's own writes.
     #[must_use]
-    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
+    pub fn subscribe_to_changes(&self) -> FilteredChangeReceiver {
         #[allow(clippy::expect_used)]
         self.client
             .subscribe_to_changes()
             .expect("Failed to subscribe to changes")
+    }
+
+    /// Get the connection ID for this client.
+    #[must_use]
+    pub fn connection_id(&self) -> crate::storage::ConnectionId {
+        self.client.connection_id()
     }
 }
 

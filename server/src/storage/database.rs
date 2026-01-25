@@ -20,7 +20,7 @@
 //! let attr_id = [2u8; 16];
 //! let value = server::storage::TripleValue::String("hello".to_string());
 //!
-//! let mut txn = db.begin().unwrap();
+//! let mut txn = db.begin(0).unwrap(); // 0 = connection ID
 //! txn.insert(entity_id, attr_id, value); // Buffers the insert
 //! txn.commit().unwrap();  // Writes to WAL, then applies to index
 //! ```
@@ -46,7 +46,9 @@ use crate::storage::triple::{
     AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
 };
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
-use crate::storage::{ChangeNotification, ChangeRecord, ChangeType};
+use crate::storage::{
+    ChangeNotification, ChangeRecord, ChangeType, ConnectionId, FilteredChangeReceiver,
+};
 
 /// Trait for applying operations to secondary indexes (attribute and entity-attribute).
 ///
@@ -353,10 +355,19 @@ impl Database {
     ///
     /// Only one write transaction can be active at a time (enforced by borrow checker).
     ///
+    /// # Arguments
+    ///
+    /// * `connection_id` - The ID of the connection that is creating this transaction.
+    ///   This is included in change notifications so subscribers can filter out
+    ///   their own writes.
+    ///
     /// # Panics
     /// Panics if transaction ID is 0 (indicates uninitialized database state).
     #[allow(clippy::disallowed_methods)] // Clone needed for broadcast sender
-    pub fn begin(&mut self) -> Result<WalTransaction<'_>, DatabaseError> {
+    pub fn begin(
+        &mut self,
+        connection_id: ConnectionId,
+    ) -> Result<WalTransaction<'_>, DatabaseError> {
         // Get next transaction ID
         let txn_id = self.file.superblock().next_txn_id;
 
@@ -376,6 +387,7 @@ impl Database {
             txn_id,
             hlc,
             self.change_tx.clone(),
+            connection_id,
         ))
     }
 
@@ -624,8 +636,12 @@ impl Database {
     ///
     /// Multiple subscribers can exist simultaneously - each receives all changes.
     #[must_use]
-    pub fn subscribe_to_changes(&self) -> broadcast::Receiver<ChangeNotification> {
-        self.change_tx.subscribe()
+    /// Subscribe to change notifications, filtering out this connection's own writes.
+    ///
+    /// Returns a filtered receiver that only yields notifications from other connections.
+    /// Notifications originating from the specified `connection_id` are automatically skipped.
+    pub fn subscribe_to_changes(&self, connection_id: ConnectionId) -> FilteredChangeReceiver {
+        FilteredChangeReceiver::new(self.change_tx.subscribe(), connection_id)
     }
 }
 
@@ -670,6 +686,8 @@ pub struct WalTransaction<'a> {
     finalized: bool,
     /// Broadcast sender for change notifications.
     change_tx: broadcast::Sender<ChangeNotification>,
+    /// The connection that created this transaction.
+    connection_id: ConnectionId,
 }
 
 impl<'a> WalTransaction<'a> {
@@ -681,6 +699,7 @@ impl<'a> WalTransaction<'a> {
         txn_id: TxnId,
         hlc: HlcTimestamp,
         change_tx: broadcast::Sender<ChangeNotification>,
+        connection_id: ConnectionId,
     ) -> Self {
         Self {
             file,
@@ -691,6 +710,7 @@ impl<'a> WalTransaction<'a> {
             operations: Vec::new(),
             finalized: false,
             change_tx,
+            connection_id,
         }
     }
 
@@ -1170,7 +1190,10 @@ impl<'a> WalTransaction<'a> {
             .collect();
 
         // Ignore send errors - no subscribers is not an error
-        let _ = self.change_tx.send(ChangeNotification { changes });
+        let _ = self.change_tx.send(ChangeNotification {
+            source_connection_id: self.connection_id,
+            changes,
+        });
     }
 
     /// Abort the transaction.
@@ -1508,7 +1531,7 @@ mod tests {
         // Create database
         {
             let mut db = Database::create(&path).expect("create db");
-            let mut txn = db.begin().expect("begin txn");
+            let mut txn = db.begin(0).expect("begin txn");
 
             let entity_id = [1u8; 16];
             let attribute_id = [2u8; 16];
@@ -1530,7 +1553,7 @@ mod tests {
                 assert!(result.transactions_replayed > 0);
             }
 
-            let mut txn = db.begin().expect("begin txn");
+            let mut txn = db.begin(0).expect("begin txn");
             let record = txn.get(&[1u8; 16], &[2u8; 16]).expect("get");
             assert!(record.is_some());
             assert_eq!(
@@ -1555,7 +1578,7 @@ mod tests {
         // Second call opens
         {
             let (mut db, _) = Database::open_or_create(&path).expect("open_or_create again");
-            let txn = db.begin().expect("begin");
+            let txn = db.begin(0).expect("begin");
             txn.abort();
         }
     }
@@ -1567,7 +1590,7 @@ mod tests {
         // Create and abort transaction
         {
             let mut db = Database::create(&path).expect("create db");
-            let mut txn = db.begin().expect("begin txn");
+            let mut txn = db.begin(0).expect("begin txn");
 
             txn.insert(
                 [1u8; 16],
@@ -1580,7 +1603,7 @@ mod tests {
         // Reopen and verify data is NOT there
         {
             let (mut db, _) = Database::open(&path).expect("open db");
-            let mut txn = db.begin().expect("begin txn");
+            let mut txn = db.begin(0).expect("begin txn");
 
             let record = txn.get(&[1u8; 16], &[2u8; 16]).expect("get");
             assert!(record.is_none());
@@ -1596,14 +1619,14 @@ mod tests {
 
         // Insert
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
             txn.commit().expect("commit");
         }
 
         // Update
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.update([1u8; 16], [1u8; 16], TripleValue::Number(2.0))
                 .expect("update");
             txn.commit().expect("commit");
@@ -1611,7 +1634,7 @@ mod tests {
 
         // Verify update
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let record = txn.get(&[1u8; 16], &[1u8; 16]).expect("get");
             assert_eq!(record.unwrap().value, TripleValue::Number(2.0));
             txn.abort();
@@ -1619,14 +1642,14 @@ mod tests {
 
         // Delete
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
             txn.commit().expect("commit");
         }
 
         // Verify delete
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let record = txn.get(&[1u8; 16], &[1u8; 16]).expect("get");
             assert!(record.is_none());
             txn.abort();
@@ -1638,7 +1661,7 @@ mod tests {
         let (_dir, path) = create_test_db();
         let mut db = Database::create(&path).expect("create db");
 
-        let mut txn = db.begin().expect("begin");
+        let mut txn = db.begin(0).expect("begin");
 
         // Update non-existent
         let result = txn.update([1u8; 16], [1u8; 16], TripleValue::Null);
@@ -1658,7 +1681,7 @@ mod tests {
 
         // Multiple sequential transactions
         for i in 0..10u8 {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let mut entity = [0u8; 16];
             entity[0] = i;
             txn.insert(entity, [1u8; 16], TripleValue::Number(f64::from(i)));
@@ -1666,7 +1689,7 @@ mod tests {
         }
 
         // Verify all data
-        let mut txn = db.begin().expect("begin");
+        let mut txn = db.begin(0).expect("begin");
         for i in 0..10u8 {
             let mut entity = [0u8; 16];
             entity[0] = i;
@@ -1684,7 +1707,7 @@ mod tests {
 
         // Insert some data
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Boolean(true));
             txn.commit().expect("commit");
         }
@@ -1704,7 +1727,7 @@ mod tests {
         // Create database and insert without clean close
         {
             let mut db = Database::create(&path).expect("create db");
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert(
                 [1u8; 16],
                 [1u8; 16],
@@ -1725,7 +1748,7 @@ mod tests {
             }
 
             // Verify data is there
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let record = txn.get(&[1u8; 16], &[1u8; 16]).expect("get");
             assert!(record.is_some());
             assert_eq!(
@@ -1744,7 +1767,7 @@ mod tests {
         let mut db = Database::create(&path).expect("create db");
 
         // Empty transaction should commit successfully
-        let txn = db.begin().expect("begin");
+        let txn = db.begin(0).expect("begin");
         txn.commit().expect("commit empty");
 
         db.close().expect("close");
@@ -1757,7 +1780,7 @@ mod tests {
 
         // Insert data
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(42.0));
             txn.commit().expect("commit");
         }
@@ -1782,7 +1805,7 @@ mod tests {
 
         // Insert initial data (txn_id = 1)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
             txn.commit().expect("commit");
         }
@@ -1803,7 +1826,7 @@ mod tests {
 
         // Update the data (txn_id = 2)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.update([1u8; 16], [1u8; 16], TripleValue::Number(2.0))
                 .expect("update");
             txn.commit().expect("commit");
@@ -1828,7 +1851,7 @@ mod tests {
 
         // Insert data (txn_id = 1)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert(
                 [1u8; 16],
                 [1u8; 16],
@@ -1839,7 +1862,7 @@ mod tests {
 
         // Delete the data (txn_id = 2)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
             txn.commit().expect("commit");
         }
@@ -1867,7 +1890,7 @@ mod tests {
 
         // Insert multiple attributes
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..5u8 {
                 let mut attr = [0u8; 16];
                 attr[0] = i;
@@ -1893,7 +1916,7 @@ mod tests {
 
         // Insert 10 records
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..10u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -1913,7 +1936,7 @@ mod tests {
 
         // Delete some records
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..5u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -1939,7 +1962,7 @@ mod tests {
 
         // Insert data
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Boolean(true));
             txn.commit().expect("commit");
         }
@@ -1970,7 +1993,7 @@ mod tests {
 
         // Insert records
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..5u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -1996,7 +2019,7 @@ mod tests {
 
         // Insert records
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..10u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -2007,7 +2030,7 @@ mod tests {
 
         // Delete half the records
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..5u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -2040,7 +2063,7 @@ mod tests {
 
         // Insert a record (txn_id = 1)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
             txn.commit().expect("commit");
         }
@@ -2054,7 +2077,7 @@ mod tests {
 
         // Delete the record (txn_id = 2)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
             txn.commit().expect("commit");
         }
@@ -2080,7 +2103,7 @@ mod tests {
 
         // Insert records (no deletes)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             for i in 0..5u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
@@ -2115,7 +2138,7 @@ mod tests {
 
         // Insert records (txn_id = 1)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert([1u8; 16], [1u8; 16], TripleValue::Number(1.0));
             txn.insert([2u8; 16], [1u8; 16], TripleValue::Number(2.0));
             txn.commit().expect("commit");
@@ -2129,7 +2152,7 @@ mod tests {
 
         // Delete first record (txn_id = 2)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&[1u8; 16], &[1u8; 16]).expect("delete");
             txn.commit().expect("commit");
         }
@@ -2142,7 +2165,7 @@ mod tests {
 
         // Delete second record (txn_id = 3)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&[2u8; 16], &[1u8; 16]).expect("delete");
             txn.commit().expect("commit");
         }
@@ -2217,7 +2240,7 @@ mod tests {
 
         // Insert entities with various attributes
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             // Entity 1 has attr1 and attr2
             txn.insert([1u8; 16], attr1, TripleValue::Number(1.0));
             txn.insert([1u8; 16], attr2, TripleValue::Number(2.0));
@@ -2230,7 +2253,7 @@ mod tests {
 
         // Query entities with attr1 via transaction
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let entities = txn.get_entities_with_attribute(&attr1).expect("query");
             assert_eq!(entities.len(), 2);
             assert!(entities.contains(&[1u8; 16]));
@@ -2263,7 +2286,7 @@ mod tests {
 
         // Insert triples
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             // Entity 1 has 3 attributes
             txn.insert(entity1, attr1, TripleValue::Number(1.0));
             txn.insert(entity1, attr2, TripleValue::Number(2.0));
@@ -2275,7 +2298,7 @@ mod tests {
 
         // Query attributes for entity1 via transaction
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let attributes = txn.get_attributes_for_entity(&entity1).expect("query");
             assert_eq!(attributes.len(), 3);
             assert!(attributes.contains(&attr1));
@@ -2306,7 +2329,7 @@ mod tests {
 
         // Insert first attribute (txn_id = 1)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert(entity, attr1, TripleValue::Number(1.0));
             txn.commit().expect("commit");
         }
@@ -2319,14 +2342,14 @@ mod tests {
 
         // Insert second attribute (txn_id = 2)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert(entity, attr2, TripleValue::Number(2.0));
             txn.commit().expect("commit");
         }
 
         // Delete first attribute (txn_id = 3)
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&entity, &attr1).expect("delete");
             txn.commit().expect("commit");
         }
@@ -2355,14 +2378,14 @@ mod tests {
 
         // Insert
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.insert(entity, attr, TripleValue::Number(1.0));
             txn.commit().expect("commit");
         }
 
         // Delete
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             txn.delete(&entity, &attr).expect("delete");
             txn.commit().expect("commit");
         }
@@ -2373,7 +2396,7 @@ mod tests {
 
         // Verify the record is gone from secondary indexes too
         {
-            let mut txn = db.begin().expect("begin");
+            let mut txn = db.begin(0).expect("begin");
             let entities = txn.get_entities_with_attribute(&attr).expect("query");
             assert!(entities.is_empty());
             let attrs = txn.get_attributes_for_entity(&entity).expect("query");

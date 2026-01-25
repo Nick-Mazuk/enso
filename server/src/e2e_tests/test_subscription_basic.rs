@@ -2,21 +2,30 @@
 //!
 //! These tests verify that change notifications are properly broadcast
 //! when triples are inserted, updated, or deleted through the `ClientConnection`.
+//!
+//! Note: `FilteredChangeReceiver` automatically filters out notifications from
+//! the subscriber's own connection. These tests use a sibling pattern where
+//! one connection writes and a separate connection subscribes to verify broadcasts.
 
 use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
 use crate::storage::{ChangeType, HlcTimestamp, TripleValue};
 
 /// Test that inserting a triple broadcasts a change notification.
+///
+/// Uses a sibling connection to receive the notification since `FilteredChangeReceiver`
+/// filters out a connection's own writes.
 #[test]
 fn test_insert_broadcasts_change_notification() {
     let test = TestClient::new();
-    let mut change_rx = test.subscribe_to_changes();
+    // Create a sibling connection to receive notifications
+    let sibling = test.create_sibling();
+    let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id = new_entity_id(1);
     let attribute_id = new_attribute_id(1);
 
-    // Insert a triple
+    // Insert a triple from the main client
     let insert_resp = test.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
@@ -35,8 +44,10 @@ fn test_insert_broadcasts_change_notification() {
 
     assert!(is_ok(&insert_resp));
 
-    // Verify a change notification was broadcast
-    let notification = change_rx.try_recv().expect("should receive notification");
+    // Verify a change notification was broadcast to the sibling
+    let notification = change_rx
+        .try_recv()
+        .expect("sibling should receive notification");
     assert_eq!(notification.changes.len(), 1);
 
     let change = &notification.changes[0];
@@ -49,9 +60,14 @@ fn test_insert_broadcasts_change_notification() {
 }
 
 /// Test that updating a triple broadcasts a change notification with Update type.
+///
+/// Uses a sibling connection to receive the notification since `FilteredChangeReceiver`
+/// filters out a connection's own writes.
 #[test]
 fn test_update_broadcasts_change_notification() {
     let test = TestClient::new();
+    // Create a sibling connection to receive notifications
+    let sibling = test.create_sibling();
 
     let entity_id = new_entity_id(2);
     let attribute_id = new_attribute_id(2);
@@ -74,8 +90,8 @@ fn test_update_broadcasts_change_notification() {
     });
     assert!(is_ok(&insert_resp));
 
-    // Subscribe after the insert so we only see the update
-    let mut change_rx = test.subscribe_to_changes();
+    // Subscribe from sibling after the insert so we only see the update
+    let mut change_rx = sibling.subscribe_to_changes();
 
     // Update the triple with a newer HLC
     let update_resp = test.handle_message(proto::ClientMessage {
@@ -96,8 +112,10 @@ fn test_update_broadcasts_change_notification() {
 
     assert!(is_ok(&update_resp));
 
-    // Verify an Update notification was broadcast
-    let notification = change_rx.try_recv().expect("should receive notification");
+    // Verify an Update notification was broadcast to sibling
+    let notification = change_rx
+        .try_recv()
+        .expect("sibling should receive notification");
     assert_eq!(notification.changes.len(), 1);
 
     let change = &notification.changes[0];
@@ -113,10 +131,15 @@ fn test_update_broadcasts_change_notification() {
 }
 
 /// Test that multiple triples in one request broadcast multiple changes.
+///
+/// Uses a sibling connection to receive the notification since `FilteredChangeReceiver`
+/// filters out a connection's own writes.
 #[test]
 fn test_batch_insert_broadcasts_multiple_changes() {
     let test = TestClient::new();
-    let mut change_rx = test.subscribe_to_changes();
+    // Create a sibling connection to receive notifications
+    let sibling = test.create_sibling();
+    let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id_1 = new_entity_id(4);
     let entity_id_2 = new_entity_id(5);
@@ -151,8 +174,10 @@ fn test_batch_insert_broadcasts_multiple_changes() {
 
     assert!(is_ok(&insert_resp));
 
-    // Verify both changes were broadcast
-    let notification = change_rx.try_recv().expect("should receive notification");
+    // Verify both changes were broadcast to sibling
+    let notification = change_rx
+        .try_recv()
+        .expect("sibling should receive notification");
     assert_eq!(notification.changes.len(), 2);
 
     // First change
@@ -305,10 +330,15 @@ fn test_older_hlc_update_does_not_broadcast() {
 }
 
 /// Test inserting a boolean value broadcasts correctly.
+///
+/// Uses a sibling connection to receive the notification since `FilteredChangeReceiver`
+/// filters out a connection's own writes.
 #[test]
 fn test_insert_boolean_broadcasts_correctly() {
     let test = TestClient::new();
-    let mut change_rx = test.subscribe_to_changes();
+    // Create a sibling connection to receive notifications
+    let sibling = test.create_sibling();
+    let mut change_rx = sibling.subscribe_to_changes();
 
     let entity_id = new_entity_id(9);
     let attribute_id = new_attribute_id(9);
@@ -332,8 +362,10 @@ fn test_insert_boolean_broadcasts_correctly() {
 
     assert!(is_ok(&insert_resp));
 
-    // Verify the boolean value is correct in the notification
-    let notification = change_rx.try_recv().expect("should receive notification");
+    // Verify the boolean value is correct in the notification to sibling
+    let notification = change_rx
+        .try_recv()
+        .expect("sibling should receive notification");
     assert_eq!(notification.changes[0].change_type, ChangeType::Insert);
     assert_eq!(
         notification.changes[0].value,
