@@ -463,7 +463,7 @@ mod tests {
     fn extract_response(messages: Vec<proto::ServerMessage>) -> proto::ServerResponse {
         let msg = messages
             .into_iter()
-            .last()
+            .next_back()
             .expect("Expected at least one message");
         match msg.payload {
             Some(proto::server_message::Payload::Response(r)) => r,
@@ -677,11 +677,9 @@ mod tests {
             }],
             r#where: vec![proto::QueryPattern {
                 #[allow(clippy::disallowed_methods)]
-                entity: Some(proto::query_pattern::Entity::EntityId(entity_id.clone())),
+                entity: Some(proto::query_pattern::Entity::EntityId(entity_id)),
                 #[allow(clippy::disallowed_methods)]
-                attribute: Some(proto::query_pattern::Attribute::AttributeId(
-                    attribute_id.clone(),
-                )),
+                attribute: Some(proto::query_pattern::Attribute::AttributeId(attribute_id)),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
                         label: Some("value".to_owned()),

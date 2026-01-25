@@ -14,7 +14,6 @@ static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// RAII guard that cleans up the database file on drop.
 pub struct TestClient {
     pub client: ClientConnection,
-    pub runtime: tokio::runtime::Runtime,
     db_path: PathBuf,
     /// Shared database reference for creating sibling clients.
     shared_db: Arc<Mutex<Database>>,
@@ -38,12 +37,8 @@ impl TestClient {
         let client = ClientConnection::new(database);
         let shared_db = client.shared_database();
 
-        #[allow(clippy::expect_used)]
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-
         Self {
             client,
-            runtime,
             db_path,
             shared_db,
         }
@@ -64,7 +59,7 @@ impl TestClient {
     /// Send a message and return the response.
     pub fn handle_message(&mut self, message: proto::ClientMessage) -> proto::ServerResponse {
         let responses = self.client.handle_message(message);
-        let response = responses.into_iter().last();
+        let response = responses.into_iter().next_back();
 
         #[allow(clippy::expect_used)]
         let response = response.expect("Expected at least one response");
@@ -131,7 +126,7 @@ impl SiblingClient {
     /// Send a message and return the response.
     pub fn handle_message(&mut self, message: proto::ClientMessage) -> proto::ServerResponse {
         let responses = self.client.handle_message(message);
-        let response = responses.into_iter().last();
+        let response = responses.into_iter().next_back();
 
         #[allow(clippy::expect_used)]
         let response = response.expect("Expected at least one response");

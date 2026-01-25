@@ -13,7 +13,8 @@
       "Bash(wc:*)",
       "Bash(buf lint:*)",
       "Bash(bun proto-gen:*)",
-      "Bash(RUST_BACKTRACE=1 cargo test:*)"
+      "Bash(RUST_BACKTRACE=1 cargo test:*)",
+      "Bash(ls:*)"
     ]
   }
 }

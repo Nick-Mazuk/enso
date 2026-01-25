@@ -19,7 +19,7 @@ use crate::storage::{ChangeType, TripleValue};
 #[test]
 fn test_sibling_connection_receives_notification() {
     let mut client1 = TestClient::new();
-    let mut client2 = client1.create_sibling();
+    let client2 = client1.create_sibling();
 
     // Subscribe on client2 (the sibling)
     let mut rx2 = client2.subscribe_to_changes();
@@ -148,7 +148,7 @@ fn test_bidirectional_notifications() {
 /// `FilteredChangeReceiver`), but all other connections do.
 #[test]
 fn test_multiple_siblings_all_receive_notifications() {
-    let mut client1 = TestClient::new();
+    let client1 = TestClient::new();
     let mut client2 = client1.create_sibling();
     let client3 = client1.create_sibling();
 
@@ -211,7 +211,7 @@ fn test_multiple_siblings_all_receive_notifications() {
 #[test]
 fn test_late_sibling_subscriber() {
     let mut client1 = TestClient::new();
-    let mut client2 = client1.create_sibling();
+    let client2 = client1.create_sibling();
     let client3 = client1.create_sibling();
 
     // Only client2 subscribes initially (to receive client1's writes)
@@ -294,7 +294,7 @@ fn test_late_sibling_subscriber() {
 #[test]
 fn test_notification_includes_source_connection_id() {
     let mut client1 = TestClient::new();
-    let mut client2 = client1.create_sibling();
+    let client2 = client1.create_sibling();
 
     // Get connection IDs
     let client1_id = client1.connection_id();
