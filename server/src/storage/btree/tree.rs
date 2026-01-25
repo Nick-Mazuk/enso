@@ -102,9 +102,15 @@ impl<'a> BTree<'a> {
         let page = self.file.read_page(leaf_page_id)?;
         let mut leaf = LeafNode::from_page(&page)?;
 
-        // Check if we can fit the new entry
-        if !leaf.can_fit(stored_value.len()) && leaf.get(&key).is_none() {
-            // Need to split before inserting
+        // Check if we need to split
+        // Update case: check if larger value fits; Insert case: check if new entry fits
+        let needs_split = leaf.get(&key).map_or_else(
+            || !leaf.can_fit(stored_value.len()),
+            |old_value| !leaf.can_fit_update(old_value.len(), stored_value.len()),
+        );
+
+        if needs_split {
+            // Need to split before inserting/updating
             return self.insert_with_split_internal(leaf_page_id, leaf, key, stored_value);
         }
 

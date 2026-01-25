@@ -337,6 +337,24 @@ impl LeafNode {
         self.entries_size() + LEAF_ENTRY_OVERHEAD + value_len <= DATA_SPACE
     }
 
+    /// Check if an updated value would fit in this node.
+    ///
+    /// When updating an existing entry, the new value replaces the old one,
+    /// so we need to account for the size difference rather than the full size.
+    #[must_use]
+    pub fn can_fit_update(&self, old_value_len: usize, new_value_len: usize) -> bool {
+        // New size = current size - old value + new value
+        let current = self.entries_size();
+        if new_value_len <= old_value_len {
+            // Shrinking or same size always fits
+            true
+        } else {
+            // Growing: check if the additional space fits
+            let additional = new_value_len - old_value_len;
+            current + additional <= DATA_SPACE
+        }
+    }
+
     /// Check if the node is at minimum capacity.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)] // Vec::len() is not const-stable
