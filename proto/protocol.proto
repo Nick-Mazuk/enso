@@ -44,6 +44,15 @@ message TripleValue {
   }
 }
 
+// Request to establish a connection. Must be the first message sent by the
+// client after WebSocket handshake.
+message ConnectRequest {
+  // API key identifying the application. Determines which database file to use:
+  // {app_api_key}.db. Valid characters: alphanumeric, hyphens, underscores.
+  // Maximum length: 256 characters.
+  string app_api_key = 1;
+}
+
 message ClientMessage {
   // A unique ID determined by the client. This ID enables the client
   // to match the request and response, as well as allow for idempotent retries.
@@ -53,6 +62,7 @@ message ClientMessage {
     QueryRequest query = 3;
     SubscribeRequest subscribe = 4;
     UnsubscribeRequest unsubscribe = 5;
+    ConnectRequest connect = 6;
   }
 }
 

@@ -9,6 +9,7 @@ pub enum ClientMessagePayload {
     Query(proto::QueryRequest),
     Subscribe(proto::SubscribeRequest),
     Unsubscribe(proto::UnsubscribeRequest),
+    Connect(proto::ConnectRequest),
 }
 
 #[derive(Debug)]
@@ -33,6 +34,9 @@ impl ProtoDeserializable<proto::ClientMessage> for ClientMessage {
             }
             Some(proto::client_message::Payload::Unsubscribe(request)) => {
                 ClientMessagePayload::Unsubscribe(request)
+            }
+            Some(proto::client_message::Payload::Connect(request)) => {
+                ClientMessagePayload::Connect(request)
             }
             None => return Err("Client message must have a payload".to_string()),
         };

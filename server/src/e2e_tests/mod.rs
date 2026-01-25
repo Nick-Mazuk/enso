@@ -8,6 +8,7 @@
 mod helpers;
 
 mod test_columns;
+mod test_connect_request;
 mod test_determinism;
 mod test_empty_triples;
 mod test_hlc_conflict_resolution;

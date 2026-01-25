@@ -21,6 +21,7 @@
 
 mod client_connection;
 mod constants;
+pub mod database_registry;
 mod e2e_tests;
 pub mod proto;
 mod query;
@@ -31,4 +32,5 @@ pub mod subscription;
 mod testing;
 mod types;
 
-pub use client_connection::ClientConnection;
+pub use client_connection::{ClientConnection, ConnectionState};
+pub use database_registry::DatabaseRegistry;

@@ -146,7 +146,7 @@ pub fn create_ok_response(request_id: Option<u32>) -> proto::ServerMessage {
     }
 }
 
-/// Create an error response message.
+/// Create an error response message with `InvalidArgument` status.
 #[must_use]
 pub fn create_error_response(request_id: Option<u32>, message: &str) -> proto::ServerMessage {
     proto::ServerMessage {
@@ -155,6 +155,53 @@ pub fn create_error_response(request_id: Option<u32>, message: &str) -> proto::S
                 request_id,
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::InvalidArgument.into(),
+                    message: message.to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+    }
+}
+
+/// Create a `FailedPrecondition` error response message.
+///
+/// Use this when a request cannot be fulfilled because the system is not
+/// in the required state (e.g., connection not established).
+#[must_use]
+pub fn create_failed_precondition_response(
+    request_id: Option<u32>,
+    message: &str,
+) -> proto::ServerMessage {
+    proto::ServerMessage {
+        payload: Some(proto::server_message::Payload::Response(
+            proto::ServerResponse {
+                request_id,
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::FailedPrecondition.into(),
+                    message: message.to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )),
+    }
+}
+
+/// Create an `Internal` error response message.
+///
+/// Use this for internal server errors that the client cannot resolve.
+#[must_use]
+pub fn create_internal_error_response(
+    request_id: Option<u32>,
+    message: &str,
+) -> proto::ServerMessage {
+    proto::ServerMessage {
+        payload: Some(proto::server_message::Payload::Response(
+            proto::ServerResponse {
+                request_id,
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Internal.into(),
                     message: message.to_string(),
                     ..Default::default()
                 }),

@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use crate::{
+    database_registry::{ApiKeyValidationError, DatabaseRegistry, validate_api_key},
     proto,
     query::{Query, QueryEngine, value_from_storage, value_to_storage},
     storage::{
@@ -10,7 +11,8 @@ use crate::{
     },
     subscription::{
         ClientSubscriptions, Subscription, convert_log_records_to_changes, create_error_response,
-        create_ok_response, create_subscription_update, proto_hlc_to_storage,
+        create_failed_precondition_response, create_internal_error_response, create_ok_response,
+        create_subscription_update, proto_hlc_to_storage,
     },
     types::{
         ProtoDeserializable, ProtoSerializable,
@@ -19,48 +21,113 @@ use crate::{
     },
 };
 
+/// State of a client connection.
+///
+/// # Invariants
+///
+/// - Connection starts in `AwaitingConnect` and transitions to `Connected`
+///   after successful `ConnectRequest`.
+/// - No other state transitions are valid.
+/// - Once `Connected`, the connection remains connected for its lifetime.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConnectionState {
+    /// Waiting for the initial `ConnectRequest` message.
+    /// In this state, only `ConnectRequest` messages are accepted.
+    AwaitingConnect,
+    /// Connected and ready to process requests.
+    Connected {
+        /// The `app_api_key` used for this connection.
+        app_api_key: String,
+    },
+}
+
 /// Global counter for generating unique connection IDs.
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A connection to the database for a single client.
 ///
-/// Multiple `ClientConnection` instances can share the same underlying database
-/// by using `new_shared()` with a shared `Arc<Mutex<Database>>`.
+/// # Connection Lifecycle
+///
+/// 1. Create with `new_awaiting_connect()` - connection is in `AwaitingConnect` state
+/// 2. Client sends `ConnectRequest` with `app_api_key`
+/// 3. Server opens/creates database for that app and transitions to `Connected`
+/// 4. All subsequent messages are processed normally
+///
+/// # Thread Safety
+///
+/// Uses `RwLock<Database>` to allow concurrent read operations.
+/// Multiple connections with the same `app_api_key` share the same database instance.
 ///
 /// Each connection has a unique ID that is included in change notifications,
 /// allowing subscribers to filter out their own writes.
 pub struct ClientConnection {
-    database: Arc<Mutex<Database>>,
+    /// Database connection. `None` until `ConnectRequest` is processed.
+    database: Option<Arc<RwLock<Database>>>,
     /// Unique identifier for this connection.
     connection_id: ConnectionId,
     /// Per-connection subscription tracking.
     subscriptions: ClientSubscriptions,
+    /// Current state of this connection.
+    state: ConnectionState,
+    /// Registry for looking up databases by `app_api_key`.
+    /// `None` for test connections that don't use the registry.
+    registry: Option<Arc<DatabaseRegistry>>,
 }
 
 impl ClientConnection {
+    /// Create a new `ClientConnection` that awaits a `ConnectRequest`.
+    ///
+    /// The connection starts in `AwaitingConnect` state. The first message
+    /// must be a `ConnectRequest`, which will open/create the database based
+    /// on the `app_api_key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - Registry for looking up databases by `app_api_key`.
+    #[must_use]
+    pub fn new_awaiting_connect(registry: Arc<DatabaseRegistry>) -> Self {
+        Self {
+            database: None,
+            connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
+            subscriptions: ClientSubscriptions::new(),
+            state: ConnectionState::AwaitingConnect,
+            registry: Some(registry),
+        }
+    }
+
     /// Create a new `ClientConnection` with exclusive ownership of the database.
     ///
-    /// Use this when only one connection will access the database.
+    /// The connection starts in `Connected` state, bypassing the `ConnectRequest` flow.
+    /// Use this for testing when you don't need the registry-based connection flow.
     #[must_use]
     pub fn new(database: Database) -> Self {
         Self {
-            database: Arc::new(Mutex::new(database)),
+            database: Some(Arc::new(RwLock::new(database))),
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
+            state: ConnectionState::Connected {
+                app_api_key: "test".to_string(),
+            },
+            registry: None,
         }
     }
 
     /// Create a new `ClientConnection` with shared access to a database.
     ///
+    /// The connection starts in `Connected` state, bypassing the `ConnectRequest` flow.
     /// Use this when multiple connections need to share the same database.
     /// All connections sharing the database will receive change notifications
     /// when any connection commits a transaction.
     #[must_use]
-    pub fn new_shared(database: Arc<Mutex<Database>>) -> Self {
+    pub fn new_shared(database: Arc<RwLock<Database>>) -> Self {
         Self {
-            database,
+            database: Some(database),
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
+            state: ConnectionState::Connected {
+                app_api_key: "test".to_string(),
+            },
+            registry: None,
         }
     }
 
@@ -72,14 +139,22 @@ impl ClientConnection {
         self.connection_id
     }
 
+    /// Check if this connection is in `Connected` state.
+    #[must_use]
+    pub const fn is_connected(&self) -> bool {
+        matches!(self.state, ConnectionState::Connected { .. })
+    }
+
     /// Get a clone of the shared database reference.
+    ///
+    /// Returns `None` if the connection is not yet established.
     ///
     /// This can be used to create additional `ClientConnection` instances
     /// that share the same database.
     #[must_use]
     #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
-    pub fn shared_database(&self) -> Arc<Mutex<Database>> {
-        Arc::clone(&self.database)
+    pub fn shared_database(&self) -> Option<Arc<RwLock<Database>>> {
+        self.database.as_ref().map(Arc::clone)
     }
 
     /// Subscribe to change notifications from the database.
@@ -87,13 +162,15 @@ impl ClientConnection {
     /// Returns a filtered receiver that will receive change notifications
     /// from other connections only. Notifications from this connection's
     /// own writes are automatically filtered out.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection is not established or if the lock is poisoned.
     pub fn subscribe_to_changes(
         &self,
     ) -> Result<crate::storage::FilteredChangeReceiver, DatabaseError> {
-        let db = self
-            .database
-            .lock()
-            .map_err(|_| DatabaseError::LockPoisoned)?;
+        let db_arc = self.database.as_ref().ok_or(DatabaseError::NotConnected)?;
+        let db = db_arc.read().map_err(|_| DatabaseError::LockPoisoned)?;
         Ok(db.subscribe_to_changes(self.connection_id))
     }
 
@@ -103,12 +180,11 @@ impl ClientConnection {
     ///
     /// # Errors
     ///
-    /// Returns an error if the database lock is poisoned or if reading changes fails.
+    /// Returns an error if the connection is not established, the database lock is poisoned,
+    /// or if reading changes fails.
     pub fn get_changes_since(&self, since: HlcTimestamp) -> Result<Vec<LogRecord>, DatabaseError> {
-        let mut db = self
-            .database
-            .lock()
-            .map_err(|_| DatabaseError::LockPoisoned)?;
+        let db_arc = self.database.as_ref().ok_or(DatabaseError::NotConnected)?;
+        let mut db = db_arc.write().map_err(|_| DatabaseError::LockPoisoned)?;
         db.changes_since(since)
     }
 
@@ -199,6 +275,15 @@ impl ClientConnection {
 
     /// Handle a client message and return response messages.
     ///
+    /// # Connection State
+    ///
+    /// - If the connection is in `AwaitingConnect` state, only `ConnectRequest` is accepted.
+    ///   Any other message returns a `FailedPrecondition` error.
+    /// - If the connection is in `Connected` state, all message types are accepted.
+    ///   A second `ConnectRequest` returns a `FailedPrecondition` error.
+    ///
+    /// # Return Value
+    ///
     /// Returns a list of messages to send to the client. Most message types
     /// return a single response, but Subscribe may return multiple messages
     /// (backfill update + OK response).
@@ -207,6 +292,23 @@ impl ClientConnection {
         proto_message: proto::ClientMessage,
     ) -> Vec<proto::ServerMessage> {
         let request_id = proto_message.request_id;
+
+        // Handle ConnectRequest specially - check raw proto before full deserialization
+        if let Some(proto::client_message::Payload::Connect(ref connect_req)) =
+            proto_message.payload
+        {
+            return self.handle_connect(request_id, connect_req);
+        }
+
+        // All other messages require Connected state
+        if !self.is_connected() {
+            return vec![create_failed_precondition_response(
+                request_id,
+                "Connection not established. First message must be ConnectRequest.",
+            )];
+        }
+
+        // Deserialize and validate the message
         let message = match ClientMessage::from_proto(proto_message) {
             Ok(message) => message,
             Err(err) => {
@@ -235,7 +337,85 @@ impl ClientConnection {
             ClientMessagePayload::Unsubscribe(request) => {
                 vec![self.handle_unsubscribe(request_id, request)]
             }
+            ClientMessagePayload::Connect(_) => {
+                // This shouldn't happen as we handled it above, but be defensive
+                vec![create_failed_precondition_response(
+                    request_id,
+                    "Already connected. ConnectRequest can only be sent once.",
+                )]
+            }
         }
+    }
+
+    /// Handle a `ConnectRequest` message.
+    ///
+    /// # Pre-conditions
+    ///
+    /// - Connection should be in `AwaitingConnect` state.
+    ///
+    /// # Post-conditions
+    ///
+    /// - On success: state becomes `Connected`, database is opened/created.
+    /// - On failure: state remains unchanged.
+    fn handle_connect(
+        &mut self,
+        request_id: Option<u32>,
+        req: &proto::ConnectRequest,
+    ) -> Vec<proto::ServerMessage> {
+        // Validate state - cannot connect twice
+        if let ConnectionState::Connected { .. } = &self.state {
+            return vec![create_failed_precondition_response(
+                request_id,
+                "Already connected. ConnectRequest can only be sent once.",
+            )];
+        }
+
+        // Validate app_api_key
+        let app_api_key = &req.app_api_key;
+        if let Err(e) = validate_api_key(app_api_key) {
+            let message = match e {
+                ApiKeyValidationError::Empty => "app_api_key must not be empty",
+                ApiKeyValidationError::TooLong => "app_api_key exceeds maximum length",
+                ApiKeyValidationError::InvalidCharacters => {
+                    "app_api_key contains invalid characters; only alphanumeric, hyphens, and underscores are allowed"
+                }
+            };
+            return vec![create_error_response(request_id, message)];
+        }
+
+        // Get or create the database
+        let Some(registry) = &self.registry else {
+            // This shouldn't happen in production, but handle gracefully
+            return vec![create_error_response(
+                request_id,
+                "Internal error: no database registry configured",
+            )];
+        };
+
+        let database = match registry.get_or_create(app_api_key) {
+            Ok(db) => db,
+            Err(e) => {
+                tracing::error!("Failed to open database for '{}': {}", app_api_key, e);
+                return vec![create_internal_error_response(
+                    request_id,
+                    &format!("Failed to open database: {e}"),
+                )];
+            }
+        };
+
+        // Transition state
+        self.database = Some(database);
+        self.state = ConnectionState::Connected {
+            app_api_key: app_api_key.to_string(),
+        };
+
+        tracing::info!(
+            "Connection {} established for app '{}'",
+            self.connection_id,
+            app_api_key
+        );
+
+        vec![create_ok_response(request_id)]
     }
 
     #[allow(clippy::too_many_lines)]
@@ -251,8 +431,20 @@ impl ClientConnection {
             };
         }
 
-        // Lock the database for the duration of the transaction
-        let Ok(mut db) = self.database.lock() else {
+        // Get the database - should always be Some since we checked is_connected()
+        let Some(db_arc) = &self.database else {
+            return proto::ServerResponse {
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Internal.into(),
+                    message: "Connection not established".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+        };
+
+        // Acquire write lock for the duration of the transaction
+        let Ok(mut db) = db_arc.write() else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
@@ -380,8 +572,20 @@ impl ClientConnection {
     }
 
     fn query(&self, request: &proto::QueryRequest) -> proto::ServerResponse {
-        // Lock the database
-        let Ok(mut db) = self.database.lock() else {
+        // Get the database - should always be Some since we checked is_connected()
+        let Some(db_arc) = &self.database else {
+            return proto::ServerResponse {
+                status: Some(proto::google::rpc::Status {
+                    code: proto::google::rpc::Code::Internal.into(),
+                    message: "Connection not established".to_owned(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+        };
+
+        // Acquire write lock (needed for begin_readonly which mutates Database state)
+        let Ok(mut db) = db_arc.write() else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
@@ -517,7 +721,7 @@ mod tests {
 
         // Verify the triple was inserted by reading it back
 
-        let mut db = client_conn.database.lock().unwrap();
+        let mut db = client_conn.database.as_ref().unwrap().write().unwrap();
         let mut txn = db.begin(0).expect("begin txn"); // 0 = test connection ID
         let entity_arr: [u8; 16] = entity_id.try_into().unwrap();
         let attr_arr: [u8; 16] = attribute_id.try_into().unwrap();

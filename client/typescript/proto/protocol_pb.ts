@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file protocol.proto.
  */
 export const file_protocol: GenFile = /*@__PURE__*/
-  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wisgEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlEigKA2hsYxgEIAEoCzIWLnByb3RvY29sLkhsY1RpbWVzdGFtcEgCiAEBQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZEIGCgRfaGxjIlIKDEhsY1RpbWVzdGFtcBIYChBwaHlzaWNhbF90aW1lX21zGAEgASgEEhcKD2xvZ2ljYWxfY291bnRlchgCIAEoDRIPCgdub2RlX2lkGAMgASgNIk0KC1RyaXBsZVZhbHVlEhAKBnN0cmluZxgDIAEoCUgAEhAKBm51bWJlchgEIAEoAUgAEhEKB2Jvb2xlYW4YBSABKAhIAEIHCgV2YWx1ZSKRAgoNQ2xpZW50TWVzc2FnZRIXCgpyZXF1ZXN0X2lkGAEgASgNSAGIAQESPgoVdHJpcGxlX3VwZGF0ZV9yZXF1ZXN0GAIgASgLMh0ucHJvdG9jb2wuVHJpcGxlVXBkYXRlUmVxdWVzdEgAEicKBXF1ZXJ5GAMgASgLMhYucHJvdG9jb2wuUXVlcnlSZXF1ZXN0SAASLwoJc3Vic2NyaWJlGAQgASgLMhoucHJvdG9jb2wuU3Vic2NyaWJlUmVxdWVzdEgAEjMKC3Vuc3Vic2NyaWJlGAUgASgLMhwucHJvdG9jb2wuVW5zdWJzY3JpYmVSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCK4AQoMUXVlcnlSZXF1ZXN0EiwKBGZpbmQYASADKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZRIlCgV3aGVyZRgCIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIoCghvcHRpb25hbBgDIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIpCgl3aGVyZV9ub3QYBCADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4ivAIKDFF1ZXJ5UGF0dGVybhITCgllbnRpdHlfaWQYASABKAxIABI5Cg9lbnRpdHlfdmFyaWFibGUYAiABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgAEhYKDGF0dHJpYnV0ZV9pZBgDIAEoDEgBEjwKEmF0dHJpYnV0ZV92YXJpYWJsZRgEIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAESJgoFdmFsdWUYBSABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgCEjgKDnZhbHVlX3ZhcmlhYmxlGAYgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIAkIICgZlbnRpdHlCCwoJYXR0cmlidXRlQg0KC3ZhbHVlX2dyb3VwIjQKFFF1ZXJ5UGF0dGVyblZhcmlhYmxlEhIKBWxhYmVsGAEgASgJSACIAQFCCAoGX2xhYmVsImkKEFN1YnNjcmliZVJlcXVlc3QSFwoPc3Vic2NyaXB0aW9uX2lkGAEgASgNEi4KCXNpbmNlX2hsYxgCIAEoCzIWLnByb3RvY29sLkhsY1RpbWVzdGFtcEgAiAEBQgwKCl9zaW5jZV9obGMiLQoSVW5zdWJzY3JpYmVSZXF1ZXN0EhcKD3N1YnNjcmlwdGlvbl9pZBgBIAEoDSJbCgxDaGFuZ2VSZWNvcmQSKQoLY2hhbmdlX3R5cGUYASABKA4yFC5wcm90b2NvbC5DaGFuZ2VUeXBlEiAKBnRyaXBsZRgCIAEoCzIQLnByb3RvY29sLlRyaXBsZSJWChJTdWJzY3JpcHRpb25VcGRhdGUSFwoPc3Vic2NyaXB0aW9uX2lkGAEgASgNEicKB2NoYW5nZXMYAiADKAsyFi5wcm90b2NvbC5DaGFuZ2VSZWNvcmQiOAoTVHJpcGxlVXBkYXRlUmVxdWVzdBIhCgd0cmlwbGVzGAEgAygLMhAucHJvdG9jb2wuVHJpcGxlIoUBCg1TZXJ2ZXJNZXNzYWdlEiwKCHJlc3BvbnNlGAEgASgLMhgucHJvdG9jb2wuU2VydmVyUmVzcG9uc2VIABI7ChNzdWJzY3JpcHRpb25fdXBkYXRlGAIgASgLMhwucHJvdG9jb2wuU3Vic2NyaXB0aW9uVXBkYXRlSABCCQoHcGF5bG9hZCJuChBRdWVyeVJlc3VsdFZhbHVlEgwKAmlkGAEgASgJSAASLQoMdHJpcGxlX3ZhbHVlGAIgASgLMhUucHJvdG9jb2wuVHJpcGxlVmFsdWVIABIUCgxpc191bmRlZmluZWQYAyABKAhCBwoFdmFsdWUiPAoOUXVlcnlSZXN1bHRSb3cSKgoGdmFsdWVzGAEgAygLMhoucHJvdG9jb2wuUXVlcnlSZXN1bHRWYWx1ZSLIAQoOU2VydmVyUmVzcG9uc2USFwoKcmVxdWVzdF9pZBgBIAEoDUgAiAEBEicKBnN0YXR1cxgCIAEoCzISLmdvb2dsZS5ycGMuU3RhdHVzSAGIAQESIQoHdHJpcGxlcxgDIAMoCzIQLnByb3RvY29sLlRyaXBsZRIPCgdjb2x1bW5zGAQgAygJEiYKBHJvd3MYBSADKAsyGC5wcm90b2NvbC5RdWVyeVJlc3VsdFJvd0INCgtfcmVxdWVzdF9pZEIJCgdfc3RhdHVzKnEKCkNoYW5nZVR5cGUSGwoXQ0hBTkdFX1RZUEVfVU5TUEVDSUZJRUQQABIWChJDSEFOR0VfVFlQRV9JTlNFUlQQARIWChJDSEFOR0VfVFlQRV9VUERBVEUQAhIWChJDSEFOR0VfVFlQRV9ERUxFVEUQA2IGcHJvdG8z", [file_google_rpc_status]);
+  fileDesc("Cg5wcm90b2NvbC5wcm90bxIIcHJvdG9jb2wisgEKBlRyaXBsZRIWCgllbnRpdHlfaWQYASABKAxIAIgBARIZCgxhdHRyaWJ1dGVfaWQYAiABKAxIAYgBARIkCgV2YWx1ZRgDIAEoCzIVLnByb3RvY29sLlRyaXBsZVZhbHVlEigKA2hsYxgEIAEoCzIWLnByb3RvY29sLkhsY1RpbWVzdGFtcEgCiAEBQgwKCl9lbnRpdHlfaWRCDwoNX2F0dHJpYnV0ZV9pZEIGCgRfaGxjIlIKDEhsY1RpbWVzdGFtcBIYChBwaHlzaWNhbF90aW1lX21zGAEgASgEEhcKD2xvZ2ljYWxfY291bnRlchgCIAEoDRIPCgdub2RlX2lkGAMgASgNIk0KC1RyaXBsZVZhbHVlEhAKBnN0cmluZxgDIAEoCUgAEhAKBm51bWJlchgEIAEoAUgAEhEKB2Jvb2xlYW4YBSABKAhIAEIHCgV2YWx1ZSIlCg5Db25uZWN0UmVxdWVzdBITCgthcHBfYXBpX2tleRgBIAEoCSK+AgoNQ2xpZW50TWVzc2FnZRIXCgpyZXF1ZXN0X2lkGAEgASgNSAGIAQESPgoVdHJpcGxlX3VwZGF0ZV9yZXF1ZXN0GAIgASgLMh0ucHJvdG9jb2wuVHJpcGxlVXBkYXRlUmVxdWVzdEgAEicKBXF1ZXJ5GAMgASgLMhYucHJvdG9jb2wuUXVlcnlSZXF1ZXN0SAASLwoJc3Vic2NyaWJlGAQgASgLMhoucHJvdG9jb2wuU3Vic2NyaWJlUmVxdWVzdEgAEjMKC3Vuc3Vic2NyaWJlGAUgASgLMhwucHJvdG9jb2wuVW5zdWJzY3JpYmVSZXF1ZXN0SAASKwoHY29ubmVjdBgGIAEoCzIYLnByb3RvY29sLkNvbm5lY3RSZXF1ZXN0SABCCQoHcGF5bG9hZEINCgtfcmVxdWVzdF9pZCK4AQoMUXVlcnlSZXF1ZXN0EiwKBGZpbmQYASADKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZRIlCgV3aGVyZRgCIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIoCghvcHRpb25hbBgDIAMoCzIWLnByb3RvY29sLlF1ZXJ5UGF0dGVybhIpCgl3aGVyZV9ub3QYBCADKAsyFi5wcm90b2NvbC5RdWVyeVBhdHRlcm4ivAIKDFF1ZXJ5UGF0dGVybhITCgllbnRpdHlfaWQYASABKAxIABI5Cg9lbnRpdHlfdmFyaWFibGUYAiABKAsyHi5wcm90b2NvbC5RdWVyeVBhdHRlcm5WYXJpYWJsZUgAEhYKDGF0dHJpYnV0ZV9pZBgDIAEoDEgBEjwKEmF0dHJpYnV0ZV92YXJpYWJsZRgEIAEoCzIeLnByb3RvY29sLlF1ZXJ5UGF0dGVyblZhcmlhYmxlSAESJgoFdmFsdWUYBSABKAsyFS5wcm90b2NvbC5UcmlwbGVWYWx1ZUgCEjgKDnZhbHVlX3ZhcmlhYmxlGAYgASgLMh4ucHJvdG9jb2wuUXVlcnlQYXR0ZXJuVmFyaWFibGVIAkIICgZlbnRpdHlCCwoJYXR0cmlidXRlQg0KC3ZhbHVlX2dyb3VwIjQKFFF1ZXJ5UGF0dGVyblZhcmlhYmxlEhIKBWxhYmVsGAEgASgJSACIAQFCCAoGX2xhYmVsImkKEFN1YnNjcmliZVJlcXVlc3QSFwoPc3Vic2NyaXB0aW9uX2lkGAEgASgNEi4KCXNpbmNlX2hsYxgCIAEoCzIWLnByb3RvY29sLkhsY1RpbWVzdGFtcEgAiAEBQgwKCl9zaW5jZV9obGMiLQoSVW5zdWJzY3JpYmVSZXF1ZXN0EhcKD3N1YnNjcmlwdGlvbl9pZBgBIAEoDSJbCgxDaGFuZ2VSZWNvcmQSKQoLY2hhbmdlX3R5cGUYASABKA4yFC5wcm90b2NvbC5DaGFuZ2VUeXBlEiAKBnRyaXBsZRgCIAEoCzIQLnByb3RvY29sLlRyaXBsZSJWChJTdWJzY3JpcHRpb25VcGRhdGUSFwoPc3Vic2NyaXB0aW9uX2lkGAEgASgNEicKB2NoYW5nZXMYAiADKAsyFi5wcm90b2NvbC5DaGFuZ2VSZWNvcmQiOAoTVHJpcGxlVXBkYXRlUmVxdWVzdBIhCgd0cmlwbGVzGAEgAygLMhAucHJvdG9jb2wuVHJpcGxlIoUBCg1TZXJ2ZXJNZXNzYWdlEiwKCHJlc3BvbnNlGAEgASgLMhgucHJvdG9jb2wuU2VydmVyUmVzcG9uc2VIABI7ChNzdWJzY3JpcHRpb25fdXBkYXRlGAIgASgLMhwucHJvdG9jb2wuU3Vic2NyaXB0aW9uVXBkYXRlSABCCQoHcGF5bG9hZCJuChBRdWVyeVJlc3VsdFZhbHVlEgwKAmlkGAEgASgJSAASLQoMdHJpcGxlX3ZhbHVlGAIgASgLMhUucHJvdG9jb2wuVHJpcGxlVmFsdWVIABIUCgxpc191bmRlZmluZWQYAyABKAhCBwoFdmFsdWUiPAoOUXVlcnlSZXN1bHRSb3cSKgoGdmFsdWVzGAEgAygLMhoucHJvdG9jb2wuUXVlcnlSZXN1bHRWYWx1ZSLIAQoOU2VydmVyUmVzcG9uc2USFwoKcmVxdWVzdF9pZBgBIAEoDUgAiAEBEicKBnN0YXR1cxgCIAEoCzISLmdvb2dsZS5ycGMuU3RhdHVzSAGIAQESIQoHdHJpcGxlcxgDIAMoCzIQLnByb3RvY29sLlRyaXBsZRIPCgdjb2x1bW5zGAQgAygJEiYKBHJvd3MYBSADKAsyGC5wcm90b2NvbC5RdWVyeVJlc3VsdFJvd0INCgtfcmVxdWVzdF9pZEIJCgdfc3RhdHVzKnEKCkNoYW5nZVR5cGUSGwoXQ0hBTkdFX1RZUEVfVU5TUEVDSUZJRUQQABIWChJDSEFOR0VfVFlQRV9JTlNFUlQQARIWChJDSEFOR0VfVFlQRV9VUERBVEUQAhIWChJDSEFOR0VfVFlQRV9ERUxFVEUQA2IGcHJvdG8z", [file_google_rpc_status]);
 
 /**
  * Represents a single triple (entity, attribute, value) in the database.
@@ -141,6 +141,30 @@ export const TripleValueSchema: GenMessage<TripleValue> = /*@__PURE__*/
   messageDesc(file_protocol, 2);
 
 /**
+ * Request to establish a connection. Must be the first message sent by the
+ * client after WebSocket handshake.
+ *
+ * @generated from message protocol.ConnectRequest
+ */
+export type ConnectRequest = Message<"protocol.ConnectRequest"> & {
+  /**
+   * API key identifying the application. Determines which database file to use:
+   * {app_api_key}.db. Valid characters: alphanumeric, hyphens, underscores.
+   * Maximum length: 256 characters.
+   *
+   * @generated from field: string app_api_key = 1;
+   */
+  appApiKey: string;
+};
+
+/**
+ * Describes the message protocol.ConnectRequest.
+ * Use `create(ConnectRequestSchema)` to create a new message.
+ */
+export const ConnectRequestSchema: GenMessage<ConnectRequest> = /*@__PURE__*/
+  messageDesc(file_protocol, 3);
+
+/**
  * @generated from message protocol.ClientMessage
  */
 export type ClientMessage = Message<"protocol.ClientMessage"> & {
@@ -179,6 +203,12 @@ export type ClientMessage = Message<"protocol.ClientMessage"> & {
      */
     value: UnsubscribeRequest;
     case: "unsubscribe";
+  } | {
+    /**
+     * @generated from field: protocol.ConnectRequest connect = 6;
+     */
+    value: ConnectRequest;
+    case: "connect";
   } | { case: undefined; value?: undefined };
 };
 
@@ -187,7 +217,7 @@ export type ClientMessage = Message<"protocol.ClientMessage"> & {
  * Use `create(ClientMessageSchema)` to create a new message.
  */
 export const ClientMessageSchema: GenMessage<ClientMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 3);
+  messageDesc(file_protocol, 4);
 
 /**
  * @generated from message protocol.QueryRequest
@@ -227,7 +257,7 @@ export type QueryRequest = Message<"protocol.QueryRequest"> & {
  * Use `create(QueryRequestSchema)` to create a new message.
  */
 export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 4);
+  messageDesc(file_protocol, 5);
 
 /**
  * @generated from message protocol.QueryPattern
@@ -290,7 +320,7 @@ export type QueryPattern = Message<"protocol.QueryPattern"> & {
  * Use `create(QueryPatternSchema)` to create a new message.
  */
 export const QueryPatternSchema: GenMessage<QueryPattern> = /*@__PURE__*/
-  messageDesc(file_protocol, 5);
+  messageDesc(file_protocol, 6);
 
 /**
  * @generated from message protocol.QueryPatternVariable
@@ -307,7 +337,7 @@ export type QueryPatternVariable = Message<"protocol.QueryPatternVariable"> & {
  * Use `create(QueryPatternVariableSchema)` to create a new message.
  */
 export const QueryPatternVariableSchema: GenMessage<QueryPatternVariable> = /*@__PURE__*/
-  messageDesc(file_protocol, 6);
+  messageDesc(file_protocol, 7);
 
 /**
  * Request to subscribe to triple changes.
@@ -337,7 +367,7 @@ export type SubscribeRequest = Message<"protocol.SubscribeRequest"> & {
  * Use `create(SubscribeRequestSchema)` to create a new message.
  */
 export const SubscribeRequestSchema: GenMessage<SubscribeRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 7);
+  messageDesc(file_protocol, 8);
 
 /**
  * Request to cancel an active subscription.
@@ -358,7 +388,7 @@ export type UnsubscribeRequest = Message<"protocol.UnsubscribeRequest"> & {
  * Use `create(UnsubscribeRequestSchema)` to create a new message.
  */
 export const UnsubscribeRequestSchema: GenMessage<UnsubscribeRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 8);
+  messageDesc(file_protocol, 9);
 
 /**
  * A single change record representing a triple modification.
@@ -387,7 +417,7 @@ export type ChangeRecord = Message<"protocol.ChangeRecord"> & {
  * Use `create(ChangeRecordSchema)` to create a new message.
  */
 export const ChangeRecordSchema: GenMessage<ChangeRecord> = /*@__PURE__*/
-  messageDesc(file_protocol, 9);
+  messageDesc(file_protocol, 10);
 
 /**
  * Streaming update sent to subscribers when triples change.
@@ -415,7 +445,7 @@ export type SubscriptionUpdate = Message<"protocol.SubscriptionUpdate"> & {
  * Use `create(SubscriptionUpdateSchema)` to create a new message.
  */
 export const SubscriptionUpdateSchema: GenMessage<SubscriptionUpdate> = /*@__PURE__*/
-  messageDesc(file_protocol, 10);
+  messageDesc(file_protocol, 11);
 
 /**
  * @generated from message protocol.TripleUpdateRequest
@@ -432,7 +462,7 @@ export type TripleUpdateRequest = Message<"protocol.TripleUpdateRequest"> & {
  * Use `create(TripleUpdateRequestSchema)` to create a new message.
  */
 export const TripleUpdateRequestSchema: GenMessage<TripleUpdateRequest> = /*@__PURE__*/
-  messageDesc(file_protocol, 11);
+  messageDesc(file_protocol, 12);
 
 /**
  * @generated from message protocol.ServerMessage
@@ -465,7 +495,7 @@ export type ServerMessage = Message<"protocol.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_protocol, 12);
+  messageDesc(file_protocol, 13);
 
 /**
  * A single value in a query result row
@@ -507,7 +537,7 @@ export type QueryResultValue = Message<"protocol.QueryResultValue"> & {
  * Use `create(QueryResultValueSchema)` to create a new message.
  */
 export const QueryResultValueSchema: GenMessage<QueryResultValue> = /*@__PURE__*/
-  messageDesc(file_protocol, 13);
+  messageDesc(file_protocol, 14);
 
 /**
  * A row of query results
@@ -526,7 +556,7 @@ export type QueryResultRow = Message<"protocol.QueryResultRow"> & {
  * Use `create(QueryResultRowSchema)` to create a new message.
  */
 export const QueryResultRowSchema: GenMessage<QueryResultRow> = /*@__PURE__*/
-  messageDesc(file_protocol, 14);
+  messageDesc(file_protocol, 15);
 
 /**
  * @generated from message protocol.ServerResponse
@@ -567,7 +597,7 @@ export type ServerResponse = Message<"protocol.ServerResponse"> & {
  * Use `create(ServerResponseSchema)` to create a new message.
  */
 export const ServerResponseSchema: GenMessage<ServerResponse> = /*@__PURE__*/
-  messageDesc(file_protocol, 15);
+  messageDesc(file_protocol, 16);
 
 /**
  * Types of changes that can occur to triples.

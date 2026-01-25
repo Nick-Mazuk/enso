@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use crate::client_connection::ClientConnection;
 use crate::proto;
@@ -16,11 +16,14 @@ pub struct TestClient {
     pub client: ClientConnection,
     db_path: PathBuf,
     /// Shared database reference for creating sibling clients.
-    shared_db: Arc<Mutex<Database>>,
+    shared_db: Arc<RwLock<Database>>,
 }
 
 impl TestClient {
     /// Create a new test client with a fresh database.
+    ///
+    /// The client is created in `Connected` state, bypassing the `ConnectRequest` flow.
+    /// This is for tests that don't need to test the connection handshake.
     #[must_use]
     pub fn new() -> Self {
         let temp_dir = std::env::temp_dir();
@@ -34,8 +37,12 @@ impl TestClient {
         let database = Database::create(&db_path).expect("Failed to create test database");
 
         // Database now handles broadcast channel internally
+        // ClientConnection::new() puts the connection in Connected state
         let client = ClientConnection::new(database);
-        let shared_db = client.shared_database();
+        #[allow(clippy::expect_used)]
+        let shared_db = client
+            .shared_database()
+            .expect("Client should be connected");
 
         Self {
             client,
@@ -48,6 +55,7 @@ impl TestClient {
     ///
     /// This simulates multiple WebSocket connections to the same server,
     /// each with their own `ClientConnection` but sharing the same database.
+    /// The sibling is created in `Connected` state.
     #[must_use]
     #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
     pub fn create_sibling(&self) -> SiblingClient {

@@ -263,9 +263,10 @@ impl Simulator {
                 }
                 Some(
                     proto::client_message::Payload::Subscribe(_)
-                    | proto::client_message::Payload::Unsubscribe(_),
+                    | proto::client_message::Payload::Unsubscribe(_)
+                    | proto::client_message::Payload::Connect(_),
                 ) => {
-                    // Subscriptions not supported in simulation yet
+                    // Subscriptions and Connect not supported in simulation yet
                     self.failed_operations += 1;
                 }
                 None => {

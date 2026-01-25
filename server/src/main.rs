@@ -4,7 +4,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use axum::{
     Router,
@@ -16,19 +16,17 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, proto, storage::Database, subscription::storage_change_to_proto};
+use server::{ClientConnection, DatabaseRegistry, proto, subscription::storage_change_to_proto};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-/// Shared database for all connections.
-type SharedDatabase = Arc<Mutex<Database>>;
 
 #[derive(Clone)]
 #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected for shared state
 struct AppState {
-    /// Shared database - each WebSocket connection creates its own `ClientConnection`
-    /// using this shared database.
-    shared_database: SharedDatabase,
+    /// Database registry - manages per-app databases.
+    /// Each WebSocket connection creates its own `ClientConnection` that
+    /// opens/creates the database based on the `app_api_key` in `ConnectRequest`.
+    registry: Arc<DatabaseRegistry>,
 }
 
 #[tokio::main]
@@ -41,26 +39,16 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Create or open the database
-    let db_path = PathBuf::from("enso.db");
-    let (database, recovery_result) = Database::open_or_create(&db_path).unwrap_or_else(|e| {
-        tracing::error!("Failed to open database: {e}");
+    // Create the data directory for databases
+    let database_directory = PathBuf::from("./data");
+    if let Err(e) = std::fs::create_dir_all(&database_directory) {
+        tracing::error!("Failed to create data directory: {e}");
         std::process::exit(1);
-    });
-
-    // Log recovery info if recovery was performed
-    if let Some(result) = recovery_result {
-        tracing::info!(
-            "Database recovery completed: {} records scanned, {} transactions replayed, {} discarded",
-            result.records_scanned,
-            result.transactions_replayed,
-            result.transactions_discarded
-        );
     }
 
-    // Create a shared database that all connections will use
-    let shared_database: SharedDatabase = Arc::new(Mutex::new(database));
-    let state = AppState { shared_database };
+    // Create the database registry - databases are opened on-demand per app_api_key
+    let registry = Arc::new(DatabaseRegistry::new(database_directory));
+    let state = AppState { registry };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
@@ -90,17 +78,11 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl
 
 #[allow(clippy::too_many_lines, clippy::disallowed_methods)]
 async fn handle_socket(mut socket: WebSocket, state: AppState) {
-    // Create a per-connection ClientConnection using the shared database
-    let mut client_connection = ClientConnection::new_shared(Arc::clone(&state.shared_database));
+    // Create a per-connection ClientConnection that awaits ConnectRequest
+    let mut client_connection = ClientConnection::new_awaiting_connect(Arc::clone(&state.registry));
 
-    // Subscribe to the broadcast channel for change notifications (from the database)
-    let mut change_rx = match client_connection.subscribe_to_changes() {
-        Ok(rx) => rx,
-        Err(e) => {
-            tracing::error!("Failed to subscribe to changes: {e}");
-            return;
-        }
-    };
+    // Change receiver - will be set up after ConnectRequest is processed
+    let mut change_rx: Option<server::storage::FilteredChangeReceiver> = None;
 
     loop {
         tokio::select! {
@@ -161,11 +143,30 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                         return;
                     }
                 }
+
+                // If we just connected, set up the change receiver for subscriptions
+                if change_rx.is_none() && client_connection.is_connected() {
+                    match client_connection.subscribe_to_changes() {
+                        Ok(rx) => {
+                            change_rx = Some(rx);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to subscribe to changes: {e}");
+                            return;
+                        }
+                    }
+                }
             }
 
             // Handle broadcast notifications for subscriptions
             // (FilteredChangeReceiver automatically excludes this connection's own writes)
-            notification = change_rx.recv() => {
+            // Only active after connection is established
+            notification = async {
+                match &mut change_rx {
+                    Some(rx) => rx.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
                 match notification {
                     Ok(change) => {
                         // Convert storage change records to proto format
