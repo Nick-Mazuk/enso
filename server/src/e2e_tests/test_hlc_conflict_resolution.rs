@@ -46,7 +46,7 @@ fn query_triple(
         request_id: Some(request_id),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -55,7 +55,7 @@ fn query_triple(
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -66,8 +66,8 @@ fn query_triple(
 }
 
 /// Helper to extract string value from query response.
-fn get_query_string(resp: &proto::ServerResponse) -> Option<&str> {
-    resp.rows.first().and_then(|row| {
+fn get_query_string(response: &proto::ServerResponse) -> Option<&str> {
+    response.rows.first().and_then(|row| {
         row.values.first().and_then(|v| match &v.value {
             Some(proto::query_result_value::Value::TripleValue(tv)) => match &tv.value {
                 Some(proto::triple_value::Value::String(s)) => Some(s.as_str()),
@@ -86,7 +86,7 @@ fn test_insert_new_triple_succeeds() {
     let attribute_id = new_attribute_id(100);
     let hlc = make_hlc(1000, 0, 1);
 
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -95,22 +95,22 @@ fn test_insert_new_triple_succeeds() {
         )),
     });
 
-    assert!(is_ok(&resp));
-    assert_eq!(resp.triples.len(), 1);
+    assert!(is_ok(&response));
+    assert_eq!(response.triples.len(), 1);
     assert_eq!(
-        resp.triples[0].value,
+        response.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("initial".to_string())),
         })
     );
     // Response should include the HLC
-    assert!(resp.triples[0].hlc.is_some());
+    assert!(response.triples[0].hlc.is_some());
 
     // Verify query returns the correct value
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 2);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("initial"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 2);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("initial"));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn test_newer_hlc_wins() {
 
     // Insert initial value with HLC (1000, 0, 1)
     let initial_hlc = make_hlc(1000, 0, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -130,11 +130,11 @@ fn test_newer_hlc_wins() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Update with newer HLC (2000, 0, 1) - should succeed
     let newer_hlc = make_hlc(2000, 0, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -143,21 +143,21 @@ fn test_newer_hlc_wins() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     // Value should be updated
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("updated".to_string())),
         })
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("updated"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("updated"));
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn test_older_hlc_loses() {
 
     // Insert initial value with HLC (2000, 0, 1)
     let initial_hlc = make_hlc(2000, 0, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -177,11 +177,11 @@ fn test_older_hlc_loses() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Try to update with older HLC (1000, 0, 1) - should be rejected
     let older_hlc = make_hlc(1000, 0, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -190,21 +190,21 @@ fn test_older_hlc_loses() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     // Value should still be the original (update rejected)
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("initial".to_string())),
         })
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("initial"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("initial"));
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn test_equal_hlc_rejected() {
 
     // Insert initial value with HLC (1000, 5, 1)
     let hlc = make_hlc(1000, 5, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -224,11 +224,11 @@ fn test_equal_hlc_rejected() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Try to update with same HLC - should be rejected
     let same_hlc = make_hlc(1000, 5, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -237,21 +237,21 @@ fn test_equal_hlc_rejected() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     // Value should still be the original (update rejected)
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("initial".to_string())),
         })
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("initial"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("initial"));
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn test_logical_counter_newer_wins() {
 
     // Insert with HLC (1000, 5, 1)
     let initial_hlc = make_hlc(1000, 5, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -271,11 +271,11 @@ fn test_logical_counter_newer_wins() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Update with same physical time but higher logical counter (1000, 10, 1) - should succeed
     let newer_hlc = make_hlc(1000, 10, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -284,19 +284,19 @@ fn test_logical_counter_newer_wins() {
         )),
     });
 
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("updated".to_string())),
         })
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("updated"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("updated"));
 }
 
 #[test]
@@ -308,7 +308,7 @@ fn test_logical_counter_older_loses() {
 
     // Insert with HLC (1000, 10, 1)
     let initial_hlc = make_hlc(1000, 10, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -316,11 +316,11 @@ fn test_logical_counter_older_loses() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Try to update with same physical time but lower logical counter (1000, 5, 1) - should be rejected
     let older_hlc = make_hlc(1000, 5, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -329,21 +329,21 @@ fn test_logical_counter_older_loses() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     // Value should still be the original (update rejected)
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("initial".to_string())),
         })
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("initial"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("initial"));
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn test_node_id_newer_wins() {
 
     // Insert with HLC (1000, 5, 1)
     let initial_hlc = make_hlc(1000, 5, 1);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -363,11 +363,11 @@ fn test_node_id_newer_wins() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Update with same physical time and logical counter but higher node_id (1000, 5, 10) - should succeed
     let newer_hlc = make_hlc(1000, 5, 10);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -376,20 +376,20 @@ fn test_node_id_newer_wins() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("updated".to_string())),
         })
     );
 
     // Verify query returns the updated value
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("updated"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("updated"));
 }
 
 #[test]
@@ -401,7 +401,7 @@ fn test_node_id_older_loses() {
 
     // Insert with HLC (1000, 5, 10)
     let initial_hlc = make_hlc(1000, 5, 10);
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -409,11 +409,11 @@ fn test_node_id_older_loses() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Try to update with same physical time and logical counter but lower node_id (1000, 5, 1) - should be rejected
     let older_hlc = make_hlc(1000, 5, 1);
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -422,21 +422,21 @@ fn test_node_id_older_loses() {
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 1);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 1);
     // Value should still be the original (update rejected)
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("initial".to_string())),
         })
     );
 
     // Verify query returns the original value (rejected update)
-    let query_resp = query_triple(&mut client, entity_id, attribute_id, 3);
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_query_string(&query_resp), Some("initial"));
+    let query_response = query_triple(&mut client, entity_id, attribute_id, 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_query_string(&query_response), Some("initial"));
 }
 
 #[test]
@@ -444,45 +444,45 @@ fn test_mixed_batch_some_update_some_reject() {
     let mut client = TestClient::new();
 
     let entity1 = new_entity_id(105);
-    let attr1 = new_attribute_id(105);
+    let attribute_id_1 = new_attribute_id(105);
     let entity2 = new_entity_id(106);
-    let attr2 = new_attribute_id(106);
+    let attribute_id_2 = new_attribute_id(106);
 
     // Insert initial values
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![
-                    make_triple(entity1, attr1, "value1", make_hlc(1000, 0, 1)),
-                    make_triple(entity2, attr2, "value2", make_hlc(2000, 0, 1)),
+                    make_triple(entity1, attribute_id_1, "value1", make_hlc(1000, 0, 1)),
+                    make_triple(entity2, attribute_id_2, "value2", make_hlc(2000, 0, 1)),
                 ],
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Send batch where:
     // - Triple 1 has newer HLC (should update)
     // - Triple 2 has older HLC (should be rejected)
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
                 triples: vec![
-                    make_triple(entity1, attr1, "updated1", make_hlc(3000, 0, 1)), // Newer
-                    make_triple(entity2, attr2, "rejected2", make_hlc(1500, 0, 1)), // Older
+                    make_triple(entity1, attribute_id_1, "updated1", make_hlc(3000, 0, 1)), // Newer
+                    make_triple(entity2, attribute_id_2, "rejected2", make_hlc(1500, 0, 1)), // Older
                 ],
             },
         )),
     });
 
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.triples.len(), 2);
+    assert!(is_ok(&response2));
+    assert_eq!(response2.triples.len(), 2);
 
     // First triple should be updated
     assert_eq!(
-        resp2.triples[0].value,
+        response2.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("updated1".to_string())),
         })
@@ -490,19 +490,19 @@ fn test_mixed_batch_some_update_some_reject() {
 
     // Second triple should keep original value
     assert_eq!(
-        resp2.triples[1].value,
+        response2.triples[1].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("value2".to_string())),
         })
     );
 
     // Verify queries return the correct values
-    let query1 = query_triple(&mut client, entity1, attr1, 3);
+    let query1 = query_triple(&mut client, entity1, attribute_id_1, 3);
     assert!(is_ok(&query1));
     assert_eq!(query1.rows.len(), 1);
     assert_eq!(get_query_string(&query1), Some("updated1"));
 
-    let query2 = query_triple(&mut client, entity2, attr2, 4);
+    let query2 = query_triple(&mut client, entity2, attribute_id_2, 4);
     assert!(is_ok(&query2));
     assert_eq!(query2.rows.len(), 1);
     assert_eq!(get_query_string(&query2), Some("value2"));
@@ -516,7 +516,7 @@ fn test_response_includes_hlc() {
     let attribute_id = new_attribute_id(107);
     let hlc = make_hlc(5000, 42, 7);
 
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -525,11 +525,11 @@ fn test_response_includes_hlc() {
         )),
     });
 
-    assert!(is_ok(&resp));
-    assert_eq!(resp.triples.len(), 1);
+    assert!(is_ok(&response));
+    assert_eq!(response.triples.len(), 1);
 
     // Response should include the HLC
-    let response_hlc = resp.triples[0]
+    let response_hlc = response.triples[0]
         .hlc
         .as_ref()
         .expect("Response should include HLC");
@@ -546,7 +546,7 @@ fn test_missing_hlc_rejected() {
     let attribute_id = new_attribute_id(108);
 
     // Send triple without HLC
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -563,8 +563,8 @@ fn test_missing_hlc_rejected() {
     });
 
     // Should return InvalidArgument
-    assert!(resp.status.is_some());
-    let status = resp.status.as_ref().unwrap();
+    assert!(response.status.is_some());
+    let status = response.status.as_ref().unwrap();
     assert_eq!(
         status.code,
         proto::google::rpc::Code::InvalidArgument as i32

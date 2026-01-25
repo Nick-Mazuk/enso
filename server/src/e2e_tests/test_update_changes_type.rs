@@ -13,7 +13,7 @@ fn test_update_changes_value_type() {
     let attribute_id = new_attribute_id(32);
 
     // Insert as string
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -28,10 +28,10 @@ fn test_update_changes_value_type() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Update to number
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -46,14 +46,14 @@ fn test_update_changes_value_type() {
             },
         )),
     });
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
 
     // Query should return number
-    let query_resp = client.handle_message(proto::ClientMessage {
+    let query_response = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -62,7 +62,7 @@ fn test_update_changes_value_type() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -70,7 +70,7 @@ fn test_update_changes_value_type() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_number_value(&query_resp, 0), Some(123.0));
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_number_value(&query_response, 0), Some(123.0));
 }

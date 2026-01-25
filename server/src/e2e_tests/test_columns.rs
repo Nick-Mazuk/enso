@@ -11,7 +11,7 @@ fn test_query_returns_correct_columns() {
     let attribute_id = new_attribute_id(90);
 
     // Insert a value
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -26,10 +26,10 @@ fn test_query_returns_correct_columns() {
             },
         )),
     });
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // Point query returns column "value"
-    let point_resp = client.handle_message(proto::ClientMessage {
+    let point_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
@@ -50,11 +50,11 @@ fn test_query_returns_correct_columns() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&point_resp));
-    assert_eq!(point_resp.columns, vec!["value"]);
+    assert!(is_ok(&point_response));
+    assert_eq!(point_response.columns, vec!["value"]);
 
     // Entity scan returns columns "attribute" and "value"
-    let scan_resp = client.handle_message(proto::ClientMessage {
+    let scan_response = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![
@@ -82,6 +82,6 @@ fn test_query_returns_correct_columns() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&scan_resp));
-    assert_eq!(scan_resp.columns, vec!["attribute", "value"]);
+    assert!(is_ok(&scan_response));
+    assert_eq!(scan_response.columns, vec!["attribute", "value"]);
 }

@@ -14,7 +14,7 @@ fn test_insert_multiple_entities() {
     let attribute_id = new_attribute_id(22);
 
     // Insert for entity 1
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -29,10 +29,10 @@ fn test_insert_multiple_entities() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Insert for entity 2
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -47,14 +47,14 @@ fn test_insert_multiple_entities() {
             },
         )),
     });
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
 
     // Query entity 1
     let query1 = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id_1.to_vec())),
@@ -63,7 +63,7 @@ fn test_insert_multiple_entities() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -80,7 +80,7 @@ fn test_insert_multiple_entities() {
         request_id: Some(4),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id_2.to_vec())),
@@ -89,7 +89,7 @@ fn test_insert_multiple_entities() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],

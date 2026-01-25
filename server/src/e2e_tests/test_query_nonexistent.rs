@@ -12,7 +12,7 @@ fn test_query_nonexistent_entity() {
     let attribute_id = new_attribute_id(40);
 
     // Insert some data
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -27,14 +27,14 @@ fn test_query_nonexistent_entity() {
             },
         )),
     });
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // Query for a different entity
-    let query_resp = client.handle_message(proto::ClientMessage {
+    let query_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(
@@ -45,7 +45,7 @@ fn test_query_nonexistent_entity() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -54,6 +54,6 @@ fn test_query_nonexistent_entity() {
         })),
     });
 
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 0);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 0);
 }

@@ -14,7 +14,7 @@ fn test_insert_response_returns_written_triples() {
     let attribute_id = new_attribute_id(80);
 
     // Insert a triple
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -31,18 +31,18 @@ fn test_insert_response_returns_written_triples() {
     });
 
     // Response should be OK
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // Response should contain the written triple
     assert_eq!(
-        resp.triples.len(),
+        response.triples.len(),
         1,
         "Insert response should contain 1 triple, got {}",
-        resp.triples.len()
+        response.triples.len()
     );
 
     // Verify the returned triple has correct values
-    let triple = &resp.triples[0];
+    let triple = &response.triples[0];
     assert_eq!(triple.entity_id, Some(entity_id.to_vec()));
     assert_eq!(triple.attribute_id, Some(attribute_id.to_vec()));
     assert_eq!(
@@ -61,7 +61,7 @@ fn test_update_response_returns_current_value() {
     let attribute_id = new_attribute_id(81);
 
     // Insert initial value
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -76,11 +76,11 @@ fn test_update_response_returns_current_value() {
             },
         )),
     });
-    assert!(is_ok(&insert_resp));
-    assert_eq!(insert_resp.triples.len(), 1);
+    assert!(is_ok(&insert_response));
+    assert_eq!(insert_response.triples.len(), 1);
 
     // Update with new value
-    let update_resp = client.handle_message(proto::ClientMessage {
+    let update_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -97,18 +97,18 @@ fn test_update_response_returns_current_value() {
     });
 
     // Response should be OK
-    assert!(is_ok(&update_resp));
+    assert!(is_ok(&update_response));
 
     // Response should contain the updated triple
     assert_eq!(
-        update_resp.triples.len(),
+        update_response.triples.len(),
         1,
         "Update response should contain 1 triple, got {}",
-        update_resp.triples.len()
+        update_response.triples.len()
     );
 
     // Verify the returned triple has the updated value
-    let triple = &update_resp.triples[0];
+    let triple = &update_response.triples[0];
     assert_eq!(triple.entity_id, Some(entity_id.to_vec()));
     assert_eq!(triple.attribute_id, Some(attribute_id.to_vec()));
     assert_eq!(
@@ -124,7 +124,7 @@ fn test_multi_triple_update_returns_all_values() {
     let mut client = TestClient::new();
 
     // Insert multiple triples in one request
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -159,32 +159,32 @@ fn test_multi_triple_update_returns_all_values() {
     });
 
     // Response should be OK
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // Response should contain all 3 triples
     assert_eq!(
-        resp.triples.len(),
+        response.triples.len(),
         3,
         "Multi-triple update response should contain 3 triples, got {}",
-        resp.triples.len()
+        response.triples.len()
     );
 
     // Verify each triple was returned with correct values
     // Note: Order should match insertion order
     assert_eq!(
-        resp.triples[0].value,
+        response.triples[0].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::String("value1".to_string())),
         })
     );
     assert_eq!(
-        resp.triples[1].value,
+        response.triples[1].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::Number(42.0)),
         })
     );
     assert_eq!(
-        resp.triples[2].value,
+        response.triples[2].value,
         Some(proto::TripleValue {
             value: Some(proto::triple_value::Value::Boolean(true)),
         })
@@ -196,7 +196,7 @@ fn test_empty_update_returns_no_triples() {
     let mut client = TestClient::new();
 
     // Send empty update request
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest { triples: vec![] },
@@ -204,11 +204,11 @@ fn test_empty_update_returns_no_triples() {
     });
 
     // Response should be OK
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // No triples were written, so none should be returned
     assert!(
-        resp.triples.is_empty(),
+        response.triples.is_empty(),
         "Empty update response should contain no triples"
     );
 }

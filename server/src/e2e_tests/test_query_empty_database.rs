@@ -10,11 +10,11 @@ fn test_query_empty_database() {
     let entity_id = new_entity_id(99);
     let attribute_id = new_attribute_id(99);
 
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -23,7 +23,7 @@ fn test_query_empty_database() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -32,6 +32,6 @@ fn test_query_empty_database() {
         })),
     });
 
-    assert!(is_ok(&resp));
-    assert_eq!(resp.rows.len(), 0);
+    assert!(is_ok(&response));
+    assert_eq!(response.rows.len(), 0);
 }

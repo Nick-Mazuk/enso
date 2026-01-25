@@ -8,15 +8,15 @@ fn test_request_id_preserved() {
     let mut client = TestClient::new();
 
     for request_id in [1, 100, 999, u32::MAX] {
-        let req = proto::ClientMessage {
+        let request = proto::ClientMessage {
             request_id: Some(request_id),
             payload: Some(proto::client_message::Payload::TripleUpdateRequest(
                 proto::TripleUpdateRequest { triples: vec![] },
             )),
         };
 
-        let resp = client.handle_message(req);
-        assert_eq!(resp.request_id, Some(request_id));
+        let response = client.handle_message(request);
+        assert_eq!(response.request_id, Some(request_id));
     }
 }
 
@@ -24,13 +24,13 @@ fn test_request_id_preserved() {
 fn test_request_id_none() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: None,
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest { triples: vec![] },
         )),
     };
 
-    let resp = client.handle_message(req);
-    assert_eq!(resp.request_id, None);
+    let response = client.handle_message(request);
+    assert_eq!(response.request_id, None);
 }

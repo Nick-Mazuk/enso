@@ -26,7 +26,7 @@ fn test_insert_broadcasts_change_notification() {
     let attribute_id = new_attribute_id(1);
 
     // Insert a triple from the main client
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -42,7 +42,7 @@ fn test_insert_broadcasts_change_notification() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Verify a change notification was broadcast to the sibling
     let notification = change_rx
@@ -73,7 +73,7 @@ fn test_update_broadcasts_change_notification() {
     let attribute_id = new_attribute_id(2);
 
     // First insert
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -88,13 +88,13 @@ fn test_update_broadcasts_change_notification() {
             },
         )),
     });
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Subscribe from sibling after the insert so we only see the update
     let mut change_rx = sibling.subscribe_to_changes();
 
     // Update the triple with a newer HLC
-    let update_resp = client.handle_message(proto::ClientMessage {
+    let update_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -110,7 +110,7 @@ fn test_update_broadcasts_change_notification() {
         )),
     });
 
-    assert!(is_ok(&update_resp));
+    assert!(is_ok(&update_response));
 
     // Verify an Update notification was broadcast to sibling
     let notification = change_rx
@@ -146,7 +146,7 @@ fn test_batch_insert_broadcasts_multiple_changes() {
     let attribute_id = new_attribute_id(4);
 
     // Insert two triples in one request
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -172,7 +172,7 @@ fn test_batch_insert_broadcasts_multiple_changes() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Verify both changes were broadcast to sibling
     let notification = change_rx
@@ -211,7 +211,7 @@ fn test_get_changes_since_returns_changes() {
     };
 
     // Insert a triple
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -229,7 +229,7 @@ fn test_get_changes_since_returns_changes() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Get changes since before the insert
     let changes = client
@@ -247,7 +247,7 @@ fn test_failed_operation_does_not_broadcast() {
     let mut change_rx = client.subscribe_to_changes();
 
     // Send an invalid request (missing entity_id)
-    let invalid_resp = client.handle_message(proto::ClientMessage {
+    let invalid_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -264,7 +264,7 @@ fn test_failed_operation_does_not_broadcast() {
     });
 
     // Request should fail
-    assert!(!is_ok(&invalid_resp));
+    assert!(!is_ok(&invalid_response));
 
     // No notification should be broadcast
     assert!(
@@ -282,7 +282,7 @@ fn test_older_hlc_update_does_not_broadcast() {
     let attribute_id = new_attribute_id(8);
 
     // Insert with HLC 10
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -297,13 +297,13 @@ fn test_older_hlc_update_does_not_broadcast() {
             },
         )),
     });
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Subscribe after the insert
     let mut change_rx = client.subscribe_to_changes();
 
     // Try to update with older HLC (should be rejected by conflict resolution)
-    let old_update_resp = client.handle_message(proto::ClientMessage {
+    let old_update_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -320,7 +320,7 @@ fn test_older_hlc_update_does_not_broadcast() {
     });
 
     // The request succeeds but the triple is not updated (conflict resolution)
-    assert!(is_ok(&old_update_resp));
+    assert!(is_ok(&old_update_response));
 
     // No notification should be broadcast since the triple wasn't actually changed
     assert!(
@@ -344,7 +344,7 @@ fn test_insert_boolean_broadcasts_correctly() {
     let attribute_id = new_attribute_id(9);
 
     // Insert a boolean triple
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -360,7 +360,7 @@ fn test_insert_boolean_broadcasts_correctly() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Verify the boolean value is correct in the notification to sibling
     let notification = change_rx

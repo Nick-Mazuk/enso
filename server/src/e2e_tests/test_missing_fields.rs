@@ -7,7 +7,7 @@ use crate::proto;
 fn test_missing_entity_id() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -23,9 +23,9 @@ fn test_missing_entity_id() {
         )),
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }
@@ -34,7 +34,7 @@ fn test_missing_entity_id() {
 fn test_missing_attribute_id() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -50,9 +50,9 @@ fn test_missing_attribute_id() {
         )),
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }
@@ -61,7 +61,7 @@ fn test_missing_attribute_id() {
 fn test_missing_value() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -75,9 +75,9 @@ fn test_missing_value() {
         )),
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }
@@ -86,14 +86,14 @@ fn test_missing_value() {
 fn test_no_payload() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: None,
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }

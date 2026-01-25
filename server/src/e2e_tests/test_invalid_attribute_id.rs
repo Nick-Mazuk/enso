@@ -8,7 +8,7 @@ fn test_invalid_attribute_id_length() {
     let mut client = TestClient::new();
 
     // Attribute ID with wrong length
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -24,9 +24,9 @@ fn test_invalid_attribute_id_length() {
         )),
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }

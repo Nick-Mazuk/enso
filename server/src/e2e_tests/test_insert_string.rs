@@ -13,7 +13,7 @@ fn test_insert_string_then_query() {
     let attribute_id = new_attribute_id(1);
 
     // Insert a string value
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -31,15 +31,15 @@ fn test_insert_string_then_query() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
-    assert_eq!(insert_resp.request_id, Some(1));
+    assert!(is_ok(&insert_response));
+    assert_eq!(insert_response.request_id, Some(1));
 
     // Query it back
-    let query_resp = client.handle_message(proto::ClientMessage {
+    let query_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -48,7 +48,7 @@ fn test_insert_string_then_query() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -57,8 +57,8 @@ fn test_insert_string_then_query() {
         })),
     });
 
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.request_id, Some(2));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_string_value(&query_resp, 0), Some("hello world"));
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.request_id, Some(2));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(get_string_value(&query_response, 0), Some("hello world"));
 }

@@ -8,7 +8,7 @@ fn test_invalid_entity_id_length() {
     let mut client = TestClient::new();
 
     // Entity ID with wrong length (not 16 bytes)
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -24,9 +24,9 @@ fn test_invalid_entity_id_length() {
         )),
     };
 
-    let resp = client.handle_message(req);
+    let response = client.handle_message(request);
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }

@@ -15,7 +15,7 @@ fn test_max_length_string_value() {
     // Create a string at max length (1024 chars)
     let max_string: String = "x".repeat(1024);
 
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -30,14 +30,14 @@ fn test_max_length_string_value() {
             },
         )),
     });
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // Query and verify
-    let query_resp = client.handle_message(proto::ClientMessage {
+    let query_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -46,7 +46,7 @@ fn test_max_length_string_value() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -54,9 +54,12 @@ fn test_max_length_string_value() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 1);
-    assert_eq!(get_string_value(&query_resp, 0), Some(max_string.as_str()));
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 1);
+    assert_eq!(
+        get_string_value(&query_response, 0),
+        Some(max_string.as_str())
+    );
 }
 
 #[test]
@@ -69,7 +72,7 @@ fn test_string_too_long_rejected() {
     // Create a string exceeding max length (1025 chars)
     let too_long_string: String = "y".repeat(1025);
 
-    let resp = client.handle_message(proto::ClientMessage {
+    let response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -86,7 +89,7 @@ fn test_string_too_long_rejected() {
     });
 
     assert_eq!(
-        status_code(&resp),
+        status_code(&response),
         proto::google::rpc::Code::InvalidArgument as i32
     );
 }

@@ -13,7 +13,7 @@ fn test_insert_multiple_triples_single_request() {
     let attribute_id_3 = new_attribute_id(13);
 
     // Insert multiple triples in one request
-    let insert_resp = client.handle_message(proto::ClientMessage {
+    let insert_response = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -47,30 +47,30 @@ fn test_insert_multiple_triples_single_request() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // Query all attributes for the entity
-    let query_resp = client.handle_message(proto::ClientMessage {
+    let query_response = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![
                 proto::QueryPatternVariable {
-                    label: Some("a".to_string()),
+                    label: Some("attribute".to_string()),
                 },
                 proto::QueryPatternVariable {
-                    label: Some("v".to_string()),
+                    label: Some("value".to_string()),
                 },
             ],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
-                        label: Some("a".to_string()),
+                        label: Some("attribute".to_string()),
                     },
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -79,6 +79,6 @@ fn test_insert_multiple_triples_single_request() {
         })),
     });
 
-    assert!(is_ok(&query_resp));
-    assert_eq!(query_resp.rows.len(), 3);
+    assert!(is_ok(&query_response));
+    assert_eq!(query_response.rows.len(), 3);
 }

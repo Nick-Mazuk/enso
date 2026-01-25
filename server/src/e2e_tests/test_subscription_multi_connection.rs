@@ -28,7 +28,7 @@ fn test_sibling_connection_receives_notification() {
     let attribute_id = new_attribute_id(200);
 
     // Insert via client1
-    let insert_resp = client1.handle_message(proto::ClientMessage {
+    let insert_response = client1.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -46,7 +46,7 @@ fn test_sibling_connection_receives_notification() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // client2's subscriber should receive the notification
     let notification = rx2
@@ -77,7 +77,7 @@ fn test_bidirectional_notifications() {
 
     // Client1 writes
     let entity1 = new_entity_id(201);
-    let resp1 = client1.handle_message(proto::ClientMessage {
+    let response1 = client1.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -94,7 +94,7 @@ fn test_bidirectional_notifications() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // rx1 should NOT receive client1's own write (filtered out)
     assert!(
@@ -110,7 +110,7 @@ fn test_bidirectional_notifications() {
 
     // Client2 writes
     let entity2 = new_entity_id(202);
-    let resp2 = client2.handle_message(proto::ClientMessage {
+    let response2 = client2.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -127,7 +127,7 @@ fn test_bidirectional_notifications() {
             },
         )),
     });
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
 
     // rx1 should receive client2's write
     let notif1_from_c2 = rx1.try_recv().expect("rx1 should receive client2's write");
@@ -161,7 +161,7 @@ fn test_multiple_siblings_all_receive_notifications() {
     let attribute_id = new_attribute_id(210);
 
     // Client2 writes
-    let insert_resp = client2.handle_message(proto::ClientMessage {
+    let insert_response = client2.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -179,7 +179,7 @@ fn test_multiple_siblings_all_receive_notifications() {
         )),
     });
 
-    assert!(is_ok(&insert_resp));
+    assert!(is_ok(&insert_response));
 
     // rx1 and rx3 should receive the notification (other connections)
     let notif1 = rx1.try_recv().expect("rx1 should receive notification");
@@ -221,7 +221,7 @@ fn test_late_sibling_subscriber() {
     let attribute_id = new_attribute_id(220);
 
     // Client1 writes
-    let resp1 = client1.handle_message(proto::ClientMessage {
+    let response1 = client1.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -236,7 +236,7 @@ fn test_late_sibling_subscriber() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // rx2 should have received client1's write
     assert!(
@@ -255,7 +255,7 @@ fn test_late_sibling_subscriber() {
 
     // Another write from client1
     let entity_id2 = new_entity_id(221);
-    let resp2 = client1.handle_message(proto::ClientMessage {
+    let response2 = client1.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -270,7 +270,7 @@ fn test_late_sibling_subscriber() {
             },
         )),
     });
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
 
     // Both rx2 and rx3 should receive the second write (from client1)
     let notif2 = rx2.try_recv().expect("rx2 should receive second write");
@@ -310,7 +310,7 @@ fn test_notification_includes_source_connection_id() {
     let attribute_id = new_attribute_id(240);
 
     // Client1 writes
-    let resp = client1.handle_message(proto::ClientMessage {
+    let response = client1.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -325,7 +325,7 @@ fn test_notification_includes_source_connection_id() {
             },
         )),
     });
-    assert!(is_ok(&resp));
+    assert!(is_ok(&response));
 
     // rx2 should receive the notification (from client1)
     let notif2 = rx2.try_recv().expect("rx2 should receive notification");
@@ -359,7 +359,7 @@ fn test_filter_own_writes() {
 
     // Client1 writes
     let entity1 = new_entity_id(250);
-    let resp1 = client1.handle_message(proto::ClientMessage {
+    let response1 = client1.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -376,11 +376,11 @@ fn test_filter_own_writes() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Client2 writes
     let entity2 = new_entity_id(251);
-    let resp2 = client2.handle_message(proto::ClientMessage {
+    let response2 = client2.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -397,7 +397,7 @@ fn test_filter_own_writes() {
             },
         )),
     });
-    assert!(is_ok(&resp2));
+    assert!(is_ok(&response2));
 
     // Collect all notifications from each receiver
     let mut notifs1: Vec<_> = Vec::new();

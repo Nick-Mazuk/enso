@@ -7,14 +7,14 @@ use crate::proto;
 fn test_empty_triples_request() {
     let mut client = TestClient::new();
 
-    let req = proto::ClientMessage {
+    let request = proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest { triples: vec![] },
         )),
     };
 
-    let resp = client.handle_message(req);
-    assert!(is_ok(&resp));
-    assert_eq!(resp.request_id, Some(1));
+    let response = client.handle_message(request);
+    assert!(is_ok(&response));
+    assert_eq!(response.request_id, Some(1));
 }

@@ -53,22 +53,22 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![
                 proto::QueryPatternVariable {
-                    label: Some("a".to_string()),
+                    label: Some("attribute".to_string()),
                 },
                 proto::QueryPatternVariable {
-                    label: Some("v".to_string()),
+                    label: Some("value".to_string()),
                 },
             ],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
-                        label: Some("a".to_string()),
+                        label: Some("attribute".to_string()),
                     },
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -100,22 +100,22 @@ fn run_sequence() -> Vec<proto::ServerResponse> {
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![
                 proto::QueryPatternVariable {
-                    label: Some("a".to_string()),
+                    label: Some("attribute".to_string()),
                 },
                 proto::QueryPatternVariable {
-                    label: Some("v".to_string()),
+                    label: Some("value".to_string()),
                 },
             ],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
                 attribute: Some(proto::query_pattern::Attribute::AttributeVariable(
                     proto::QueryPatternVariable {
-                        label: Some("a".to_string()),
+                        label: Some("attribute".to_string()),
                     },
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],

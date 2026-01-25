@@ -13,7 +13,7 @@ fn test_sequence_insert_query_update_query() {
     let attribute_id = new_attribute_id(50);
 
     // Step 1: Insert
-    let resp1 = client.handle_message(proto::ClientMessage {
+    let response1 = client.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -28,14 +28,14 @@ fn test_sequence_insert_query_update_query() {
             },
         )),
     });
-    assert!(is_ok(&resp1));
+    assert!(is_ok(&response1));
 
     // Step 2: Query (should see 1.0)
-    let resp2 = client.handle_message(proto::ClientMessage {
+    let response2 = client.handle_message(proto::ClientMessage {
         request_id: Some(2),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -44,7 +44,7 @@ fn test_sequence_insert_query_update_query() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -52,12 +52,12 @@ fn test_sequence_insert_query_update_query() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&resp2));
-    assert_eq!(resp2.rows.len(), 1);
-    assert_eq!(get_number_value(&resp2, 0), Some(1.0));
+    assert!(is_ok(&response2));
+    assert_eq!(response2.rows.len(), 1);
+    assert_eq!(get_number_value(&response2, 0), Some(1.0));
 
     // Step 3: Update
-    let resp3 = client.handle_message(proto::ClientMessage {
+    let response3 = client.handle_message(proto::ClientMessage {
         request_id: Some(3),
         payload: Some(proto::client_message::Payload::TripleUpdateRequest(
             proto::TripleUpdateRequest {
@@ -72,14 +72,14 @@ fn test_sequence_insert_query_update_query() {
             },
         )),
     });
-    assert!(is_ok(&resp3));
+    assert!(is_ok(&response3));
 
     // Step 4: Query (should see 2.0)
-    let resp4 = client.handle_message(proto::ClientMessage {
+    let response4 = client.handle_message(proto::ClientMessage {
         request_id: Some(4),
         payload: Some(proto::client_message::Payload::Query(proto::QueryRequest {
             find: vec![proto::QueryPatternVariable {
-                label: Some("v".to_string()),
+                label: Some("value".to_string()),
             }],
             r#where: vec![proto::QueryPattern {
                 entity: Some(proto::query_pattern::Entity::EntityId(entity_id.to_vec())),
@@ -88,7 +88,7 @@ fn test_sequence_insert_query_update_query() {
                 )),
                 value_group: Some(proto::query_pattern::ValueGroup::ValueVariable(
                     proto::QueryPatternVariable {
-                        label: Some("v".to_string()),
+                        label: Some("value".to_string()),
                     },
                 )),
             }],
@@ -96,7 +96,7 @@ fn test_sequence_insert_query_update_query() {
             where_not: vec![],
         })),
     });
-    assert!(is_ok(&resp4));
-    assert_eq!(resp4.rows.len(), 1);
-    assert_eq!(get_number_value(&resp4, 0), Some(2.0));
+    assert!(is_ok(&response4));
+    assert_eq!(response4.rows.len(), 1);
+    assert_eq!(get_number_value(&response4, 0), Some(2.0));
 }
