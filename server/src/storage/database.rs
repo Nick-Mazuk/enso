@@ -30,6 +30,7 @@ use std::path::Path;
 
 use tokio::sync::broadcast;
 
+use crate::storage::FilteredChangeReceiver;
 use crate::storage::checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
     maybe_checkpoint,
@@ -42,12 +43,9 @@ use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::time::SystemTimeSource;
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
-use crate::storage::{
-    ChangeNotification, ChangeRecord, ChangeType, ConnectionId, FilteredChangeReceiver,
-};
 use crate::types::{
-    AttributeId, EntityId, HlcTimestamp, PendingTriple, TripleError, TripleRecord, TripleValue,
-    TxnId,
+    AttributeId, ChangeNotification, ChangeRecord, ChangeType, ConnectionId, EntityId,
+    HlcTimestamp, PendingTriple, TripleError, TripleRecord, TripleValue, TxnId,
 };
 
 /// Trait for applying operations to secondary indexes (attribute and entity-attribute).

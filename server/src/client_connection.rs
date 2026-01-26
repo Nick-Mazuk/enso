@@ -6,14 +6,14 @@ use crate::{
     database_registry::{ApiKeyValidationError, DatabaseRegistry, validate_api_key},
     proto,
     query::{Query, QueryEngine},
-    storage::{ConnectionId, Database, DatabaseError, HlcClock, LogRecord, SystemTimeSource},
+    storage::{Database, DatabaseError, HlcClock, LogRecord, SystemTimeSource},
     subscription::{
         ClientSubscriptions, Subscription, convert_log_records_to_changes, create_error_response,
         create_failed_precondition_response, create_internal_error_response, create_ok_response,
         create_subscription_update,
     },
     types::{
-        HlcTimestamp, ProtoDeserializable, ProtoSerializable, TripleValue,
+        ConnectionId, HlcTimestamp, ProtoDeserializable, ProtoSerializable, TripleValue,
         client_message::{ClientMessage, ClientMessagePayload},
         triple_update_request::TripleUpdateRequest,
     },

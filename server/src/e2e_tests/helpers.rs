@@ -111,7 +111,7 @@ impl TestClient {
 
     /// Get the connection ID for this client.
     #[must_use]
-    pub fn connection_id(&self) -> crate::storage::ConnectionId {
+    pub fn connection_id(&self) -> crate::types::ConnectionId {
         self.client.connection_id()
     }
 }
@@ -161,7 +161,7 @@ impl SiblingClient {
 
     /// Get the connection ID for this client.
     #[must_use]
-    pub fn connection_id(&self) -> crate::storage::ConnectionId {
+    pub fn connection_id(&self) -> crate::types::ConnectionId {
         self.client.connection_id()
     }
 }

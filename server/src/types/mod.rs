@@ -7,6 +7,7 @@ pub mod triple_record;
 pub mod triple_update_request;
 pub mod triple_value;
 
+pub use change_record::{ChangeNotification, ChangeRecord, ChangeType, ConnectionId};
 pub use hlc::HlcTimestamp;
 pub use pending_triple::{PendingTriple, PendingTripleData};
 pub use triple_record::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};

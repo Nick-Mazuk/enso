@@ -49,8 +49,6 @@ pub mod time;
 mod transaction;
 pub mod wal;
 
-use crate::types::{AttributeId, EntityId, HlcTimestamp, TripleValue};
-
 pub use allocator::PageAllocator;
 pub use checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
@@ -68,53 +66,7 @@ pub use time::{SystemTimeSource, TimeSource};
 pub use transaction::{Transaction, TransactionError};
 pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};
 
-// =============================================================================
-// Change Notification Types
-// =============================================================================
-
-/// Type of change to a triple.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChangeType {
-    /// A new triple was created.
-    Insert,
-    /// An existing triple was modified with a newer HLC.
-    Update,
-    /// A triple was removed.
-    Delete,
-}
-
-/// A record of a single triple change.
-#[derive(Debug, Clone)]
-#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
-pub struct ChangeRecord {
-    /// The type of change.
-    pub change_type: ChangeType,
-    /// The entity ID of the affected triple.
-    pub entity_id: EntityId,
-    /// The attribute ID of the affected triple.
-    pub attribute_id: AttributeId,
-    /// The value of the triple. `None` for Delete operations.
-    pub value: Option<TripleValue>,
-    /// The HLC timestamp of the change.
-    pub hlc: HlcTimestamp,
-}
-
-/// Unique identifier for a client connection.
-pub type ConnectionId = u64;
-
-/// Notification of changes, broadcast to all subscribers.
-///
-/// This is sent via the broadcast channel when triples are modified.
-/// Subscribers receive this and can convert to protocol-specific formats.
-#[derive(Debug, Clone)]
-#[allow(clippy::disallowed_methods)] // Clone needed for broadcast channel
-pub struct ChangeNotification {
-    /// The connection that originated this change.
-    /// Subscribers can use this to filter out their own writes.
-    pub source_connection_id: ConnectionId,
-    /// The changes that occurred in this transaction.
-    pub changes: Vec<ChangeRecord>,
-}
+use crate::types::{ChangeNotification, ConnectionId};
 
 /// A filtered receiver for change notifications.
 ///
