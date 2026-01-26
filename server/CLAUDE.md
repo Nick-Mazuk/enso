@@ -9,6 +9,7 @@ Code style:
 - Always write an end-to-end test for new or modified API behavior
 - Do not ingore doc tests
 - Put all protobuf serialization / deserialization code in @server/src/types and use the `ProtoSerializable` and `ProtoDeserializable` traits
+- NEVER surpress a clippy finding that panics (e.g., never add `#[allow(clippy::expect_used)]`).
 
 Documentation:
 
