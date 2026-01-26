@@ -5,17 +5,15 @@ use std::sync::{Arc, RwLock};
 use crate::{
     database_registry::{ApiKeyValidationError, DatabaseRegistry, validate_api_key},
     proto,
-    query::{Query, QueryEngine, value_from_storage, value_to_storage},
-    storage::{
-        ConnectionId, Database, DatabaseError, HlcClock, HlcTimestamp, LogRecord, SystemTimeSource,
-    },
+    query::{Query, QueryEngine},
+    storage::{ConnectionId, Database, DatabaseError, HlcClock, LogRecord, SystemTimeSource},
     subscription::{
         ClientSubscriptions, Subscription, convert_log_records_to_changes, create_error_response,
         create_failed_precondition_response, create_internal_error_response, create_ok_response,
         create_subscription_update,
     },
     types::{
-        ProtoDeserializable, ProtoSerializable,
+        HlcTimestamp, ProtoDeserializable, ProtoSerializable, TripleValue,
         client_message::{ClientMessage, ClientMessagePayload},
         triple_update_request::TripleUpdateRequest,
     },
@@ -507,7 +505,8 @@ impl ClientConnection {
         // Insert or update triples where client HLC is newer
         for (triple, should_update, is_insert) in updates_to_apply {
             if should_update {
-                let value = value_to_storage(triple.value.clone_value());
+                // Triple now uses storage::TripleValue directly
+                let value = triple.value.clone_value();
                 if is_insert {
                     txn.insert_with_hlc(triple.entity_id, triple.attribute_id, value, triple.hlc);
                 } else {
@@ -536,23 +535,17 @@ impl ClientConnection {
 
         for (entity_id, attribute_id) in keys {
             if let Ok(Some(record)) = snapshot.get(&entity_id, &attribute_id) {
-                let types_value = value_from_storage(record.value);
+                // Convert storage::TripleValue directly to proto
+                let proto_value = match record.value {
+                    TripleValue::Null => None, // Proto doesn't have null
+                    TripleValue::String(s) => Some(proto::triple_value::Value::String(s)),
+                    TripleValue::Number(n) => Some(proto::triple_value::Value::Number(n)),
+                    TripleValue::Boolean(b) => Some(proto::triple_value::Value::Boolean(b)),
+                };
                 response_triples.push(proto::Triple {
                     entity_id: Some(entity_id.to_vec()),
                     attribute_id: Some(attribute_id.to_vec()),
-                    value: Some(proto::TripleValue {
-                        value: Some(match types_value {
-                            crate::types::triple::TripleValue::String(s) => {
-                                proto::triple_value::Value::String(s)
-                            }
-                            crate::types::triple::TripleValue::Number(n) => {
-                                proto::triple_value::Value::Number(n)
-                            }
-                            crate::types::triple::TripleValue::Boolean(b) => {
-                                proto::triple_value::Value::Boolean(b)
-                            }
-                        }),
-                    }),
+                    value: Some(proto::TripleValue { value: proto_value }),
                     hlc: Some(proto::HlcTimestamp {
                         physical_time_ms: record.created_hlc.physical_time,
                         logical_counter: record.created_hlc.logical_counter,
@@ -733,7 +726,7 @@ mod tests {
         assert!(record.is_some());
         assert_eq!(
             record.unwrap().value,
-            crate::storage::TripleValue::String("test_value".to_string())
+            crate::types::TripleValue::String("test_value".to_string())
         );
         txn.abort();
     }

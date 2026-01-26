@@ -17,7 +17,8 @@ use rand::{Rng, SeedableRng};
 
 use crate::storage::io::{Storage, StorageError};
 use crate::storage::wal::{LogRecord, LogRecordPayload, Lsn};
-use crate::storage::{HlcTimestamp, PAGE_SIZE, Page, PageId, Superblock};
+use crate::storage::{PAGE_SIZE, Page, PageId, Superblock};
+use crate::types::HlcTimestamp;
 
 /// Configuration for fault injection.
 #[derive(Debug, Clone)]

@@ -8,8 +8,9 @@ use std::path::Path;
 
 use crate::storage::io::{Storage, StorageError};
 use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
-use crate::storage::superblock::{HlcTimestamp, Superblock, SuperblockError};
+use crate::storage::superblock::{Superblock, SuperblockError};
 use crate::storage::wal::{self, LogRecord, LogRecordPayload, Lsn, Wal, WalError};
+use crate::types::HlcTimestamp;
 
 /// A database file handle with low-level page I/O operations.
 pub struct DatabaseFile {

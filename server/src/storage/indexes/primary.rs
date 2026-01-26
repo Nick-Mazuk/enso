@@ -6,7 +6,7 @@
 use crate::storage::btree::{BTree, BTreeError, make_key, split_key};
 use crate::storage::file::DatabaseFile;
 use crate::storage::page::PageId;
-use crate::storage::triple::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
+use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
 
 /// Primary index for triple storage.
 ///
@@ -323,8 +323,8 @@ impl From<TripleError> for PrimaryIndexError {
 mod tests {
     use super::*;
     use crate::storage::file::DatabaseFile;
-    use crate::storage::superblock::HlcTimestamp;
-    use crate::storage::triple::TripleValue;
+    use crate::types::HlcTimestamp;
+    use crate::types::TripleValue;
     use tempfile::tempdir;
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {

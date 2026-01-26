@@ -18,7 +18,7 @@
 //! // Begin a transaction
 //! let entity_id = [1u8; 16];
 //! let attr_id = [2u8; 16];
-//! let value = server::storage::TripleValue::String("hello".to_string());
+//! let value = server::types::TripleValue::String("hello".to_string());
 //!
 //! let mut txn = db.begin(0).unwrap(); // 0 = connection ID
 //! txn.insert(entity_id, attr_id, value); // Buffers the insert
@@ -40,14 +40,14 @@ use crate::storage::indexes::attribute::{AttributeIndex, AttributeIndexError};
 use crate::storage::indexes::entity_attribute::{EntityAttributeIndex, EntityAttributeIndexError};
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
-use crate::storage::superblock::HlcTimestamp;
 use crate::storage::time::SystemTimeSource;
-use crate::storage::triple::{
-    AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
-};
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
 use crate::storage::{
     ChangeNotification, ChangeRecord, ChangeType, ConnectionId, FilteredChangeReceiver,
+};
+use crate::types::{
+    AttributeId, EntityId, HlcTimestamp, PendingTriple, TripleError, TripleRecord, TripleValue,
+    TxnId,
 };
 
 /// Trait for applying operations to secondary indexes (attribute and entity-attribute).
@@ -129,24 +129,20 @@ impl SecondaryIndexOps for EntityAttributeIndex<'_> {
 /// don't change the entity-attribute mapping in secondary indexes.
 fn apply_ops_to_secondary_index<I: SecondaryIndexOps>(
     index: &mut I,
-    operations: &[BufferedOp],
+    operations: &[PendingTriple],
     txn_id: TxnId,
 ) -> Result<(), DatabaseError> {
     for op in operations {
         match op {
-            BufferedOp::Insert {
-                entity_id,
-                attribute_id,
-                ..
-            } => {
+            PendingTriple::Insert(record) => {
                 index
-                    .apply_insert(entity_id, attribute_id, txn_id)
+                    .apply_insert(&record.entity_id, &record.attribute_id, txn_id)
                     .map_err(Into::into)?;
             }
-            BufferedOp::Update { .. } => {
+            PendingTriple::Update(_) => {
                 // Updates don't change the entity-attribute mapping in secondary indexes
             }
-            BufferedOp::Delete {
+            PendingTriple::Delete {
                 entity_id,
                 attribute_id,
             } => {
@@ -645,31 +641,6 @@ impl Database {
     }
 }
 
-/// A buffered operation for WAL transaction.
-#[derive(Debug)]
-enum BufferedOp {
-    Insert {
-        entity_id: EntityId,
-        attribute_id: AttributeId,
-        value: TripleValue,
-        /// Optional client-provided HLC for conflict resolution.
-        /// If None, uses the transaction's HLC.
-        hlc: Option<HlcTimestamp>,
-    },
-    Update {
-        entity_id: EntityId,
-        attribute_id: AttributeId,
-        value: TripleValue,
-        /// Optional client-provided HLC for conflict resolution.
-        /// If None, uses the transaction's HLC.
-        hlc: Option<HlcTimestamp>,
-    },
-    Delete {
-        entity_id: EntityId,
-        attribute_id: AttributeId,
-    },
-}
-
 /// A WAL-backed transaction.
 ///
 /// Operations are buffered and written to WAL on commit, then applied to the index.
@@ -681,7 +652,7 @@ pub struct WalTransaction<'a> {
     txn_id: TxnId,
     hlc: HlcTimestamp,
     /// Buffered operations to be written on commit
-    operations: Vec<BufferedOp>,
+    operations: Vec<PendingTriple>,
     /// Whether this transaction has been finalized
     finalized: bool,
     /// Broadcast sender for change notifications.
@@ -816,12 +787,8 @@ impl<'a> WalTransaction<'a> {
     /// The operation is buffered until commit.
     /// Uses the transaction's HLC timestamp.
     pub fn insert(&mut self, entity_id: EntityId, attribute_id: AttributeId, value: TripleValue) {
-        self.operations.push(BufferedOp::Insert {
-            entity_id,
-            attribute_id,
-            value,
-            hlc: None,
-        });
+        let record = TripleRecord::new(entity_id, attribute_id, self.txn_id, self.hlc, value);
+        self.operations.push(PendingTriple::Insert(record));
     }
 
     /// Insert a triple with a client-provided HLC timestamp.
@@ -835,12 +802,8 @@ impl<'a> WalTransaction<'a> {
         value: TripleValue,
         hlc: HlcTimestamp,
     ) {
-        self.operations.push(BufferedOp::Insert {
-            entity_id,
-            attribute_id,
-            value,
-            hlc: Some(hlc),
-        });
+        let record = TripleRecord::new(entity_id, attribute_id, self.txn_id, hlc, value);
+        self.operations.push(PendingTriple::Insert(record));
     }
 
     /// Update a triple.
@@ -857,12 +820,8 @@ impl<'a> WalTransaction<'a> {
             return Err(DatabaseError::NotFound);
         }
 
-        self.operations.push(BufferedOp::Update {
-            entity_id,
-            attribute_id,
-            value,
-            hlc: None,
-        });
+        let record = TripleRecord::new(entity_id, attribute_id, self.txn_id, self.hlc, value);
+        self.operations.push(PendingTriple::Update(record));
         Ok(())
     }
 
@@ -880,12 +839,8 @@ impl<'a> WalTransaction<'a> {
         value: TripleValue,
         hlc: HlcTimestamp,
     ) {
-        self.operations.push(BufferedOp::Update {
-            entity_id,
-            attribute_id,
-            value,
-            hlc: Some(hlc),
-        });
+        let record = TripleRecord::new(entity_id, attribute_id, self.txn_id, hlc, value);
+        self.operations.push(PendingTriple::Update(record));
     }
 
     /// Delete a triple.
@@ -901,7 +856,7 @@ impl<'a> WalTransaction<'a> {
             return Err(DatabaseError::NotFound);
         }
 
-        self.operations.push(BufferedOp::Delete {
+        self.operations.push(PendingTriple::Delete {
             entity_id: *entity_id,
             attribute_id: *attribute_id,
         });
@@ -979,48 +934,20 @@ impl<'a> WalTransaction<'a> {
         // BEGIN
         wal.append(txn_id, hlc, LogRecordPayload::Begin)?;
 
-        // Write each operation
+        // Write each operation - TripleRecord already constructed
         for op in &self.operations {
             match op {
-                BufferedOp::Insert {
-                    entity_id,
-                    attribute_id,
-                    value,
-                    hlc: op_hlc,
-                } => {
-                    // Use per-op HLC if provided, otherwise use transaction HLC
-                    let record_hlc = op_hlc.unwrap_or(hlc);
-                    let record = TripleRecord::new(
-                        *entity_id,
-                        *attribute_id,
-                        txn_id,
-                        record_hlc,
-                        value.clone_value(),
-                    );
-                    let payload = LogRecordPayload::insert(&record);
+                PendingTriple::Insert(record) => {
+                    let payload = LogRecordPayload::insert(record);
                     total_bytes += payload.serialized_size() as u64;
-                    wal.append(txn_id, record_hlc, payload)?;
+                    wal.append(txn_id, record.created_hlc, payload)?;
                 }
-                BufferedOp::Update {
-                    entity_id,
-                    attribute_id,
-                    value,
-                    hlc: op_hlc,
-                } => {
-                    // Use per-op HLC if provided, otherwise use transaction HLC
-                    let record_hlc = op_hlc.unwrap_or(hlc);
-                    let record = TripleRecord::new(
-                        *entity_id,
-                        *attribute_id,
-                        txn_id,
-                        record_hlc,
-                        value.clone_value(),
-                    );
-                    let payload = LogRecordPayload::update(&record);
+                PendingTriple::Update(record) => {
+                    let payload = LogRecordPayload::update(record);
                     total_bytes += payload.serialized_size() as u64;
-                    wal.append(txn_id, record_hlc, payload)?;
+                    wal.append(txn_id, record.created_hlc, payload)?;
                 }
-                BufferedOp::Delete {
+                PendingTriple::Delete {
                     entity_id,
                     attribute_id,
                 } => {
@@ -1050,7 +977,7 @@ impl<'a> WalTransaction<'a> {
     }
 
     /// Apply buffered operations to all indexes.
-    fn apply_to_index(&mut self, txn_id: TxnId, hlc: HlcTimestamp) -> Result<(), DatabaseError> {
+    fn apply_to_index(&mut self, txn_id: TxnId, _hlc: HlcTimestamp) -> Result<(), DatabaseError> {
         // Apply to primary index
         let primary_root = {
             let root_page = self.file.superblock().primary_index_root;
@@ -1058,41 +985,10 @@ impl<'a> WalTransaction<'a> {
 
             for op in &self.operations {
                 match op {
-                    BufferedOp::Insert {
-                        entity_id,
-                        attribute_id,
-                        value,
-                        hlc: op_hlc,
-                    } => {
-                        // Use per-op HLC if provided, otherwise use transaction HLC
-                        let record_hlc = op_hlc.unwrap_or(hlc);
-                        let record = TripleRecord::new(
-                            *entity_id,
-                            *attribute_id,
-                            txn_id,
-                            record_hlc,
-                            value.clone_value(),
-                        );
-                        index.insert(&record)?;
+                    PendingTriple::Insert(record) | PendingTriple::Update(record) => {
+                        index.insert(record)?;
                     }
-                    BufferedOp::Update {
-                        entity_id,
-                        attribute_id,
-                        value,
-                        hlc: op_hlc,
-                    } => {
-                        // Use per-op HLC if provided, otherwise use transaction HLC
-                        let record_hlc = op_hlc.unwrap_or(hlc);
-                        let record = TripleRecord::new(
-                            *entity_id,
-                            *attribute_id,
-                            txn_id,
-                            record_hlc,
-                            value.clone_value(),
-                        );
-                        index.insert(&record)?;
-                    }
-                    BufferedOp::Delete {
+                    PendingTriple::Delete {
                         entity_id,
                         attribute_id,
                     } => {
@@ -1152,31 +1048,21 @@ impl<'a> WalTransaction<'a> {
             .operations
             .iter()
             .map(|op| match op {
-                BufferedOp::Insert {
-                    entity_id,
-                    attribute_id,
-                    value,
-                    hlc: op_hlc,
-                } => ChangeRecord {
+                PendingTriple::Insert(record) => ChangeRecord {
                     change_type: ChangeType::Insert,
-                    entity_id: *entity_id,
-                    attribute_id: *attribute_id,
-                    value: Some(value.clone_value()),
-                    hlc: op_hlc.unwrap_or(hlc),
+                    entity_id: record.entity_id,
+                    attribute_id: record.attribute_id,
+                    value: Some(record.value.clone_value()),
+                    hlc: record.created_hlc,
                 },
-                BufferedOp::Update {
-                    entity_id,
-                    attribute_id,
-                    value,
-                    hlc: op_hlc,
-                } => ChangeRecord {
+                PendingTriple::Update(record) => ChangeRecord {
                     change_type: ChangeType::Update,
-                    entity_id: *entity_id,
-                    attribute_id: *attribute_id,
-                    value: Some(value.clone_value()),
-                    hlc: op_hlc.unwrap_or(hlc),
+                    entity_id: record.entity_id,
+                    attribute_id: record.attribute_id,
+                    value: Some(record.value.clone_value()),
+                    hlc: record.created_hlc,
                 },
-                BufferedOp::Delete {
+                PendingTriple::Delete {
                     entity_id,
                     attribute_id,
                 } => ChangeRecord {
@@ -2198,7 +2084,7 @@ mod tests {
 
     #[test]
     fn test_is_gc_eligible() {
-        use crate::storage::superblock::HlcTimestamp;
+        use crate::types::HlcTimestamp;
 
         // Not deleted - not eligible
         let record = TripleRecord::new(

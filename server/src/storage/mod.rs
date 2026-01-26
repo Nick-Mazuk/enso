@@ -13,7 +13,8 @@
 //! # Usage
 //!
 //! ```no_run
-//! use server::storage::{DatabaseFile, Transaction, TripleValue};
+//! use server::storage::{DatabaseFile, Transaction};
+//! use server::types::TripleValue;
 //! use std::path::Path;
 //!
 //! // Create a new database
@@ -46,8 +47,9 @@ pub mod recovery;
 mod superblock;
 pub mod time;
 mod transaction;
-mod triple;
 pub mod wal;
+
+use crate::types::{AttributeId, EntityId, HlcTimestamp, TripleValue};
 
 pub use allocator::PageAllocator;
 pub use checkpoint::{
@@ -61,10 +63,9 @@ pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
 pub use io::{Storage, StorageError};
 pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
 pub use recovery::{RecoveryError, RecoveryResult, needs_recovery, recover};
-pub use superblock::{HlcTimestamp, Superblock, SuperblockError};
+pub use superblock::{Superblock, SuperblockError};
 pub use time::{SystemTimeSource, TimeSource};
 pub use transaction::{Transaction, TransactionError};
-pub use triple::{AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId};
 pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};
 
 // =============================================================================

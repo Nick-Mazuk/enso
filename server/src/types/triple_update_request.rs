@@ -1,11 +1,9 @@
-use crate::{
-    proto,
-    types::{ProtoDeserializable, triple::Triple},
-};
+use crate::proto;
+use crate::types::{PendingTripleData, ProtoDeserializable};
 
 #[derive(Debug)]
 pub struct TripleUpdateRequest {
-    pub triples: Vec<Triple>,
+    pub triples: Vec<PendingTripleData>,
 }
 
 impl ProtoDeserializable<proto::TripleUpdateRequest> for TripleUpdateRequest {
@@ -13,9 +11,8 @@ impl ProtoDeserializable<proto::TripleUpdateRequest> for TripleUpdateRequest {
         let mut triples = Vec::with_capacity(request.triples.len());
 
         for (index, triple) in request.triples.into_iter().enumerate() {
-            let result = Triple::from_proto(triple);
-            match result {
-                Ok(triple) => triples.push(triple),
+            match PendingTripleData::from_proto(triple) {
+                Ok(data) => triples.push(data),
                 Err(err) => return Err(format!("Failed to parse triple #{index}: {err}")),
             }
         }

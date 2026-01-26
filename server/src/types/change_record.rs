@@ -56,7 +56,8 @@ impl ProtoSerializable<proto::ChangeRecord> for &ChangeRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{HlcTimestamp, TripleValue};
+    use crate::types::HlcTimestamp;
+    use crate::types::TripleValue;
 
     #[test]
     fn test_change_type_to_proto_insert() {

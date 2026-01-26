@@ -14,8 +14,8 @@
 use std::collections::HashMap;
 
 use crate::proto;
-use crate::storage::{HlcTimestamp, LogRecord, LogRecordPayload, TripleRecord};
-use crate::types::ProtoSerializable;
+use crate::storage::{LogRecord, LogRecordPayload};
+use crate::types::{HlcTimestamp, ProtoSerializable, TripleRecord};
 
 /// Per-connection subscription tracking.
 ///

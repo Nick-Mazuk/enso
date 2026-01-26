@@ -8,7 +8,8 @@
 //! # Usage
 //!
 //! ```
-//! use server::storage::{HlcClock, SystemTimeSource, HlcTimestamp};
+//! use server::storage::{HlcClock, SystemTimeSource};
+//! use server::types::HlcTimestamp;
 //!
 //! // Create a clock for node 1 with system time
 //! let mut clock = HlcClock::new(1, SystemTimeSource);
@@ -31,8 +32,8 @@
 //! - Causally ordered: if A happens-before B, then ts(A) < ts(B)
 //! - Bounded drift from physical time (configurable)
 
-use crate::storage::superblock::HlcTimestamp;
 use crate::storage::time::TimeSource;
+use crate::types::HlcTimestamp;
 
 /// Maximum allowed drift between physical time and HLC physical component.
 /// If the clock drifts more than this, we'll wait or error.

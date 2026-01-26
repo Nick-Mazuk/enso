@@ -26,8 +26,8 @@ use std::collections::HashSet;
 
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::page::PageId;
-use crate::storage::superblock::HlcTimestamp;
 use crate::storage::wal::{LogRecordPayload, Lsn, WalError};
+use crate::types::HlcTimestamp;
 
 /// Default number of transactions between checkpoints.
 pub const DEFAULT_TXN_THRESHOLD: u64 = 1000;

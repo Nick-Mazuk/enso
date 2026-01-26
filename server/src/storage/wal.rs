@@ -34,8 +34,8 @@ use std::io::{Read, Seek, SeekFrom, Write};
 
 use crate::storage::file::FileError;
 use crate::storage::page::PAGE_SIZE;
-use crate::storage::superblock::HlcTimestamp;
-use crate::storage::triple::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
+use crate::types::HlcTimestamp;
+use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
 
 /// Default WAL capacity: 64MB
 pub const DEFAULT_WAL_CAPACITY: u64 = 64 * 1024 * 1024;
@@ -940,7 +940,7 @@ pub const fn pages_for_capacity(capacity: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::triple::TripleValue;
+    use crate::types::TripleValue;
     use std::io::Cursor;
 
     fn create_test_cursor(capacity: usize) -> Cursor<Vec<u8>> {

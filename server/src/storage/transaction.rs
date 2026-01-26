@@ -10,10 +10,8 @@ use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::indexes::primary::{
     EntityScanIterator, PrimaryIndex, PrimaryIndexCursor, PrimaryIndexError,
 };
-use crate::storage::superblock::HlcTimestamp;
-use crate::storage::triple::{
-    AttributeId, EntityId, TripleError, TripleRecord, TripleValue, TxnId,
-};
+use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
+use crate::types::{HlcTimestamp, TripleValue};
 
 /// A simple transaction for Phase 1.
 ///

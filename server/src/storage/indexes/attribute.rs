@@ -19,7 +19,7 @@
 use crate::storage::btree::{BTree, BTreeError, KEY_SIZE, Key};
 use crate::storage::file::DatabaseFile;
 use crate::storage::page::PageId;
-use crate::storage::triple::{AttributeId, EntityId, TxnId};
+use crate::types::{AttributeId, EntityId, TxnId};
 
 /// Marker value size: just the `created_txn` (8 bytes) and `deleted_txn` (8 bytes).
 const ENTRY_VALUE_SIZE: usize = 16;

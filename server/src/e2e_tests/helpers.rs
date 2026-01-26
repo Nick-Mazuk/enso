@@ -104,7 +104,7 @@ impl TestClient {
     /// This is used for subscription backfill.
     pub fn get_changes_since(
         &self,
-        hlc: crate::storage::HlcTimestamp,
+        hlc: crate::types::HlcTimestamp,
     ) -> Result<Vec<crate::storage::LogRecord>, crate::storage::DatabaseError> {
         self.client.get_changes_since(hlc)
     }

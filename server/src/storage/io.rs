@@ -19,8 +19,9 @@
 //! - Simulate partial writes and corruption
 
 use crate::storage::page::{Page, PageId};
-use crate::storage::superblock::{HlcTimestamp, Superblock};
+use crate::storage::superblock::Superblock;
 use crate::storage::wal::{LogRecord, LogRecordPayload, Lsn, WalError};
+use crate::types::HlcTimestamp;
 
 /// Errors that can occur during storage operations.
 #[derive(Debug)]

@@ -21,9 +21,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
-use crate::storage::superblock::HlcTimestamp;
-use crate::storage::triple::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
 use crate::storage::wal::{LogRecordPayload, Lsn, WalError};
+use crate::types::HlcTimestamp;
+use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
 
 /// Result of a recovery operation.
 #[derive(Debug)]
@@ -335,8 +335,8 @@ impl From<TripleError> for RecoveryError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::triple::TripleValue;
     use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload};
+    use crate::types::TripleValue;
     use tempfile::tempdir;
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {

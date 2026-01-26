@@ -9,7 +9,8 @@
 
 use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
-use crate::storage::{ChangeType, TripleValue};
+use crate::storage::ChangeType;
+use crate::types::TripleValue;
 
 /// Test that a subscriber on one connection receives updates from another connection.
 ///

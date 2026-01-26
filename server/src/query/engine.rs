@@ -16,7 +16,9 @@ use super::context::QueryContext;
 use super::types::{
     Datom, EntityId, FieldId, Pattern, PatternElement, Query, QueryResult, QueryRow, Triple, Value,
 };
-use crate::storage::{DatabaseError, Snapshot, TripleRecord, TripleValue as StorageValue};
+use crate::storage::{DatabaseError, Snapshot};
+use crate::types::TripleRecord;
+use crate::types::TripleValue as StorageValue;
 
 /// The query engine evaluates queries against a database snapshot.
 pub struct QueryEngine<'a, 'b> {
@@ -372,13 +374,13 @@ pub fn query_value_to_storage(value: &Value) -> StorageValue {
 
 /// Convert a query `EntityId` to a storage `EntityId`.
 #[must_use]
-pub const fn query_entity_to_storage(entity: &EntityId) -> crate::storage::EntityId {
+pub const fn query_entity_to_storage(entity: &EntityId) -> crate::types::EntityId {
     entity.0
 }
 
 /// Convert a query `FieldId` to a storage `AttributeId`.
 #[must_use]
-pub const fn query_field_to_storage(field: &FieldId) -> crate::storage::AttributeId {
+pub const fn query_field_to_storage(field: &FieldId) -> crate::types::AttributeId {
     field.0
 }
 
@@ -398,7 +400,8 @@ fn values_equal(a: &Value, b: &Value) -> bool {
 mod tests {
     use super::*;
     use crate::query::types::Variable;
-    use crate::storage::{Database, TripleValue as StorageTripleValue};
+    use crate::storage::Database;
+    use crate::types::TripleValue as StorageTripleValue;
     use tempfile::tempdir;
 
     fn create_test_db_with_data() -> (tempfile::TempDir, std::path::PathBuf) {
