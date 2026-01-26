@@ -4,7 +4,7 @@
 //! allowing the system to use real system time in production and simulated time
 //! in tests.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Abstraction over time operations.
 ///
@@ -26,10 +26,9 @@ impl TimeSource for SystemTimeSource {
     fn now_ms(&self) -> u64 {
         // SystemTime::now() can't fail on any supported platform.
         // duration_since(UNIX_EPOCH) only fails if system time is before 1970.
-        #[allow(clippy::expect_used)]
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("system time before Unix epoch");
+            .unwrap_or(Duration::ZERO);
         duration.as_millis() as u64
     }
 }

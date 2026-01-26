@@ -64,17 +64,10 @@ impl SimulatedTimeSource {
 
     /// Advance time by the given number of milliseconds.
     ///
-    /// # Panics
-    ///
-    /// Panics if the new time would overflow u64.
+    /// Time saturates at `u64::MAX` if overflow would occur.
     pub fn advance(&self, ms: u64) {
         let current = self.current_time_ms.get();
-        #[allow(clippy::expect_used)] // Overflow is a programming error in tests
-        self.current_time_ms.set(
-            current
-                .checked_add(ms)
-                .expect("time overflow in simulation"),
-        );
+        self.current_time_ms.set(current.saturating_add(ms));
     }
 
     /// Set the current time to a specific value.
