@@ -4,10 +4,8 @@
 
 use crate::{
     proto,
-    query::{
-        Datom, EntityId, FieldId, Pattern, PatternElement, Query, QueryResult, Value, Variable,
-    },
-    types::{ProtoDeserializable, ProtoSerializable},
+    query::{Datom, EntityId, Pattern, PatternElement, Query, QueryResult, Value, Variable},
+    types::{AttributeId, ProtoDeserializable, ProtoSerializable},
 };
 
 /// Query response containing columns and rows for proto serialization.
@@ -95,7 +93,7 @@ fn proto_pattern_to_query(pattern: &proto::QueryPattern) -> Result<Pattern, Stri
     // Convert attribute/field
     let field = match &pattern.attribute {
         Some(proto::query_pattern::Attribute::AttributeId(bytes)) => {
-            PatternElement::Field(FieldId(bytes_to_id(bytes)))
+            PatternElement::Field(AttributeId(bytes_to_id(bytes)))
         }
         Some(proto::query_pattern::Attribute::AttributeVariable(var)) => {
             PatternElement::Variable(proto_variable_to_query(var))

@@ -5,6 +5,7 @@
 
 use crate::constants::MAX_TRIPLE_STRING_VALUE_LENGTH;
 use crate::proto;
+use crate::types::ids::EntityId;
 use crate::types::{ProtoDeserializable, ProtoSerializable};
 
 /// Value type discriminants.
@@ -18,6 +19,7 @@ pub enum ValueType {
     StringOverflow = 0x05, // Not implemented in Phase 1
     Date = 0x06,           // Future
     Blob = 0x07,           // Future
+    Ref = 0x08,            // Reference to another entity
 }
 
 impl TryFrom<u8> for ValueType {
@@ -32,6 +34,7 @@ impl TryFrom<u8> for ValueType {
             0x05 => Ok(Self::StringOverflow),
             0x06 => Ok(Self::Date),
             0x07 => Ok(Self::Blob),
+            0x08 => Ok(Self::Ref),
             _ => Err(value),
         }
     }
@@ -45,6 +48,8 @@ pub enum TripleValue {
     Boolean(bool),
     Number(f64),
     String(String),
+    /// Reference to another entity.
+    Ref(EntityId),
 }
 
 /// Errors that can occur with triple value operations.
@@ -67,7 +72,43 @@ impl std::fmt::Display for TripleValueError {
 
 impl std::error::Error for TripleValueError {}
 
+impl std::fmt::Display for TripleValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "null"),
+            Self::Boolean(b) => write!(f, "{b}"),
+            Self::Number(n) => write!(f, "{n}"),
+            Self::String(s) => write!(f, "\"{s}\""),
+            Self::Ref(id) => write!(f, "#{id}"),
+        }
+    }
+}
+
 impl TripleValue {
+    /// Create a string value.
+    #[must_use]
+    pub fn string(s: impl Into<String>) -> Self {
+        Self::String(s.into())
+    }
+
+    /// Create a number value.
+    #[must_use]
+    pub fn number(n: impl Into<f64>) -> Self {
+        Self::Number(n.into())
+    }
+
+    /// Create a boolean value.
+    #[must_use]
+    pub const fn boolean(b: bool) -> Self {
+        Self::Boolean(b)
+    }
+
+    /// Create a reference value.
+    #[must_use]
+    pub const fn reference(id: EntityId) -> Self {
+        Self::Ref(id)
+    }
+
     /// Get the value type discriminant.
     #[must_use]
     pub const fn value_type(&self) -> ValueType {
@@ -76,6 +117,7 @@ impl TripleValue {
             Self::Boolean(_) => ValueType::Boolean,
             Self::Number(_) => ValueType::Number,
             Self::String(_) => ValueType::StringInline,
+            Self::Ref(_) => ValueType::Ref,
         }
     }
 
@@ -89,6 +131,7 @@ impl TripleValue {
             Self::Boolean(b) => Self::Boolean(*b),
             Self::Number(n) => Self::Number(*n),
             Self::String(s) => Self::String(s.as_str().to_owned()),
+            Self::Ref(id) => Self::Ref(*id),
         }
     }
 
@@ -101,6 +144,7 @@ impl TripleValue {
             Self::Boolean(_) => 1 + 1,          // type + 1 byte
             Self::Number(_) => 1 + 8,           // type + f64
             Self::String(s) => 1 + 2 + s.len(), // type + len (2 bytes) + data
+            Self::Ref(_) => 1 + 16,             // type + entity ID (16 bytes)
         }
     }
 
@@ -120,6 +164,7 @@ impl TripleValue {
                 bytes.extend_from_slice(&len.to_le_bytes());
                 bytes.extend_from_slice(s.as_bytes());
             }
+            Self::Ref(id) => bytes.extend_from_slice(&id.0),
         }
 
         bytes
@@ -164,6 +209,14 @@ impl TripleValue {
                 let s = String::from_utf8(bytes[3..3 + len].to_vec())
                     .map_err(|_| TripleValueError::InvalidValue)?;
                 Ok((Self::String(s), 3 + len))
+            }
+            ValueType::Ref => {
+                if bytes.len() < 17 {
+                    return Err(TripleValueError::InvalidValue);
+                }
+                let mut id_bytes = [0u8; 16];
+                id_bytes.copy_from_slice(&bytes[1..17]);
+                Ok((Self::Ref(EntityId(id_bytes)), 17))
             }
             ValueType::StringOverflow | ValueType::Date | ValueType::Blob => {
                 Err(TripleValueError::UnsupportedValueType(value_type))
@@ -214,6 +267,23 @@ impl ProtoSerializable<Option<proto::TripleValue>> for TripleValue {
             Self::String(s) => Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String(s)),
             }),
+            Self::Ref(id) => {
+                // Serialize Ref as a string representation of the entity ID.
+                // Try UTF-8 first, fall back to hex encoding.
+                let s = std::str::from_utf8(&id.0).map_or_else(
+                    |_| {
+                        use std::fmt::Write;
+                        id.0.iter().fold(String::with_capacity(32), |mut acc, b| {
+                            let _ = write!(acc, "{b:02x}");
+                            acc
+                        })
+                    },
+                    |s| s.trim_end_matches('\0').to_owned(),
+                );
+                Some(proto::TripleValue {
+                    value: Some(proto::triple_value::Value::String(s)),
+                })
+            }
         }
     }
 }
@@ -232,6 +302,22 @@ impl ProtoSerializable<Option<proto::TripleValue>> for &TripleValue {
             TripleValue::String(s) => Some(proto::TripleValue {
                 value: Some(proto::triple_value::Value::String(s.as_str().to_owned())),
             }),
+            TripleValue::Ref(id) => {
+                // Serialize Ref as a string representation of the entity ID.
+                let s = std::str::from_utf8(&id.0).map_or_else(
+                    |_| {
+                        use std::fmt::Write;
+                        id.0.iter().fold(String::with_capacity(32), |mut acc, b| {
+                            let _ = write!(acc, "{b:02x}");
+                            acc
+                        })
+                    },
+                    |s| s.trim_end_matches('\0').to_owned(),
+                );
+                Some(proto::TripleValue {
+                    value: Some(proto::triple_value::Value::String(s)),
+                })
+            }
         }
     }
 }
@@ -325,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ref_to_proto() {
+    fn test_string_ref_to_proto() {
         let value = TripleValue::String("world".to_string());
         let proto_value: Option<proto::TripleValue> = (&value).to_proto();
         assert!(proto_value.is_some());
@@ -335,5 +421,38 @@ mod tests {
         }
         // Original still accessible
         assert!(matches!(value, TripleValue::String(_)));
+    }
+
+    #[test]
+    fn test_value_ref_roundtrip() {
+        let id = EntityId::from_string("test_entity");
+        let value = TripleValue::Ref(id);
+        let bytes = value.to_bytes();
+        let (decoded, consumed) = TripleValue::from_bytes(&bytes).unwrap();
+        assert_eq!(consumed, bytes.len());
+        assert_eq!(consumed, 17); // 1 type byte + 16 entity ID bytes
+        match decoded {
+            TripleValue::Ref(decoded_id) => assert_eq!(decoded_id, id),
+            _ => panic!("expected Ref"),
+        }
+    }
+
+    #[test]
+    fn test_ref_to_proto() {
+        let id = EntityId::from_string("user123");
+        let value = TripleValue::Ref(id);
+        let proto_value: Option<proto::TripleValue> = value.to_proto();
+        assert!(proto_value.is_some());
+        match proto_value.expect("should be some").value {
+            Some(proto::triple_value::Value::String(s)) => assert_eq!(s, "user123"),
+            _ => panic!("expected String"),
+        }
+    }
+
+    #[test]
+    fn test_ref_serialized_size() {
+        let id = EntityId::from_string("test");
+        let value = TripleValue::Ref(id);
+        assert_eq!(value.serialized_size(), 17);
     }
 }

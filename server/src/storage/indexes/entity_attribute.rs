@@ -169,7 +169,7 @@ impl<'a> EntityAttributeIndex<'a> {
         entity_id: &EntityId,
     ) -> Result<EntityScanIterator<'_>, EntityAttributeIndexError> {
         // Start key: (entity_id, 0x00...)
-        let start_key = make_entity_attribute_key(entity_id, &[0u8; 16]);
+        let start_key = make_entity_attribute_key(entity_id, &AttributeId::default());
         let cursor = self.tree.iter_from(&start_key)?;
 
         Ok(EntityScanIterator {
@@ -186,7 +186,7 @@ impl<'a> EntityAttributeIndex<'a> {
         entity_id: &EntityId,
         snapshot_txn: TxnId,
     ) -> Result<EntityScanIterator<'_>, EntityAttributeIndexError> {
-        let start_key = make_entity_attribute_key(entity_id, &[0u8; 16]);
+        let start_key = make_entity_attribute_key(entity_id, &AttributeId::default());
         let cursor = self.tree.iter_from(&start_key)?;
 
         Ok(EntityScanIterator {
@@ -261,8 +261,8 @@ impl EntityScanIterator<'_> {
 /// Create a key for the entity-attribute index.
 fn make_entity_attribute_key(entity_id: &EntityId, attribute_id: &AttributeId) -> Key {
     let mut key = [0u8; KEY_SIZE];
-    key[..16].copy_from_slice(entity_id);
-    key[16..].copy_from_slice(attribute_id);
+    key[..16].copy_from_slice(&entity_id.0);
+    key[16..].copy_from_slice(&attribute_id.0);
     key
 }
 
@@ -272,7 +272,7 @@ fn split_entity_attribute_key(key: &Key) -> (EntityId, AttributeId) {
     let mut attribute_id = [0u8; 16];
     entity_id.copy_from_slice(&key[..16]);
     attribute_id.copy_from_slice(&key[16..]);
-    (entity_id, attribute_id)
+    (EntityId(entity_id), AttributeId(attribute_id))
 }
 
 /// Create the value for an entity-attribute index entry.
@@ -316,6 +316,7 @@ impl From<BTreeError> for EntityAttributeIndexError {
 mod tests {
     use super::*;
     use crate::storage::file::DatabaseFile;
+    use crate::types::{AttributeId, EntityId};
     use tempfile::tempdir;
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -331,9 +332,9 @@ mod tests {
 
         let mut index = EntityAttributeIndex::new(&mut file, 0).expect("create index");
 
-        let entity1 = [1u8; 16];
-        let attr1 = [10u8; 16];
-        let attr2 = [20u8; 16];
+        let entity1 = EntityId([1u8; 16]);
+        let attr1 = AttributeId([10u8; 16]);
+        let attr2 = AttributeId([20u8; 16]);
 
         // Insert
         index.insert(&entity1, &attr1, 1).expect("insert");
@@ -342,7 +343,11 @@ mod tests {
         // Check contains
         assert!(index.contains(&entity1, &attr1).expect("contains"));
         assert!(index.contains(&entity1, &attr2).expect("contains"));
-        assert!(!index.contains(&entity1, &[30u8; 16]).expect("contains"));
+        assert!(
+            !index
+                .contains(&entity1, &AttributeId([30u8; 16]))
+                .expect("contains")
+        );
 
         // Get
         let (created, deleted) = index.get(&entity1, &attr1).expect("get").expect("exists");
@@ -357,21 +362,25 @@ mod tests {
 
         let mut index = EntityAttributeIndex::new(&mut file, 0).expect("create index");
 
-        let entity1 = [1u8; 16];
-        let entity2 = [2u8; 16];
+        let entity1 = EntityId([1u8; 16]);
+        let entity2 = EntityId([2u8; 16]);
 
         // Insert attributes for entity1
         for i in 0..5u8 {
             let mut attr = [0u8; 16];
             attr[0] = i;
-            index.insert(&entity1, &attr, 1).expect("insert");
+            index
+                .insert(&entity1, &AttributeId(attr), 1)
+                .expect("insert");
         }
 
         // Insert attributes for entity2
         for i in 0..3u8 {
             let mut attr = [0u8; 16];
             attr[0] = i + 100;
-            index.insert(&entity2, &attr, 1).expect("insert");
+            index
+                .insert(&entity2, &AttributeId(attr), 1)
+                .expect("insert");
         }
 
         // Scan entity1
@@ -398,8 +407,8 @@ mod tests {
 
         let mut index = EntityAttributeIndex::new(&mut file, 0).expect("create index");
 
-        let entity = [1u8; 16];
-        let attr = [10u8; 16];
+        let entity = EntityId([1u8; 16]);
+        let attr = AttributeId([10u8; 16]);
 
         // Insert at txn 10
         index.insert(&entity, &attr, 10).expect("insert");
@@ -426,8 +435,8 @@ mod tests {
 
         let mut index = EntityAttributeIndex::new(&mut file, 0).expect("create index");
 
-        let entity = [1u8; 16];
-        let attr = [10u8; 16];
+        let entity = EntityId([1u8; 16]);
+        let attr = AttributeId([10u8; 16]);
 
         index.insert(&entity, &attr, 1).expect("insert");
         assert!(index.contains(&entity, &attr).expect("contains"));
@@ -443,12 +452,12 @@ mod tests {
 
         let mut index = EntityAttributeIndex::new(&mut file, 0).expect("create index");
 
-        let entity = [1u8; 16];
+        let entity = EntityId([1u8; 16]);
 
         // Insert attributes at different txns
-        let attr1 = [1u8; 16]; // created at 10
-        let attr2 = [2u8; 16]; // created at 20
-        let attr3 = [3u8; 16]; // created at 30
+        let attr1 = AttributeId([1u8; 16]); // created at 10
+        let attr2 = AttributeId([2u8; 16]); // created at 20
+        let attr3 = AttributeId([3u8; 16]); // created at 30
 
         index.insert(&entity, &attr1, 10).expect("insert");
         index.insert(&entity, &attr2, 20).expect("insert");

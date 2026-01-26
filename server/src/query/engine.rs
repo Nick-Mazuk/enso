@@ -17,8 +17,7 @@ use super::types::{
     Datom, EntityId, FieldId, Pattern, PatternElement, Query, QueryResult, QueryRow, Triple, Value,
 };
 use crate::storage::{DatabaseError, Snapshot};
-use crate::types::TripleRecord;
-use crate::types::TripleValue as StorageValue;
+use crate::types::{AttributeId, TripleRecord};
 
 /// The query engine evaluates queries against a database snapshot.
 pub struct QueryEngine<'a, 'b> {
@@ -132,23 +131,23 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
         if let Some(entity_id) = self.resolve_entity(&pattern.entity, ctx) {
             if let Some(field_id) = self.resolve_field(&pattern.field, ctx) {
                 // Most specific: entity + field lookup
-                if let Some(record) = self.snapshot.get(&entity_id.0, &field_id.0)? {
+                if let Some(record) = self.snapshot.get(&entity_id, &field_id)? {
                     return Ok(vec![record_to_triple(record)]);
                 }
                 return Ok(Vec::new());
             }
             // Entity-only scan
-            let records = self.snapshot.scan_entity(&entity_id.0)?;
+            let records = self.snapshot.scan_entity(&entity_id)?;
             return Ok(records.into_iter().map(record_to_triple).collect());
         }
 
         // Try attribute index if we have a concrete field but no entity
         if let Some(field_id) = self.resolve_field(&pattern.field, ctx) {
             // Use attribute index to get all entities with this attribute
-            let entity_ids = self.snapshot.get_entities_with_attribute(&field_id.0)?;
+            let entity_ids = self.snapshot.get_entities_with_attribute(&field_id)?;
             let mut triples = Vec::new();
-            for storage_entity_id in entity_ids {
-                if let Some(record) = self.snapshot.get(&storage_entity_id, &field_id.0)? {
+            for entity_id in entity_ids {
+                if let Some(record) = self.snapshot.get(&entity_id, &field_id)? {
                     triples.push(record_to_triple(record));
                 }
             }
@@ -337,51 +336,39 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 }
 
 /// Convert a storage `TripleRecord` to a query `Triple`.
+///
+/// Since query types are now unified with storage types, this is a simple
+/// field extraction.
 fn record_to_triple(record: TripleRecord) -> Triple {
     Triple {
-        entity: EntityId(record.entity_id),
-        field: FieldId(record.attribute_id),
-        value: storage_value_to_query_value(record.value),
-    }
-}
-
-/// Convert a storage `TripleValue` to a query `Value`.
-fn storage_value_to_query_value(value: StorageValue) -> Value {
-    match value {
-        StorageValue::Null => Value::Null,
-        StorageValue::Boolean(b) => Value::Boolean(b),
-        StorageValue::Number(n) => Value::Number(n),
-        StorageValue::String(s) => Value::String(s),
+        entity: record.entity_id,
+        field: record.attribute_id,
+        value: record.value,
     }
 }
 
 /// Convert a query `Value` to a storage `TripleValue`.
+///
+/// Since `Value` is now an alias for `TripleValue`, this creates a copy.
 #[must_use]
-pub fn query_value_to_storage(value: &Value) -> StorageValue {
-    match value {
-        Value::Null => StorageValue::Null,
-        Value::Boolean(b) => StorageValue::Boolean(*b),
-        Value::Number(n) => StorageValue::Number(*n),
-        Value::String(s) => StorageValue::String(s.as_str().to_owned()),
-        Value::Ref(id) => {
-            // Store reference as a string representation
-            // In a full implementation, this would be a proper reference type
-            let s = format!("ref:{id}");
-            StorageValue::String(s)
-        }
-    }
+pub fn query_value_to_storage(value: &Value) -> Value {
+    value.clone_value()
 }
 
 /// Convert a query `EntityId` to a storage `EntityId`.
+///
+/// Since these types are now unified, this is an identity function.
 #[must_use]
-pub const fn query_entity_to_storage(entity: &EntityId) -> crate::types::EntityId {
-    entity.0
+pub const fn query_entity_to_storage(entity: &EntityId) -> EntityId {
+    *entity
 }
 
 /// Convert a query `FieldId` to a storage `AttributeId`.
+///
+/// Since `FieldId` is now an alias for `AttributeId`, this is an identity function.
 #[must_use]
-pub const fn query_field_to_storage(field: &FieldId) -> crate::types::AttributeId {
-    field.0
+pub const fn query_field_to_storage(field: &FieldId) -> AttributeId {
+    *field
 }
 
 /// Check if two values are equal.
@@ -401,7 +388,7 @@ mod tests {
     use super::*;
     use crate::query::types::Variable;
     use crate::storage::Database;
-    use crate::types::TripleValue as StorageTripleValue;
+    use crate::types::{AttributeId, EntityId, TripleValue as StorageTripleValue};
     use tempfile::tempdir;
 
     fn create_test_db_with_data() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -415,16 +402,12 @@ mod tests {
             let mut txn = db.begin(0).expect("begin");
 
             // Create field IDs
-            let mut name_field = [0u8; 16];
-            name_field[..4].copy_from_slice(b"name");
-            let mut age_field = [0u8; 16];
-            age_field[..3].copy_from_slice(b"age");
-            let mut active_field = [0u8; 16];
-            active_field[..6].copy_from_slice(b"active");
+            let name_field = AttributeId::from_string("name");
+            let age_field = AttributeId::from_string("age");
+            let active_field = AttributeId::from_string("active");
 
             // User 1: Alice
-            let mut user1 = [0u8; 16];
-            user1[..5].copy_from_slice(b"user1");
+            let user1 = EntityId::from_string("user1");
             txn.insert(
                 user1,
                 name_field,
@@ -434,8 +417,7 @@ mod tests {
             txn.insert(user1, active_field, StorageTripleValue::Boolean(true));
 
             // User 2: Bob
-            let mut user2 = [0u8; 16];
-            user2[..5].copy_from_slice(b"user2");
+            let user2 = EntityId::from_string("user2");
             txn.insert(
                 user2,
                 name_field,
@@ -445,8 +427,7 @@ mod tests {
             txn.insert(user2, active_field, StorageTripleValue::Boolean(false));
 
             // User 3: Charlie (no age)
-            let mut user3 = [0u8; 16];
-            user3[..5].copy_from_slice(b"user3");
+            let user3 = EntityId::from_string("user3");
             txn.insert(
                 user3,
                 name_field,
@@ -737,14 +718,12 @@ mod tests {
         let mut db = Database::create(&path).expect("create db");
 
         // Create name field
-        let mut name_field = [0u8; 16];
-        name_field[..4].copy_from_slice(b"name");
+        let name_field = AttributeId::from_string("name");
 
         // Insert initial data
         {
             let mut txn = db.begin(0).expect("begin");
-            let mut user1 = [0u8; 16];
-            user1[..5].copy_from_slice(b"user1");
+            let user1 = EntityId::from_string("user1");
             txn.insert(
                 user1,
                 name_field,

@@ -1,6 +1,7 @@
 pub mod change_record;
 pub mod client_message;
 pub mod hlc;
+pub mod ids;
 pub mod pending_triple;
 pub mod query;
 pub mod triple_record;
@@ -9,8 +10,9 @@ pub mod triple_value;
 
 pub use change_record::{ChangeNotification, ChangeRecord, ChangeType, ConnectionId};
 pub use hlc::HlcTimestamp;
+pub use ids::{AttributeId, EntityId};
 pub use pending_triple::{PendingTriple, PendingTripleData};
-pub use triple_record::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
+pub use triple_record::{TripleError, TripleRecord, TxnId};
 pub use triple_value::{TripleValue, TripleValueError, ValueType};
 
 pub trait ProtoDeserializable<T> {

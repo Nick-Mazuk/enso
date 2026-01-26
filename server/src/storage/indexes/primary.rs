@@ -135,7 +135,7 @@ impl<'a> PrimaryIndex<'a> {
         entity_id: &EntityId,
     ) -> Result<EntityScanIterator<'_>, PrimaryIndexError> {
         // Create key with entity_id and zeroed attribute_id (start of range)
-        let start_key = make_key(entity_id, &[0u8; 16]);
+        let start_key = make_key(entity_id, &AttributeId::default());
         let cursor = self.tree.iter_from(&start_key)?;
 
         Ok(EntityScanIterator {
@@ -155,7 +155,7 @@ impl<'a> PrimaryIndex<'a> {
         entity_id: &EntityId,
         snapshot_txn: TxnId,
     ) -> Result<EntityScanIterator<'_>, PrimaryIndexError> {
-        let start_key = make_key(entity_id, &[0u8; 16]);
+        let start_key = make_key(entity_id, &AttributeId::default());
         let cursor = self.tree.iter_from(&start_key)?;
 
         Ok(EntityScanIterator {
@@ -340,8 +340,8 @@ mod tests {
 
         let mut index = PrimaryIndex::new(&mut file, 0).expect("create index");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         // Insert
         let record = TripleRecord::new(
@@ -393,8 +393,8 @@ mod tests {
 
         let mut index = PrimaryIndex::new(&mut file, 0).expect("create index");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         let record = TripleRecord::new(
             entity_id,
@@ -465,8 +465,8 @@ mod tests {
 
         let mut index = PrimaryIndex::new(&mut file, 0).expect("create index");
 
-        let entity1 = [1u8; 16];
-        let entity2 = [2u8; 16];
+        let entity1 = EntityId([1u8; 16]);
+        let entity2 = EntityId([2u8; 16]);
 
         // Insert attributes for entity1
         for i in 0..5u8 {
@@ -474,7 +474,7 @@ mod tests {
             attr[0] = i;
             let record = TripleRecord::new(
                 entity1,
-                attr,
+                AttributeId(attr),
                 1,
                 HlcTimestamp::new(1000, 0),
                 TripleValue::Number(f64::from(i)),
@@ -488,7 +488,7 @@ mod tests {
             attr[0] = i;
             let record = TripleRecord::new(
                 entity2,
-                attr,
+                AttributeId(attr),
                 1,
                 HlcTimestamp::new(1000, 0),
                 TripleValue::Number(f64::from(i + 100)),
@@ -522,8 +522,8 @@ mod tests {
 
         let mut index = PrimaryIndex::new(&mut file, 0).expect("create index");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         let record = TripleRecord::new(
             entity_id,
@@ -563,8 +563,8 @@ mod tests {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
                 let record = TripleRecord::new(
-                    entity,
-                    [0u8; 16],
+                    EntityId(entity),
+                    AttributeId([0u8; 16]),
                     1,
                     HlcTimestamp::new(1000, 0),
                     TripleValue::Number(f64::from(i)),
@@ -590,7 +590,9 @@ mod tests {
             for i in 0..50u8 {
                 let mut entity = [0u8; 16];
                 entity[0] = i;
-                let record = index.get(&entity, &[0u8; 16]).expect("get");
+                let record = index
+                    .get(&EntityId(entity), &AttributeId([0u8; 16]))
+                    .expect("get");
                 assert!(record.is_some());
                 assert_eq!(record.unwrap().value, TripleValue::Number(f64::from(i)));
             }

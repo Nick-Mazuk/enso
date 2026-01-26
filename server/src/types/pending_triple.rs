@@ -62,10 +62,12 @@ impl ProtoDeserializable<proto::Triple> for PendingTripleData {
     /// - `hlc` timestamp is missing
     fn from_proto(proto_triple: proto::Triple) -> Result<Self, String> {
         // Validate entity_id
-        let entity_id = validate_proto_id(proto_triple.entity_id, "Triple", "subject")?;
+        let entity_bytes = validate_proto_id(proto_triple.entity_id, "Triple", "subject")?;
+        let entity_id = EntityId(entity_bytes);
 
         // Validate attribute_id
-        let attribute_id = validate_proto_id(proto_triple.attribute_id, "Triple", "predicate")?;
+        let attribute_bytes = validate_proto_id(proto_triple.attribute_id, "Triple", "predicate")?;
+        let attribute_id = AttributeId(attribute_bytes);
 
         // Parse and validate value using storage::TripleValue's ProtoDeserializable
         let proto_value = proto_triple
@@ -162,8 +164,8 @@ mod tests {
         assert!(result.is_ok());
 
         let data = result.expect("should be ok");
-        assert_eq!(data.entity_id, [1u8; 16]);
-        assert_eq!(data.attribute_id, [2u8; 16]);
+        assert_eq!(data.entity_id, EntityId([1u8; 16]));
+        assert_eq!(data.attribute_id, AttributeId([2u8; 16]));
         assert_eq!(data.value, TripleValue::String("hello".to_string()));
         assert_eq!(data.hlc.physical_time, 1000);
     }

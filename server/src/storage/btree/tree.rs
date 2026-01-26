@@ -542,6 +542,7 @@ mod tests {
     use super::*;
     use crate::storage::btree::node::make_key;
     use crate::storage::file::DatabaseFile;
+    use crate::types::{AttributeId, EntityId};
     use tempfile::tempdir;
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -558,9 +559,9 @@ mod tests {
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
         // Insert some entries
-        let key1 = make_key(&[1u8; 16], &[1u8; 16]);
-        let key2 = make_key(&[2u8; 16], &[2u8; 16]);
-        let key3 = make_key(&[3u8; 16], &[3u8; 16]);
+        let key1 = make_key(&EntityId([1u8; 16]), &AttributeId([1u8; 16]));
+        let key2 = make_key(&EntityId([2u8; 16]), &AttributeId([2u8; 16]));
+        let key3 = make_key(&EntityId([3u8; 16]), &AttributeId([3u8; 16]));
 
         tree.insert(key1, b"value1".to_vec()).expect("insert 1");
         tree.insert(key2, b"value2".to_vec()).expect("insert 2");
@@ -572,7 +573,7 @@ mod tests {
         assert_eq!(tree.get(&key3).expect("get 3"), Some(b"value3".to_vec()));
 
         // Look up non-existent key
-        let key4 = make_key(&[4u8; 16], &[4u8; 16]);
+        let key4 = make_key(&EntityId([4u8; 16]), &AttributeId([4u8; 16]));
         assert_eq!(tree.get(&key4).expect("get 4"), None);
     }
 
@@ -583,7 +584,7 @@ mod tests {
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
-        let key = make_key(&[1u8; 16], &[1u8; 16]);
+        let key = make_key(&EntityId([1u8; 16]), &AttributeId([1u8; 16]));
 
         // Insert
         let old = tree.insert(key, b"original".to_vec()).expect("insert");
@@ -604,7 +605,7 @@ mod tests {
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
-        let key = make_key(&[1u8; 16], &[1u8; 16]);
+        let key = make_key(&EntityId([1u8; 16]), &AttributeId([1u8; 16]));
 
         tree.insert(key, b"value".to_vec()).expect("insert");
         assert!(tree.get(&key).expect("get").is_some());
@@ -624,7 +625,7 @@ mod tests {
 
         // Insert entries in non-sorted order
         for i in [5u8, 3, 7, 1, 9, 2, 8, 4, 6, 0] {
-            let key = make_key(&[i; 16], &[0u8; 16]);
+            let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
             tree.insert(key, vec![i]).expect("insert");
         }
 
@@ -654,9 +655,9 @@ mod tests {
         // Insert enough entries to cause splits
         let n = 500;
         for i in 0..n {
-            let mut entity_id = [0u8; 16];
-            entity_id[0..2].copy_from_slice(&(i as u16).to_be_bytes());
-            let key = make_key(&entity_id, &[0u8; 16]);
+            let mut entity_bytes = [0u8; 16];
+            entity_bytes[0..2].copy_from_slice(&(i as u16).to_be_bytes());
+            let key = make_key(&EntityId(entity_bytes), &AttributeId::default());
             let value = format!("value_{i}").into_bytes();
             tree.insert(key, value).expect("insert");
         }
@@ -667,9 +668,9 @@ mod tests {
 
         // Verify all entries can be retrieved
         for i in 0..n {
-            let mut entity_id = [0u8; 16];
-            entity_id[0..2].copy_from_slice(&(i as u16).to_be_bytes());
-            let key = make_key(&entity_id, &[0u8; 16]);
+            let mut entity_bytes = [0u8; 16];
+            entity_bytes[0..2].copy_from_slice(&(i as u16).to_be_bytes());
+            let key = make_key(&EntityId(entity_bytes), &AttributeId::default());
             let expected = format!("value_{i}").into_bytes();
             let actual = tree.get(&key).expect("get");
             assert_eq!(actual, Some(expected), "mismatch at {i}");
@@ -685,12 +686,12 @@ mod tests {
 
         // Insert 10 entries
         for i in 0..10u8 {
-            let key = make_key(&[i; 16], &[0u8; 16]);
+            let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
             tree.insert(key, vec![i]).expect("insert");
         }
 
         // Iterate from key 5
-        let start_key = make_key(&[5u8; 16], &[0u8; 16]);
+        let start_key = make_key(&EntityId([5u8; 16]), &AttributeId([0u8; 16]));
         let mut iter = tree.iter_from(&start_key).expect("iter_from");
 
         let mut values = Vec::new();
@@ -713,7 +714,7 @@ mod tests {
             let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
             for i in 0..100u8 {
-                let key = make_key(&[i; 16], &[0u8; 16]);
+                let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
                 tree.insert(key, vec![i]).expect("insert");
             }
 
@@ -735,7 +736,7 @@ mod tests {
 
             // Verify entries
             for i in 0..100u8 {
-                let key = make_key(&[i; 16], &[0u8; 16]);
+                let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
                 let value = tree.get(&key).expect("get");
                 assert_eq!(value, Some(vec![i]));
             }
@@ -749,7 +750,7 @@ mod tests {
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
-        let key = make_key(&[1u8; 16], &[1u8; 16]);
+        let key = make_key(&EntityId([1u8; 16]), &AttributeId([1u8; 16]));
 
         // Create a value larger than MAX_INLINE_VALUE_SIZE (1024 bytes)
         let large_value = vec![0xABu8; 2000];
@@ -788,7 +789,7 @@ mod tests {
 
         // Insert mix of small and large values
         for i in 0..10u8 {
-            let key = make_key(&[i; 16], &[0u8; 16]);
+            let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
             let value = if i % 2 == 0 {
                 vec![i; 100] // Small inline value
             } else {
@@ -802,7 +803,7 @@ mod tests {
 
         // Verify all values can be retrieved correctly
         for i in 0..10u8 {
-            let key = make_key(&[i; 16], &[0u8; 16]);
+            let key = make_key(&EntityId([i; 16]), &AttributeId([0u8; 16]));
             let expected = if i % 2 == 0 {
                 vec![i; 100]
             } else {
@@ -820,7 +821,7 @@ mod tests {
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
-        let key = make_key(&[1u8; 16], &[1u8; 16]);
+        let key = make_key(&EntityId([1u8; 16]), &AttributeId([1u8; 16]));
 
         // Create a value that spans multiple overflow pages (~20KB)
         let very_large_value: Vec<u8> = (0..20000u32).map(|i| (i % 256) as u8).collect();

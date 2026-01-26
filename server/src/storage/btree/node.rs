@@ -7,6 +7,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::storage::page::{PAGE_SIZE, Page, PageHeader, PageId, PageType};
+use crate::types::{AttributeId, EntityId};
 
 /// Size of a key in bytes (`entity_id` + `attribute_id` = 16 + 16).
 pub const KEY_SIZE: usize = 32;
@@ -531,21 +532,21 @@ pub fn compare_keys(a: &Key, b: &Key) -> std::cmp::Ordering {
 
 /// Create a key from `entity_id` and `attribute_id`.
 #[must_use]
-pub fn make_key(entity_id: &[u8; 16], attribute_id: &[u8; 16]) -> Key {
+pub fn make_key(entity_id: &EntityId, attribute_id: &AttributeId) -> Key {
     let mut key = [0u8; KEY_SIZE];
-    key[..16].copy_from_slice(entity_id);
-    key[16..].copy_from_slice(attribute_id);
+    key[..16].copy_from_slice(&entity_id.0);
+    key[16..].copy_from_slice(&attribute_id.0);
     key
 }
 
 /// Extract `entity_id` and `attribute_id` from a key.
 #[must_use]
-pub fn split_key(key: &Key) -> ([u8; 16], [u8; 16]) {
-    let mut entity_id = [0u8; 16];
-    let mut attribute_id = [0u8; 16];
-    entity_id.copy_from_slice(&key[..16]);
-    attribute_id.copy_from_slice(&key[16..]);
-    (entity_id, attribute_id)
+pub fn split_key(key: &Key) -> (EntityId, AttributeId) {
+    let mut entity_bytes = [0u8; 16];
+    let mut attribute_bytes = [0u8; 16];
+    entity_bytes.copy_from_slice(&key[..16]);
+    attribute_bytes.copy_from_slice(&key[16..]);
+    (EntityId(entity_bytes), AttributeId(attribute_bytes))
 }
 
 #[cfg(test)]
@@ -554,8 +555,8 @@ mod tests {
 
     #[test]
     fn test_key_operations() {
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         let key = make_key(&entity_id, &attribute_id);
         let (e, a) = split_key(&key);

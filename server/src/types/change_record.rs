@@ -72,8 +72,8 @@ impl ProtoSerializable<proto::ChangeRecord> for ChangeRecord {
         proto::ChangeRecord {
             change_type: self.change_type.to_proto(),
             triple: Some(proto::Triple {
-                entity_id: Some(self.entity_id.to_vec()),
-                attribute_id: Some(self.attribute_id.to_vec()),
+                entity_id: Some(self.entity_id.0.to_vec()),
+                attribute_id: Some(self.attribute_id.0.to_vec()),
                 value,
                 hlc: Some(self.hlc.to_proto()),
             }),
@@ -92,8 +92,8 @@ impl ProtoSerializable<proto::ChangeRecord> for &ChangeRecord {
         proto::ChangeRecord {
             change_type: self.change_type.to_proto(),
             triple: Some(proto::Triple {
-                entity_id: Some(self.entity_id.to_vec()),
-                attribute_id: Some(self.attribute_id.to_vec()),
+                entity_id: Some(self.entity_id.0.to_vec()),
+                attribute_id: Some(self.attribute_id.0.to_vec()),
                 value,
                 hlc: Some(self.hlc.to_proto()),
             }),
@@ -104,8 +104,7 @@ impl ProtoSerializable<proto::ChangeRecord> for &ChangeRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::HlcTimestamp;
-    use crate::types::TripleValue;
+    use crate::types::{AttributeId, EntityId, HlcTimestamp, TripleValue};
 
     #[test]
     fn test_change_type_to_proto_insert() {
@@ -129,8 +128,8 @@ mod tests {
     fn test_change_record_to_proto_insert() {
         let change = ChangeRecord {
             change_type: ChangeType::Insert,
-            entity_id: [1u8; 16],
-            attribute_id: [2u8; 16],
+            entity_id: EntityId([1u8; 16]),
+            attribute_id: AttributeId([2u8; 16]),
             value: Some(TripleValue::String("hello".to_string())),
             hlc: HlcTimestamp {
                 physical_time: 1000,
@@ -156,8 +155,8 @@ mod tests {
     fn test_change_record_to_proto_delete() {
         let change = ChangeRecord {
             change_type: ChangeType::Delete,
-            entity_id: [1u8; 16],
-            attribute_id: [2u8; 16],
+            entity_id: EntityId([1u8; 16]),
+            attribute_id: AttributeId([2u8; 16]),
             value: None,
             hlc: HlcTimestamp {
                 physical_time: 1000,
@@ -177,8 +176,8 @@ mod tests {
     fn test_change_record_ref_to_proto() {
         let change = ChangeRecord {
             change_type: ChangeType::Update,
-            entity_id: [3u8; 16],
-            attribute_id: [4u8; 16],
+            entity_id: EntityId([3u8; 16]),
+            attribute_id: AttributeId([4u8; 16]),
             value: Some(TripleValue::Boolean(true)),
             hlc: HlcTimestamp {
                 physical_time: 2000,

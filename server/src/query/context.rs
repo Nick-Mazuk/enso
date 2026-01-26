@@ -227,7 +227,7 @@ mod tests {
         let mut ctx = QueryContext::new();
         let var_e = Variable::new("e");
 
-        ctx.set(&var_e, Datom::Entity(EntityId::from_str("user1")));
+        ctx.set(&var_e, Datom::Entity(EntityId::from_string("user1")));
 
         let value = ctx.get(&var_e).expect("should have value");
         assert!(matches!(value, Datom::Entity(_)));

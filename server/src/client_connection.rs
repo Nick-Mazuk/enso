@@ -13,7 +13,8 @@ use crate::{
         create_subscription_update,
     },
     types::{
-        ConnectionId, HlcTimestamp, ProtoDeserializable, ProtoSerializable, TripleValue,
+        AttributeId, ConnectionId, EntityId, HlcTimestamp, ProtoDeserializable, ProtoSerializable,
+        TripleValue,
         client_message::{ClientMessage, ClientMessagePayload},
         triple_update_request::TripleUpdateRequest,
     },
@@ -497,7 +498,7 @@ impl ClientConnection {
         };
 
         // Track the keys for reading back current values
-        let keys: Vec<([u8; 16], [u8; 16])> = triples
+        let keys: Vec<(EntityId, AttributeId)> = triples
             .iter()
             .map(|t| (t.entity_id, t.attribute_id))
             .collect();
@@ -541,10 +542,24 @@ impl ClientConnection {
                     TripleValue::String(s) => Some(proto::triple_value::Value::String(s)),
                     TripleValue::Number(n) => Some(proto::triple_value::Value::Number(n)),
                     TripleValue::Boolean(b) => Some(proto::triple_value::Value::Boolean(b)),
+                    TripleValue::Ref(id) => {
+                        // Serialize Ref as string (matching to_proto impl)
+                        let s = std::str::from_utf8(&id.0).map_or_else(
+                            |_| {
+                                use std::fmt::Write;
+                                id.0.iter().fold(String::with_capacity(32), |mut acc, b| {
+                                    let _ = write!(acc, "{b:02x}");
+                                    acc
+                                })
+                            },
+                            |s| s.trim_end_matches('\0').to_owned(),
+                        );
+                        Some(proto::triple_value::Value::String(s))
+                    }
                 };
                 response_triples.push(proto::Triple {
-                    entity_id: Some(entity_id.to_vec()),
-                    attribute_id: Some(attribute_id.to_vec()),
+                    entity_id: Some(entity_id.0.to_vec()),
+                    attribute_id: Some(attribute_id.0.to_vec()),
                     value: Some(proto::TripleValue { value: proto_value }),
                     hlc: Some(proto::HlcTimestamp {
                         physical_time_ms: record.created_hlc.physical_time,
@@ -722,7 +737,9 @@ mod tests {
         let mut txn = db.begin(0).expect("begin txn"); // 0 = test connection ID
         let entity_arr: [u8; 16] = entity_id.try_into().unwrap();
         let attr_arr: [u8; 16] = attribute_id.try_into().unwrap();
-        let record = txn.get(&entity_arr, &attr_arr).expect("get");
+        let record = txn
+            .get(&EntityId(entity_arr), &AttributeId(attr_arr))
+            .expect("get");
         assert!(record.is_some());
         assert_eq!(
             record.unwrap().value,

@@ -1,15 +1,10 @@
 //! Triple record types and serialization.
 //!
-//! Provides `TripleRecord` struct with MVCC metadata, ID type aliases,
-//! and `TripleError` for record-level errors.
+//! Provides `TripleRecord` struct with MVCC metadata and `TripleError`
+//! for record-level errors.
 
+use crate::types::ids::{AttributeId, EntityId};
 use crate::types::{HlcTimestamp, TripleValue, TripleValueError, ValueType};
-
-/// Entity ID (16 bytes).
-pub type EntityId = [u8; 16];
-
-/// Attribute ID (16 bytes).
-pub type AttributeId = [u8; 16];
 
 /// Transaction ID.
 pub type TxnId = u64;
@@ -110,8 +105,8 @@ impl TripleRecord {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.serialized_size());
 
-        bytes.extend_from_slice(&self.entity_id);
-        bytes.extend_from_slice(&self.attribute_id);
+        bytes.extend_from_slice(&self.entity_id.0);
+        bytes.extend_from_slice(&self.attribute_id.0);
         bytes.extend_from_slice(&self.created_txn.to_le_bytes());
         bytes.extend_from_slice(&self.deleted_txn.to_le_bytes());
         bytes.extend_from_slice(&self.created_hlc.to_bytes());
@@ -126,11 +121,13 @@ impl TripleRecord {
             return Err(TripleError::InvalidRecord);
         }
 
-        let mut entity_id = [0u8; 16];
-        entity_id.copy_from_slice(&bytes[0..16]);
+        let mut entity_bytes = [0u8; 16];
+        entity_bytes.copy_from_slice(&bytes[0..16]);
+        let entity_id = EntityId(entity_bytes);
 
-        let mut attribute_id = [0u8; 16];
-        attribute_id.copy_from_slice(&bytes[16..32]);
+        let mut attribute_bytes = [0u8; 16];
+        attribute_bytes.copy_from_slice(&bytes[16..32]);
+        let attribute_id = AttributeId(attribute_bytes);
 
         let created_txn = u64::from_le_bytes([
             bytes[32], bytes[33], bytes[34], bytes[35], bytes[36], bytes[37], bytes[38], bytes[39],
@@ -201,8 +198,8 @@ mod tests {
     #[test]
     fn test_triple_record_roundtrip() {
         let record = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             100,
             HlcTimestamp::new(1000, 1),
             TripleValue::String("test value".to_string()),
@@ -229,8 +226,8 @@ mod tests {
     #[test]
     fn test_triple_visibility() {
         let mut record = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             10,
             HlcTimestamp::new(1000, 0),
             TripleValue::Null,
@@ -255,8 +252,8 @@ mod tests {
     #[test]
     fn test_triple_serialized_size() {
         let record = TripleRecord::new(
-            [0u8; 16],
-            [0u8; 16],
+            EntityId([0u8; 16]),
+            AttributeId([0u8; 16]),
             0,
             HlcTimestamp::new(0, 0),
             TripleValue::Null,
@@ -265,8 +262,8 @@ mod tests {
         assert_eq!(record.serialized_size(), 65);
 
         let record = TripleRecord::new(
-            [0u8; 16],
-            [0u8; 16],
+            EntityId([0u8; 16]),
+            AttributeId([0u8; 16]),
             0,
             HlcTimestamp::new(0, 0),
             TripleValue::String("hello".to_string()),
@@ -278,8 +275,8 @@ mod tests {
     #[test]
     fn test_gc_eligibility() {
         let mut record = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             10,
             HlcTimestamp::new(1000, 0),
             TripleValue::Null,

@@ -137,10 +137,12 @@ pub fn recover(file: &mut DatabaseFile) -> Result<RecoveryResult, RecoveryError>
                 if let Some(txn) = pending_txns.get_mut(&record.txn_id) {
                     // Extract entity_id and attribute_id from serialized record
                     if bytes.len() >= 32 {
-                        let mut entity_id = [0u8; 16];
-                        let mut attribute_id = [0u8; 16];
-                        entity_id.copy_from_slice(&bytes[0..16]);
-                        attribute_id.copy_from_slice(&bytes[16..32]);
+                        let mut entity_bytes = [0u8; 16];
+                        let mut attribute_bytes = [0u8; 16];
+                        entity_bytes.copy_from_slice(&bytes[0..16]);
+                        attribute_bytes.copy_from_slice(&bytes[16..32]);
+                        let entity_id = EntityId(entity_bytes);
+                        let attribute_id = AttributeId(attribute_bytes);
                         txn.inserts.insert((entity_id, attribute_id), bytes);
                         // Remove from deletes if present (insert after delete)
                         txn.deletes.remove(&(entity_id, attribute_id));
@@ -151,10 +153,12 @@ pub fn recover(file: &mut DatabaseFile) -> Result<RecoveryResult, RecoveryError>
                 // Updates are treated the same as inserts for replay
                 if let Some(txn) = pending_txns.get_mut(&record.txn_id) {
                     if bytes.len() >= 32 {
-                        let mut entity_id = [0u8; 16];
-                        let mut attribute_id = [0u8; 16];
-                        entity_id.copy_from_slice(&bytes[0..16]);
-                        attribute_id.copy_from_slice(&bytes[16..32]);
+                        let mut entity_bytes = [0u8; 16];
+                        let mut attribute_bytes = [0u8; 16];
+                        entity_bytes.copy_from_slice(&bytes[0..16]);
+                        attribute_bytes.copy_from_slice(&bytes[16..32]);
+                        let entity_id = EntityId(entity_bytes);
+                        let attribute_id = AttributeId(attribute_bytes);
                         txn.inserts.insert((entity_id, attribute_id), bytes);
                         txn.deletes.remove(&(entity_id, attribute_id));
                     }
@@ -389,8 +393,8 @@ mod tests {
 
             // INSERT
             let triple = TripleRecord::new(
-                [1u8; 16],
-                [2u8; 16],
+                EntityId([1u8; 16]),
+                AttributeId([2u8; 16]),
                 txn_id,
                 hlc,
                 TripleValue::String("test".to_string()),
@@ -422,7 +426,9 @@ mod tests {
         // Verify the data was applied
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
-        let record = index.get(&[1u8; 16], &[2u8; 16]).expect("get");
+        let record = index
+            .get(&EntityId([1u8; 16]), &AttributeId([2u8; 16]))
+            .expect("get");
         assert!(record.is_some());
         assert_eq!(
             record.unwrap().value,
@@ -447,8 +453,8 @@ mod tests {
                 .expect("append begin");
 
             let triple = TripleRecord::new(
-                [1u8; 16],
-                [2u8; 16],
+                EntityId([1u8; 16]),
+                AttributeId([2u8; 16]),
                 txn_id,
                 hlc,
                 TripleValue::String("uncommitted".to_string()),
@@ -477,7 +483,9 @@ mod tests {
         // Verify the data was NOT applied
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
-        let record = index.get(&[1u8; 16], &[2u8; 16]).expect("get");
+        let record = index
+            .get(&EntityId([1u8; 16]), &AttributeId([2u8; 16]))
+            .expect("get");
         assert!(record.is_none());
     }
 
@@ -496,7 +504,13 @@ mod tests {
             // Transaction 1 - committed
             wal.append(1, hlc, LogRecordPayload::Begin)
                 .expect("begin 1");
-            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
+            let triple1 = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(1.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple1))
                 .expect("insert 1");
             wal.append(1, hlc, LogRecordPayload::Commit)
@@ -505,7 +519,13 @@ mod tests {
             // Transaction 2 - uncommitted
             wal.append(2, hlc, LogRecordPayload::Begin)
                 .expect("begin 2");
-            let triple2 = TripleRecord::new([2u8; 16], [2u8; 16], 2, hlc, TripleValue::Number(2.0));
+            let triple2 = TripleRecord::new(
+                EntityId([2u8; 16]),
+                AttributeId([2u8; 16]),
+                2,
+                hlc,
+                TripleValue::Number(2.0),
+            );
             wal.append(2, hlc, LogRecordPayload::insert(&triple2))
                 .expect("insert 2");
             // NO COMMIT for txn 2
@@ -513,7 +533,13 @@ mod tests {
             // Transaction 3 - committed
             wal.append(3, hlc, LogRecordPayload::Begin)
                 .expect("begin 3");
-            let triple3 = TripleRecord::new([3u8; 16], [3u8; 16], 3, hlc, TripleValue::Number(3.0));
+            let triple3 = TripleRecord::new(
+                EntityId([3u8; 16]),
+                AttributeId([3u8; 16]),
+                3,
+                hlc,
+                TripleValue::Number(3.0),
+            );
             wal.append(3, hlc, LogRecordPayload::insert(&triple3))
                 .expect("insert 3");
             wal.append(3, hlc, LogRecordPayload::Commit)
@@ -539,9 +565,24 @@ mod tests {
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
 
-        assert!(index.get(&[1u8; 16], &[1u8; 16]).expect("get 1").is_some());
-        assert!(index.get(&[2u8; 16], &[2u8; 16]).expect("get 2").is_none());
-        assert!(index.get(&[3u8; 16], &[3u8; 16]).expect("get 3").is_some());
+        assert!(
+            index
+                .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+                .expect("get 1")
+                .is_some()
+        );
+        assert!(
+            index
+                .get(&EntityId([2u8; 16]), &AttributeId([2u8; 16]))
+                .expect("get 2")
+                .is_none()
+        );
+        assert!(
+            index
+                .get(&EntityId([3u8; 16]), &AttributeId([3u8; 16]))
+                .expect("get 3")
+                .is_some()
+        );
     }
 
     #[test]
@@ -557,8 +598,8 @@ mod tests {
             let root_page = file.superblock().primary_index_root;
             let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
             let triple = TripleRecord::new(
-                [1u8; 16],
-                [1u8; 16],
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
                 0,
                 hlc,
                 TripleValue::String("to delete".to_string()),
@@ -576,8 +617,12 @@ mod tests {
             let mut wal = file.wal().expect("get wal");
 
             wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
-            wal.append(1, hlc, LogRecordPayload::delete([1u8; 16], [1u8; 16]))
-                .expect("delete");
+            wal.append(
+                1,
+                hlc,
+                LogRecordPayload::delete(EntityId([1u8; 16]), AttributeId([1u8; 16])),
+            )
+            .expect("delete");
             wal.append(1, hlc, LogRecordPayload::Commit)
                 .expect("commit");
 
@@ -599,7 +644,9 @@ mod tests {
         // Verify the record was marked as deleted
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
-        let record = index.get(&[1u8; 16], &[1u8; 16]).expect("get");
+        let record = index
+            .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+            .expect("get");
 
         // Record exists but is deleted
         assert!(record.is_some());
@@ -651,7 +698,13 @@ mod tests {
             let mut wal = file.wal().expect("get wal");
             wal.append(100, hlc, LogRecordPayload::Begin)
                 .expect("begin");
-            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 100, hlc, TripleValue::Null);
+            let triple = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                100,
+                hlc,
+                TripleValue::Null,
+            );
             wal.append(100, hlc, LogRecordPayload::insert(&triple))
                 .expect("insert");
             wal.append(100, hlc, LogRecordPayload::Commit)
@@ -698,12 +751,24 @@ mod tests {
                 .expect("begin 2");
 
             // Transaction 1 inserts
-            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
+            let triple1 = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(1.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple1))
                 .expect("insert 1");
 
             // Transaction 2 inserts (uncommitted)
-            let triple2 = TripleRecord::new([2u8; 16], [2u8; 16], 2, hlc, TripleValue::Number(2.0));
+            let triple2 = TripleRecord::new(
+                EntityId([2u8; 16]),
+                AttributeId([2u8; 16]),
+                2,
+                hlc,
+                TripleValue::Number(2.0),
+            );
             wal.append(2, hlc, LogRecordPayload::insert(&triple2))
                 .expect("insert 2");
 
@@ -733,8 +798,18 @@ mod tests {
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
 
-        assert!(index.get(&[1u8; 16], &[1u8; 16]).expect("get 1").is_some());
-        assert!(index.get(&[2u8; 16], &[2u8; 16]).expect("get 2").is_none());
+        assert!(
+            index
+                .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+                .expect("get 1")
+                .is_some()
+        );
+        assert!(
+            index
+                .get(&EntityId([2u8; 16]), &AttributeId([2u8; 16]))
+                .expect("get 2")
+                .is_none()
+        );
     }
 
     #[test]
@@ -753,13 +828,23 @@ mod tests {
             wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
 
             // Insert a triple
-            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(42.0));
+            let triple = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(42.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple))
                 .expect("insert");
 
             // Delete the same triple in the same transaction
-            wal.append(1, hlc, LogRecordPayload::delete([1u8; 16], [1u8; 16]))
-                .expect("delete");
+            wal.append(
+                1,
+                hlc,
+                LogRecordPayload::delete(EntityId([1u8; 16]), AttributeId([1u8; 16])),
+            )
+            .expect("delete");
 
             wal.append(1, hlc, LogRecordPayload::Commit)
                 .expect("commit");
@@ -785,7 +870,9 @@ mod tests {
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
 
         // The record should not exist because it was deleted after insert
-        let record = index.get(&[1u8; 16], &[1u8; 16]).expect("get");
+        let record = index
+            .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+            .expect("get");
         assert!(record.is_none() || record.unwrap().is_deleted());
     }
 
@@ -806,12 +893,24 @@ mod tests {
             wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
 
             // First insert
-            let triple1 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(1.0));
+            let triple1 = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(1.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple1))
                 .expect("insert 1");
 
             // Second insert (same key, different value)
-            let triple2 = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(2.0));
+            let triple2 = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(2.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple2))
                 .expect("insert 2");
 
@@ -838,7 +937,10 @@ mod tests {
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
 
-        let record = index.get(&[1u8; 16], &[1u8; 16]).expect("get").unwrap();
+        let record = index
+            .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+            .expect("get")
+            .unwrap();
         assert_eq!(record.value, TripleValue::Number(2.0));
     }
 
@@ -857,7 +959,13 @@ mod tests {
 
             wal.append(1, hlc, LogRecordPayload::Begin).expect("begin");
 
-            let triple = TripleRecord::new([1u8; 16], [1u8; 16], 1, hlc, TripleValue::Number(42.0));
+            let triple = TripleRecord::new(
+                EntityId([1u8; 16]),
+                AttributeId([1u8; 16]),
+                1,
+                hlc,
+                TripleValue::Number(42.0),
+            );
             wal.append(1, hlc, LogRecordPayload::insert(&triple))
                 .expect("insert");
 
@@ -887,7 +995,12 @@ mod tests {
         // Verify the data was applied
         let root_page = file.superblock().primary_index_root;
         let mut index = PrimaryIndex::new(&mut file, root_page).expect("open index");
-        assert!(index.get(&[1u8; 16], &[1u8; 16]).expect("get").is_some());
+        assert!(
+            index
+                .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
+                .expect("get")
+                .is_some()
+        );
     }
 
     #[test]

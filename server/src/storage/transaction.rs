@@ -253,8 +253,8 @@ mod tests {
         {
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-            let entity_id = [1u8; 16];
-            let attribute_id = [2u8; 16];
+            let entity_id = EntityId([1u8; 16]);
+            let attribute_id = AttributeId([2u8; 16]);
 
             txn.insert(
                 entity_id,
@@ -278,8 +278,8 @@ mod tests {
             let mut file = DatabaseFile::open(&path).expect("open db");
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-            let entity_id = [1u8; 16];
-            let attribute_id = [2u8; 16];
+            let entity_id = EntityId([1u8; 16]);
+            let attribute_id = AttributeId([2u8; 16]);
 
             let record = txn
                 .get(&entity_id, &attribute_id)
@@ -301,8 +301,8 @@ mod tests {
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         // Insert
         txn.insert(entity_id, attribute_id, TripleValue::Number(1.0))
@@ -327,8 +327,8 @@ mod tests {
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         // Insert
         txn.insert(entity_id, attribute_id, TripleValue::Boolean(true))
@@ -353,8 +353,8 @@ mod tests {
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         // Try to update non-existent triple
         let result = txn.update(entity_id, attribute_id, TripleValue::Null);
@@ -370,8 +370,8 @@ mod tests {
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-        let entity_id = [1u8; 16];
-        let attribute_id = [2u8; 16];
+        let entity_id = EntityId([1u8; 16]);
+        let attribute_id = AttributeId([2u8; 16]);
 
         // Try to delete non-existent triple
         let result = txn.delete(&entity_id, &attribute_id);
@@ -390,14 +390,18 @@ mod tests {
 
             // Insert triples for multiple entities
             for i in 0..10u8 {
-                let mut entity = [0u8; 16];
-                entity[0] = i;
+                let mut entity_bytes = [0u8; 16];
+                entity_bytes[0] = i;
 
                 for j in 0..5u8 {
-                    let mut attr = [0u8; 16];
-                    attr[0] = j;
-                    txn.insert(entity, attr, TripleValue::Number(f64::from(i * 10 + j)))
-                        .expect("insert");
+                    let mut attr_bytes = [0u8; 16];
+                    attr_bytes[0] = j;
+                    txn.insert(
+                        EntityId(entity_bytes),
+                        AttributeId(attr_bytes),
+                        TripleValue::Number(f64::from(i * 10 + j)),
+                    )
+                    .expect("insert");
                 }
             }
 
@@ -409,13 +413,14 @@ mod tests {
             let mut file = DatabaseFile::open(&path).expect("open db");
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
-            let mut entity = [0u8; 16];
-            entity[0] = 5;
+            let mut entity_bytes = [0u8; 16];
+            entity_bytes[0] = 5;
+            let entity_id = EntityId(entity_bytes);
 
-            let mut scan = txn.scan_entity(&entity).expect("scan");
+            let mut scan = txn.scan_entity(&entity_id).expect("scan");
             let mut count = 0;
             while let Some(record) = scan.next_record().expect("next") {
-                assert_eq!(record.entity_id[0], 5);
+                assert_eq!(record.entity_id.0[0], 5);
                 count += 1;
             }
             assert_eq!(count, 5);

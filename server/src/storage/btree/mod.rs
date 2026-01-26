@@ -16,15 +16,16 @@
 //!
 //! ```
 //! use server::storage::btree::{make_key, KEY_SIZE};
+//! use server::types::{EntityId, AttributeId};
 //!
 //! // Keys are 32 bytes: entity_id (16) + attribute_id (16)
-//! let entity_id = [1u8; 16];
-//! let attribute_id = [2u8; 16];
+//! let entity_id = EntityId([1u8; 16]);
+//! let attribute_id = AttributeId([2u8; 16]);
 //! let key = make_key(&entity_id, &attribute_id);
 //!
 //! assert_eq!(key.len(), KEY_SIZE);
-//! assert_eq!(&key[..16], &entity_id);
-//! assert_eq!(&key[16..], &attribute_id);
+//! assert_eq!(&key[..16], &entity_id.0);
+//! assert_eq!(&key[16..], &attribute_id.0);
 //! ```
 
 mod node;

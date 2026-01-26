@@ -244,8 +244,8 @@ pub fn log_record_to_change_record(
             Ok(Some(proto::ChangeRecord {
                 change_type: proto::ChangeType::Insert.into(),
                 triple: Some(proto::Triple {
-                    entity_id: Some(triple.entity_id.to_vec()),
-                    attribute_id: Some(triple.attribute_id.to_vec()),
+                    entity_id: Some(triple.entity_id.0.to_vec()),
+                    attribute_id: Some(triple.attribute_id.0.to_vec()),
                     value: (&triple.value).to_proto(),
                     hlc: Some(record.hlc.to_proto()),
                 }),
@@ -257,8 +257,8 @@ pub fn log_record_to_change_record(
             Ok(Some(proto::ChangeRecord {
                 change_type: proto::ChangeType::Update.into(),
                 triple: Some(proto::Triple {
-                    entity_id: Some(triple.entity_id.to_vec()),
-                    attribute_id: Some(triple.attribute_id.to_vec()),
+                    entity_id: Some(triple.entity_id.0.to_vec()),
+                    attribute_id: Some(triple.attribute_id.0.to_vec()),
                     value: (&triple.value).to_proto(),
                     hlc: Some(record.hlc.to_proto()),
                 }),
@@ -270,8 +270,8 @@ pub fn log_record_to_change_record(
         } => Ok(Some(proto::ChangeRecord {
             change_type: proto::ChangeType::Delete.into(),
             triple: Some(proto::Triple {
-                entity_id: Some(entity_id.to_vec()),
-                attribute_id: Some(attribute_id.to_vec()),
+                entity_id: Some(entity_id.0.to_vec()),
+                attribute_id: Some(attribute_id.0.to_vec()),
                 value: None,
                 hlc: Some(record.hlc.to_proto()),
             }),

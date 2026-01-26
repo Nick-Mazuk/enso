@@ -14,7 +14,7 @@
 //!
 //! ```no_run
 //! use server::storage::{DatabaseFile, Transaction};
-//! use server::types::TripleValue;
+//! use server::types::{EntityId, AttributeId, TripleValue};
 //! use std::path::Path;
 //!
 //! // Create a new database
@@ -25,8 +25,8 @@
 //! let mut txn = Transaction::begin(&mut db).unwrap();
 //!
 //! // Insert a triple
-//! let entity_id = [1u8; 16];
-//! let attribute_id = [2u8; 16];
+//! let entity_id = EntityId([1u8; 16]);
+//! let attribute_id = AttributeId([2u8; 16]);
 //! txn.insert(entity_id, attribute_id, TripleValue::String("hello".into())).unwrap();
 //!
 //! // Commit with durability

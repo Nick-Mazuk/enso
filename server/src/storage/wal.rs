@@ -188,8 +188,8 @@ impl LogRecordPayload {
                 attribute_id,
             } => {
                 let mut bytes = Vec::with_capacity(32);
-                bytes.extend_from_slice(entity_id);
-                bytes.extend_from_slice(attribute_id);
+                bytes.extend_from_slice(&entity_id.0);
+                bytes.extend_from_slice(&attribute_id.0);
                 bytes
             }
             Self::Checkpoint {
@@ -215,13 +215,13 @@ impl LogRecordPayload {
                 if bytes.len() < 32 {
                     return Err(WalError::CorruptRecord);
                 }
-                let mut entity_id = [0u8; 16];
-                let mut attribute_id = [0u8; 16];
-                entity_id.copy_from_slice(&bytes[0..16]);
-                attribute_id.copy_from_slice(&bytes[16..32]);
+                let mut entity_bytes = [0u8; 16];
+                let mut attribute_bytes = [0u8; 16];
+                entity_bytes.copy_from_slice(&bytes[0..16]);
+                attribute_bytes.copy_from_slice(&bytes[16..32]);
                 Ok(Self::Delete {
-                    entity_id,
-                    attribute_id,
+                    entity_id: EntityId(entity_bytes),
+                    attribute_id: AttributeId(attribute_bytes),
                 })
             }
             LogRecordType::Checkpoint => {
@@ -981,8 +981,8 @@ mod tests {
     #[test]
     fn test_log_record_roundtrip_insert() {
         let triple = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             10,
             HlcTimestamp::new(500, 0),
             TripleValue::String("test value".to_string()),
@@ -1002,8 +1002,8 @@ mod tests {
         assert_eq!(decoded.lsn, 300);
 
         let rec = decoded.triple_record().unwrap().unwrap();
-        assert_eq!(rec.entity_id, [1u8; 16]);
-        assert_eq!(rec.attribute_id, [2u8; 16]);
+        assert_eq!(rec.entity_id, EntityId([1u8; 16]));
+        assert_eq!(rec.attribute_id, AttributeId([2u8; 16]));
         assert_eq!(rec.value, TripleValue::String("test value".to_string()));
     }
 
@@ -1013,7 +1013,7 @@ mod tests {
             5,
             400,
             HlcTimestamp::new(4000, 2),
-            LogRecordPayload::delete([3u8; 16], [4u8; 16]),
+            LogRecordPayload::delete(EntityId([3u8; 16]), AttributeId([4u8; 16])),
         );
 
         let bytes = record.to_bytes();
@@ -1024,8 +1024,8 @@ mod tests {
             attribute_id,
         } = decoded.payload
         {
-            assert_eq!(entity_id, [3u8; 16]);
-            assert_eq!(attribute_id, [4u8; 16]);
+            assert_eq!(entity_id, EntityId([3u8; 16]));
+            assert_eq!(attribute_id, AttributeId([4u8; 16]));
         } else {
             panic!("expected Delete payload");
         }
@@ -1095,8 +1095,8 @@ mod tests {
             .unwrap();
 
         let triple = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             1,
             HlcTimestamp::new(1000, 0),
             TripleValue::Number(42.0),
@@ -1152,7 +1152,7 @@ mod tests {
         assert_eq!(LogRecordPayload::Begin.serialized_size(), 0);
         assert_eq!(LogRecordPayload::Commit.serialized_size(), 0);
         assert_eq!(
-            LogRecordPayload::delete([0u8; 16], [0u8; 16]).serialized_size(),
+            LogRecordPayload::delete(EntityId([0u8; 16]), AttributeId([0u8; 16])).serialized_size(),
             32
         );
         assert_eq!(LogRecordPayload::checkpoint(0, 0).serialized_size(), 16);
@@ -1184,8 +1184,8 @@ mod tests {
         let mut wal = Wal::new(&mut cursor, 0, 8192, 0, 0, 1);
 
         let triple = TripleRecord::new(
-            [1u8; 16],
-            [2u8; 16],
+            EntityId([1u8; 16]),
+            AttributeId([2u8; 16]),
             1,
             HlcTimestamp::new(1000, 0),
             TripleValue::Number(42.0),

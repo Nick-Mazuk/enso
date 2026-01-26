@@ -11,137 +11,17 @@
 
 use std::fmt;
 
-/// A unique identifier for an entity.
-///
-/// Wraps a 16-byte array that corresponds to the `EntityId` in the storage layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EntityId(pub [u8; 16]);
+// Re-export storage types for use in queries.
+// This unifies the type system so queries use the same types as storage.
+pub use crate::types::{AttributeId, EntityId, TripleValue};
 
-impl EntityId {
-    /// Create an entity ID from a string (uses first 16 bytes, zero-padded).
-    #[must_use]
-    pub fn from_str(s: &str) -> Self {
-        let mut bytes = [0u8; 16];
-        let src = s.as_bytes();
-        let len = src.len().min(16);
-        bytes[..len].copy_from_slice(&src[..len]);
-        Self(bytes)
-    }
+/// Type alias for backwards compatibility.
+/// In queries, we refer to attributes as "fields".
+pub type FieldId = AttributeId;
 
-    /// Create an entity ID from a u64.
-    #[must_use]
-    pub fn from_u64(n: u64) -> Self {
-        let mut bytes = [0u8; 16];
-        bytes[..8].copy_from_slice(&n.to_le_bytes());
-        Self(bytes)
-    }
-}
-
-impl fmt::Display for EntityId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Try to display as string if valid UTF-8, otherwise as hex
-        if let Ok(s) = std::str::from_utf8(&self.0) {
-            write!(f, "{}", s.trim_end_matches('\0'))
-        } else {
-            write!(f, "{:02x?}", &self.0[..])
-        }
-    }
-}
-
-/// A field/attribute identifier.
-///
-/// Wraps a 16-byte array that corresponds to the `AttributeId` in the storage layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FieldId(pub [u8; 16]);
-
-impl FieldId {
-    /// Create a field ID from a string (uses first 16 bytes, zero-padded).
-    #[must_use]
-    pub fn from_str(s: &str) -> Self {
-        let mut bytes = [0u8; 16];
-        let src = s.as_bytes();
-        let len = src.len().min(16);
-        bytes[..len].copy_from_slice(&src[..len]);
-        Self(bytes)
-    }
-}
-
-impl fmt::Display for FieldId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Ok(s) = std::str::from_utf8(&self.0) {
-            write!(f, "{}", s.trim_end_matches('\0'))
-        } else {
-            write!(f, "{:02x?}", &self.0[..])
-        }
-    }
-}
-
-/// A value in a triple.
-#[derive(Debug, PartialEq)]
-pub enum Value {
-    /// Null/missing value.
-    Null,
-    /// Boolean value.
-    Boolean(bool),
-    /// Numeric value (stored as f64).
-    Number(f64),
-    /// String value.
-    String(String),
-    /// Reference to another entity.
-    Ref(EntityId),
-}
-
-impl Value {
-    /// Create a string value.
-    #[must_use]
-    pub fn string(s: impl Into<String>) -> Self {
-        Self::String(s.into())
-    }
-
-    /// Create a number value.
-    #[must_use]
-    pub fn number(n: impl Into<f64>) -> Self {
-        Self::Number(n.into())
-    }
-
-    /// Create a boolean value.
-    #[must_use]
-    pub const fn boolean(b: bool) -> Self {
-        Self::Boolean(b)
-    }
-
-    /// Create a reference value.
-    #[must_use]
-    pub const fn reference(id: EntityId) -> Self {
-        Self::Ref(id)
-    }
-
-    /// Create a copy of this value.
-    ///
-    /// This is used instead of Clone to comply with project policy.
-    #[must_use]
-    pub fn clone_value(&self) -> Self {
-        match self {
-            Self::Null => Self::Null,
-            Self::Boolean(b) => Self::Boolean(*b),
-            Self::Number(n) => Self::Number(*n),
-            Self::String(s) => Self::String(s.as_str().to_owned()),
-            Self::Ref(id) => Self::Ref(*id),
-        }
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Null => write!(f, "null"),
-            Self::Boolean(b) => write!(f, "{b}"),
-            Self::Number(n) => write!(f, "{n}"),
-            Self::String(s) => write!(f, "\"{s}\""),
-            Self::Ref(id) => write!(f, "#{id}"),
-        }
-    }
-}
+/// Type alias for query values.
+/// This is the same as `TripleValue` from the storage layer.
+pub type Value = TripleValue;
 
 /// A datom is any piece of data that can appear in a triple.
 #[derive(Debug, PartialEq)]
@@ -158,13 +38,13 @@ impl Datom {
     /// Create an entity datom from a string.
     #[must_use]
     pub fn entity(s: &str) -> Self {
-        Self::Entity(EntityId::from_str(s))
+        Self::Entity(EntityId::from_string(s))
     }
 
     /// Create a field datom from a string.
     #[must_use]
     pub fn field(s: &str) -> Self {
-        Self::Field(FieldId::from_str(s))
+        Self::Field(FieldId::from_string(s))
     }
 
     /// Create a string value datom.
@@ -297,13 +177,13 @@ impl PatternElement {
     /// Create an entity pattern element.
     #[must_use]
     pub fn entity(s: &str) -> Self {
-        Self::Entity(EntityId::from_str(s))
+        Self::Entity(EntityId::from_string(s))
     }
 
     /// Create a field pattern element.
     #[must_use]
     pub fn field(s: &str) -> Self {
-        Self::Field(FieldId::from_str(s))
+        Self::Field(FieldId::from_string(s))
     }
 
     /// Create a string value pattern element.
@@ -511,8 +391,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_entity_id_from_str() {
-        let id = EntityId::from_str("test");
+    fn test_entity_id_from_string() {
+        let id = EntityId::from_string("test");
         assert_eq!(&id.0[..4], b"test");
         assert_eq!(&id.0[4..], &[0u8; 12]);
     }

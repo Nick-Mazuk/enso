@@ -9,7 +9,7 @@
 
 use crate::e2e_tests::helpers::{TestClient, is_ok, new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
-use crate::types::{ChangeType, HlcTimestamp, TripleValue};
+use crate::types::{AttributeId, ChangeType, EntityId, HlcTimestamp, TripleValue};
 
 /// Test that inserting a triple broadcasts a change notification.
 ///
@@ -52,8 +52,8 @@ fn test_insert_broadcasts_change_notification() {
 
     let change = &notification.changes[0];
     assert_eq!(change.change_type, ChangeType::Insert);
-    assert_eq!(change.entity_id, entity_id);
-    assert_eq!(change.attribute_id, attribute_id);
+    assert_eq!(change.entity_id, EntityId(entity_id));
+    assert_eq!(change.attribute_id, AttributeId(attribute_id));
 
     // Assert the value is correct
     assert_eq!(change.value, Some(TripleValue::String("test".to_string())));
@@ -120,8 +120,8 @@ fn test_update_broadcasts_change_notification() {
 
     let change = &notification.changes[0];
     assert_eq!(change.change_type, ChangeType::Update);
-    assert_eq!(change.entity_id, entity_id);
-    assert_eq!(change.attribute_id, attribute_id);
+    assert_eq!(change.entity_id, EntityId(entity_id));
+    assert_eq!(change.attribute_id, AttributeId(attribute_id));
 
     // Assert the updated value is correct
     assert_eq!(
