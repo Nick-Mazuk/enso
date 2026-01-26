@@ -12,7 +12,7 @@ use crate::{
     subscription::{
         ClientSubscriptions, Subscription, convert_log_records_to_changes, create_error_response,
         create_failed_precondition_response, create_internal_error_response, create_ok_response,
-        create_subscription_update, proto_hlc_to_storage,
+        create_subscription_update,
     },
     types::{
         ProtoDeserializable, ProtoSerializable,
@@ -199,7 +199,11 @@ impl ClientConnection {
         req: &proto::SubscribeRequest,
     ) -> Vec<proto::ServerMessage> {
         let subscription_id = req.subscription_id;
-        let since_hlc = req.since_hlc.as_ref().map(proto_hlc_to_storage);
+        // HlcTimestamp::from_proto is infallible - always returns Ok
+        let since_hlc = req.since_hlc.as_ref().map(|hlc| {
+            HlcTimestamp::from_proto(hlc)
+                .unwrap_or_else(|_| unreachable!("HLC conversion is infallible"))
+        });
 
         // Add the subscription
         if let Err(e) = self.subscriptions.add(subscription_id, since_hlc) {

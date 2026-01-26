@@ -30,7 +30,7 @@ pub mod storage;
 pub mod subscription;
 #[cfg(test)]
 mod testing;
-mod types;
+pub mod types;
 
 pub use client_connection::{ClientConnection, ConnectionState};
 pub use database_registry::DatabaseRegistry;

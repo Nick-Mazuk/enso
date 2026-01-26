@@ -16,7 +16,7 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, DatabaseRegistry, proto, subscription::storage_change_to_proto};
+use server::{ClientConnection, DatabaseRegistry, proto, types::ProtoSerializable};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -170,7 +170,8 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 match notification {
                     Ok(change) => {
                         // Convert storage change records to proto format
-                        let proto_changes: Vec<proto::ChangeRecord> = change.changes.iter().map(storage_change_to_proto).collect();
+                        let proto_changes: Vec<proto::ChangeRecord> =
+                            change.changes.iter().map(ProtoSerializable::to_proto).collect();
 
                         // Forward changes to all matching subscriptions
                         for sub in client_connection.subscriptions() {

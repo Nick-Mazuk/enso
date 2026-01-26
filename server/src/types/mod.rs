@@ -1,6 +1,8 @@
+pub mod change_record;
 pub mod client_message;
 pub mod hlc;
 pub mod query;
+pub mod storage_triple_value;
 pub mod triple;
 pub mod triple_update_request;
 

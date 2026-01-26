@@ -14,10 +14,8 @@
 use std::collections::HashMap;
 
 use crate::proto;
-use crate::storage::{
-    ChangeRecord, ChangeType, HlcTimestamp, LogRecord, LogRecordPayload, TripleRecord,
-    TripleValue as StorageTripleValue,
-};
+use crate::storage::{HlcTimestamp, LogRecord, LogRecordPayload, TripleRecord};
+use crate::types::ProtoSerializable;
 
 /// Per-connection subscription tracking.
 ///
@@ -248,12 +246,8 @@ pub fn log_record_to_change_record(
                 triple: Some(proto::Triple {
                     entity_id: Some(triple.entity_id.to_vec()),
                     attribute_id: Some(triple.attribute_id.to_vec()),
-                    value: storage_value_to_proto_value(&triple.value),
-                    hlc: Some(proto::HlcTimestamp {
-                        physical_time_ms: record.hlc.physical_time,
-                        logical_counter: record.hlc.logical_counter,
-                        node_id: record.hlc.node_id,
-                    }),
+                    value: (&triple.value).to_proto(),
+                    hlc: Some(record.hlc.to_proto()),
                 }),
             }))
         }
@@ -265,12 +259,8 @@ pub fn log_record_to_change_record(
                 triple: Some(proto::Triple {
                     entity_id: Some(triple.entity_id.to_vec()),
                     attribute_id: Some(triple.attribute_id.to_vec()),
-                    value: storage_value_to_proto_value(&triple.value),
-                    hlc: Some(proto::HlcTimestamp {
-                        physical_time_ms: record.hlc.physical_time,
-                        logical_counter: record.hlc.logical_counter,
-                        node_id: record.hlc.node_id,
-                    }),
+                    value: (&triple.value).to_proto(),
+                    hlc: Some(record.hlc.to_proto()),
                 }),
             }))
         }
@@ -283,32 +273,12 @@ pub fn log_record_to_change_record(
                 entity_id: Some(entity_id.to_vec()),
                 attribute_id: Some(attribute_id.to_vec()),
                 value: None,
-                hlc: Some(proto::HlcTimestamp {
-                    physical_time_ms: record.hlc.physical_time,
-                    logical_counter: record.hlc.logical_counter,
-                    node_id: record.hlc.node_id,
-                }),
+                hlc: Some(record.hlc.to_proto()),
             }),
         })),
         LogRecordPayload::Begin
         | LogRecordPayload::Commit
         | LogRecordPayload::Checkpoint { .. } => Ok(None),
-    }
-}
-
-/// Convert a storage `TripleValue` to a proto `TripleValue`.
-fn storage_value_to_proto_value(value: &StorageTripleValue) -> Option<proto::TripleValue> {
-    match value {
-        StorageTripleValue::Null => None,
-        StorageTripleValue::Boolean(b) => Some(proto::TripleValue {
-            value: Some(proto::triple_value::Value::Boolean(*b)),
-        }),
-        StorageTripleValue::Number(n) => Some(proto::TripleValue {
-            value: Some(proto::triple_value::Value::Number(*n)),
-        }),
-        StorageTripleValue::String(s) => Some(proto::TripleValue {
-            value: Some(proto::triple_value::Value::String(s.as_str().to_owned())),
-        }),
     }
 }
 
@@ -322,48 +292,6 @@ pub fn create_subscription_update(
     proto::SubscriptionUpdate {
         subscription_id,
         changes: changes.to_vec(),
-    }
-}
-
-/// Convert a proto `HlcTimestamp` to storage `HlcTimestamp`.
-///
-/// # Panics
-///
-/// This function will not panic as the conversion is infallible.
-#[must_use]
-pub fn proto_hlc_to_storage(hlc: &proto::HlcTimestamp) -> HlcTimestamp {
-    use crate::types::ProtoDeserializable;
-    // Unwrap is safe: HlcTimestamp::from_proto is infallible
-    #[allow(clippy::unwrap_used)]
-    HlcTimestamp::from_proto(hlc).unwrap()
-}
-
-/// Convert a storage `ChangeRecord` to a proto `ChangeRecord`.
-///
-/// This is used for converting broadcast change notifications to proto format.
-#[must_use]
-#[allow(clippy::disallowed_methods)] // Clone needed for String conversion
-pub fn storage_change_to_proto(change: &ChangeRecord) -> proto::ChangeRecord {
-    let change_type = match change.change_type {
-        ChangeType::Insert => proto::ChangeType::Insert,
-        ChangeType::Update => proto::ChangeType::Update,
-        ChangeType::Delete => proto::ChangeType::Delete,
-    };
-
-    let value = change.value.as_ref().and_then(storage_value_to_proto_value);
-
-    proto::ChangeRecord {
-        change_type: change_type.into(),
-        triple: Some(proto::Triple {
-            entity_id: Some(change.entity_id.to_vec()),
-            attribute_id: Some(change.attribute_id.to_vec()),
-            value,
-            hlc: Some(proto::HlcTimestamp {
-                physical_time_ms: change.hlc.physical_time,
-                logical_counter: change.hlc.logical_counter,
-                node_id: change.hlc.node_id,
-            }),
-        }),
     }
 }
 
@@ -413,19 +341,6 @@ mod tests {
         subs.add(1, Some(hlc)).expect("add should succeed");
         let sub = subs.get(1).expect("subscription should exist");
         assert_eq!(sub.since_hlc, Some(hlc));
-    }
-
-    #[test]
-    fn test_proto_hlc_to_storage() {
-        let proto_hlc = proto::HlcTimestamp {
-            physical_time_ms: 1000,
-            logical_counter: 5,
-            node_id: 42,
-        };
-        let storage_hlc = proto_hlc_to_storage(&proto_hlc);
-        assert_eq!(storage_hlc.physical_time, 1000);
-        assert_eq!(storage_hlc.logical_counter, 5);
-        assert_eq!(storage_hlc.node_id, 42);
     }
 
     #[test]
@@ -581,51 +496,5 @@ mod tests {
             }
             _ => panic!("expected Response payload"),
         }
-    }
-
-    #[test]
-    fn test_storage_change_to_proto_insert() {
-        let change = ChangeRecord {
-            change_type: ChangeType::Insert,
-            entity_id: [1u8; 16],
-            attribute_id: [2u8; 16],
-            value: Some(StorageTripleValue::String("hello".to_string())),
-            hlc: HlcTimestamp {
-                physical_time: 1000,
-                logical_counter: 1,
-                node_id: 42,
-            },
-        };
-
-        let proto_change = storage_change_to_proto(&change);
-        assert_eq!(proto_change.change_type, proto::ChangeType::Insert as i32);
-        let triple = proto_change.triple.unwrap();
-        assert_eq!(triple.entity_id, Some(vec![1u8; 16]));
-        assert_eq!(triple.attribute_id, Some(vec![2u8; 16]));
-
-        let hlc = triple.hlc.unwrap();
-        assert_eq!(hlc.physical_time_ms, 1000);
-        assert_eq!(hlc.logical_counter, 1);
-        assert_eq!(hlc.node_id, 42);
-    }
-
-    #[test]
-    fn test_storage_change_to_proto_delete() {
-        let change = ChangeRecord {
-            change_type: ChangeType::Delete,
-            entity_id: [1u8; 16],
-            attribute_id: [2u8; 16],
-            value: None,
-            hlc: HlcTimestamp {
-                physical_time: 1000,
-                logical_counter: 1,
-                node_id: 42,
-            },
-        };
-
-        let proto_change = storage_change_to_proto(&change);
-        assert_eq!(proto_change.change_type, proto::ChangeType::Delete as i32);
-        let triple = proto_change.triple.unwrap();
-        assert!(triple.value.is_none());
     }
 }
