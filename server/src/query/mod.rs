@@ -40,9 +40,7 @@ pub mod types;
 
 // Datalog-style query engine
 pub use context::QueryContext;
-pub use engine::{
-    QueryEngine, query_entity_to_storage, query_field_to_storage, query_value_to_storage,
-};
+pub use engine::QueryEngine;
 pub use types::{
     Datom, EntityId, FieldId, Filter, Pattern, PatternElement, Query, QueryResult, QueryRow,
     Triple, Value, Variable,

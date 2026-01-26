@@ -347,30 +347,6 @@ fn record_to_triple(record: TripleRecord) -> Triple {
     }
 }
 
-/// Convert a query `Value` to a storage `TripleValue`.
-///
-/// Since `Value` is now an alias for `TripleValue`, this creates a copy.
-#[must_use]
-pub fn query_value_to_storage(value: &Value) -> Value {
-    value.clone_value()
-}
-
-/// Convert a query `EntityId` to a storage `EntityId`.
-///
-/// Since these types are now unified, this is an identity function.
-#[must_use]
-pub const fn query_entity_to_storage(entity: &EntityId) -> EntityId {
-    *entity
-}
-
-/// Convert a query `FieldId` to a storage `AttributeId`.
-///
-/// Since `FieldId` is now an alias for `AttributeId`, this is an identity function.
-#[must_use]
-pub const fn query_field_to_storage(field: &FieldId) -> AttributeId {
-    *field
-}
-
 /// Check if two values are equal.
 fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
