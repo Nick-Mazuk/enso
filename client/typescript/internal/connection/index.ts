@@ -71,6 +71,8 @@ export class Connection {
 	 * @param apiKey - API key for authentication
 	 */
 	constructor(url: string, apiKey: string) {
+		assert(url.length > 0, "url must be a non-empty string");
+		assert(apiKey.length > 0, "apiKey must be a non-empty string");
 		this.url = url;
 		this.apiKey = apiKey;
 	}
