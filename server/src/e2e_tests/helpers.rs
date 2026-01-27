@@ -281,6 +281,49 @@ pub fn get_bool_value(response: &proto::ServerResponse, row: usize) -> Option<bo
     })
 }
 
+/// Extract the value at a specific row and column.
+#[must_use]
+pub fn get_value_at(
+    response: &proto::ServerResponse,
+    row: usize,
+    col: usize,
+) -> Option<&proto::TripleValue> {
+    response.rows.get(row).and_then(|r| {
+        r.values.get(col).and_then(|v| match &v.value {
+            Some(proto::query_result_value::Value::TripleValue(tv)) => Some(tv),
+            _ => None,
+        })
+    })
+}
+
+/// Get string value at a specific row and column.
+#[must_use]
+pub fn get_string_at(response: &proto::ServerResponse, row: usize, col: usize) -> Option<&str> {
+    get_value_at(response, row, col).and_then(|tv| match &tv.value {
+        Some(proto::triple_value::Value::String(s)) => Some(s.as_str()),
+        _ => None,
+    })
+}
+
+/// Get number value at a specific row and column.
+#[must_use]
+pub fn get_number_at(response: &proto::ServerResponse, row: usize, col: usize) -> Option<f64> {
+    get_value_at(response, row, col).and_then(|tv| match &tv.value {
+        Some(proto::triple_value::Value::Number(n)) => Some(*n),
+        _ => None,
+    })
+}
+
+/// Check if the value at a specific row and column is undefined (for optional patterns).
+#[must_use]
+pub fn is_undefined_at(response: &proto::ServerResponse, row: usize, col: usize) -> bool {
+    response
+        .rows
+        .get(row)
+        .and_then(|r| r.values.get(col))
+        .is_some_and(|v| v.is_undefined)
+}
+
 // =============================================================================
 // HLC Helpers
 // =============================================================================
