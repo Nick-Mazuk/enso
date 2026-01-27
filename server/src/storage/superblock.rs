@@ -40,7 +40,12 @@ mod offsets {
     pub const ACTIVE_TXN_COUNT: usize = 120;
     pub const NEXT_TXN_ID: usize = 128;
     pub const SCHEMA_VERSION: usize = 136;
-    // 136-1023: reserved
+    // Tombstone list metadata (for incremental GC)
+    pub const TOMBSTONE_HEAD_PAGE: usize = 144;
+    pub const TOMBSTONE_TAIL_PAGE: usize = 152;
+    pub const TOMBSTONE_TAIL_SLOT: usize = 160;
+    pub const TOMBSTONE_COUNT: usize = 168;
+    // 176-1023: reserved
     // 1024-8191: checkpoint metadata
 }
 
@@ -81,6 +86,14 @@ pub struct Superblock {
     pub next_txn_id: u64,
     /// Schema version for migrations.
     pub schema_version: u64,
+    /// Head page of the tombstone list (oldest tombstones, for GC).
+    pub tombstone_head_page: PageId,
+    /// Tail page of the tombstone list (newest tombstones, for appends).
+    pub tombstone_tail_page: PageId,
+    /// Next write slot in the tombstone tail page.
+    pub tombstone_tail_slot: u64,
+    /// Total count of pending tombstones.
+    pub tombstone_count: u64,
 }
 
 impl Superblock {
@@ -109,6 +122,10 @@ impl Superblock {
             active_txn_count: 0,
             next_txn_id: 1,
             schema_version: 1,
+            tombstone_head_page: 0,
+            tombstone_tail_page: 0,
+            tombstone_tail_slot: 0,
+            tombstone_count: 0,
         }
     }
 
@@ -142,6 +159,10 @@ impl Superblock {
         page.write_u64(offsets::ACTIVE_TXN_COUNT, self.active_txn_count);
         page.write_u64(offsets::NEXT_TXN_ID, self.next_txn_id);
         page.write_u64(offsets::SCHEMA_VERSION, self.schema_version);
+        page.write_u64(offsets::TOMBSTONE_HEAD_PAGE, self.tombstone_head_page);
+        page.write_u64(offsets::TOMBSTONE_TAIL_PAGE, self.tombstone_tail_page);
+        page.write_u64(offsets::TOMBSTONE_TAIL_SLOT, self.tombstone_tail_slot);
+        page.write_u64(offsets::TOMBSTONE_COUNT, self.tombstone_count);
 
         Some(page)
     }
@@ -188,6 +209,10 @@ impl Superblock {
             active_txn_count: page.read_u64(offsets::ACTIVE_TXN_COUNT),
             next_txn_id: page.read_u64(offsets::NEXT_TXN_ID),
             schema_version: page.read_u64(offsets::SCHEMA_VERSION),
+            tombstone_head_page: page.read_u64(offsets::TOMBSTONE_HEAD_PAGE),
+            tombstone_tail_page: page.read_u64(offsets::TOMBSTONE_TAIL_PAGE),
+            tombstone_tail_slot: page.read_u64(offsets::TOMBSTONE_TAIL_SLOT),
+            tombstone_count: page.read_u64(offsets::TOMBSTONE_COUNT),
         })
     }
 }

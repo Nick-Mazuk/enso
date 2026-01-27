@@ -1,4 +1,4 @@
-This server is a sync engine for 
+This server is a sync engine
 
 Code style:
 
@@ -11,6 +11,12 @@ Code style:
 - Put all protobuf serialization / deserialization code in @server/src/types and use the `ProtoSerializable` and `ProtoDeserializable` traits
 - NEVER surpress a clippy finding that panics (e.g., never add `#[allow(clippy::expect_used)]`).
 - Use type driven design and the type-state pattern.
+
+Design constraints:
+
+- Optimize for having thousands of database files. Keep memory usage low.
+- Assume no long-running processes for the database. Databases may be evicted from memory anytime when not in use.
+- Keep database open and close as fast as possible.
 
 Documentation:
 

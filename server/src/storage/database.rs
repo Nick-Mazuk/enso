@@ -47,6 +47,7 @@ use crate::storage::indexes::entity_attribute::{EntityAttributeIndex, EntityAttr
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::time::SystemTimeSource;
+use crate::storage::tombstone::{Tombstone, TombstoneError, TombstoneList};
 use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload, Lsn, WalError};
 use crate::types::{
     AttributeId, ChangeNotification, ChangeRecord, ChangeType, ConnectionId, EntityId,
@@ -230,6 +231,13 @@ const DEFAULT_BROADCAST_CAPACITY: usize = 1000;
 ///
 /// The database broadcasts change notifications when transactions commit.
 /// Use `subscribe_to_changes()` to receive notifications of all committed changes.
+///
+/// # Incremental Garbage Collection
+///
+/// Deleted records are tracked in a tombstone list. A background GC task processes
+/// tombstones incrementally after each commit, removing records that are no longer
+/// visible to any active snapshot. Use `gc_notify()` to get a handle for signaling
+/// the GC task.
 pub struct Database {
     file: DatabaseFile,
     checkpoint_state: CheckpointState,
@@ -239,6 +247,10 @@ pub struct Database {
     active_snapshots: ActiveSnapshots,
     /// Broadcast sender for change notifications.
     change_tx: broadcast::Sender<ChangeNotification>,
+    /// Disk-based linked list of tombstones (deleted records awaiting GC).
+    tombstone_list: TombstoneList,
+    /// Notifier for signaling the background GC task.
+    gc_notify: Arc<tokio::sync::Notify>,
 }
 
 impl Database {
@@ -288,6 +300,8 @@ impl Database {
             clock,
             active_snapshots: ActiveSnapshots::default(),
             change_tx,
+            tombstone_list: TombstoneList::new(),
+            gc_notify: Arc::new(tokio::sync::Notify::new()),
         })
     }
 
@@ -333,6 +347,23 @@ impl Database {
         // Create broadcast channel for change notifications
         let (change_tx, _) = broadcast::channel(DEFAULT_BROADCAST_CAPACITY);
 
+        // Load tombstone list metadata from superblock
+        let superblock = file.superblock();
+        #[allow(clippy::cast_possible_truncation)] // Slot indices always fit in usize
+        let tombstone_tail_slot = superblock.tombstone_tail_slot as usize;
+        let mut tombstone_list = TombstoneList::from_persisted(
+            superblock.tombstone_head_page,
+            0, // head_slot is loaded separately from the head page
+            superblock.tombstone_tail_page,
+            tombstone_tail_slot,
+            superblock.tombstone_count,
+        );
+
+        // Load the head slot from the head page (for partial consumption tracking)
+        if superblock.tombstone_head_page != 0 {
+            tombstone_list.load_head_slot(&mut file)?;
+        }
+
         Ok((
             Self {
                 file,
@@ -340,6 +371,8 @@ impl Database {
                 clock,
                 active_snapshots: ActiveSnapshots::default(),
                 change_tx,
+                tombstone_list,
+                gc_notify: Arc::new(tokio::sync::Notify::new()),
             },
             recovery_result,
         ))
@@ -394,6 +427,8 @@ impl Database {
             &mut self.file,
             &mut self.checkpoint_state,
             &mut self.clock,
+            &mut self.tombstone_list,
+            Arc::clone(&self.gc_notify),
             txn_id,
             hlc,
             self.change_tx.clone(),
@@ -464,105 +499,6 @@ impl Database {
     #[must_use]
     pub fn active_snapshot_count(&self) -> usize {
         self.active_snapshots.count()
-    }
-
-    /// Run garbage collection to remove deleted records.
-    ///
-    /// This physically removes records that:
-    /// - Have been deleted (`deleted_txn` != 0)
-    /// - Are no longer visible to any active snapshot (`deleted_txn` < `min_active_snapshot`)
-    ///
-    /// If there are no active snapshots, all deleted records are eligible for GC.
-    ///
-    /// # Returns
-    ///
-    /// A `GcResult` with statistics about what was collected.
-    ///
-    /// # Note
-    ///
-    /// This operation modifies the database but does not use the WAL.
-    /// It's safe to run during normal operation as it only removes records
-    /// that are no longer visible to any transaction.
-    pub fn collect_garbage(&mut self) -> Result<GcResult, DatabaseError> {
-        let min_active = self.active_snapshots.min_active();
-        let root_page = self.file.superblock().primary_index_root;
-
-        // Empty database has root_page = 0, which is valid - nothing to GC
-        if root_page == 0 {
-            return Ok(GcResult {
-                records_scanned: 0,
-                records_removed: 0,
-                bytes_freed: 0,
-                min_active_snapshot: min_active,
-            });
-        }
-
-        // First pass: collect keys of records eligible for GC
-        let mut to_remove: Vec<(EntityId, AttributeId)> = Vec::new();
-        let mut records_scanned = 0u64;
-
-        {
-            let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
-            let mut cursor = index.cursor()?;
-
-            while let Some(record) = cursor.next_record()? {
-                records_scanned += 1;
-                if record.is_gc_eligible(min_active) {
-                    to_remove.push((record.entity_id, record.attribute_id));
-                }
-            }
-        }
-
-        // Second pass: remove from all indexes
-        let records_removed = to_remove.len() as u64;
-        let mut bytes_freed = 0u64;
-
-        if !to_remove.is_empty() {
-            // Remove from primary index
-            let primary_root = {
-                let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
-                for (entity_id, attribute_id) in &to_remove {
-                    if let Some(removed) = index.remove(entity_id, attribute_id)? {
-                        bytes_freed += removed.serialized_size() as u64;
-                    }
-                }
-                index.root_page()
-            };
-
-            // Remove from attribute index
-            let attribute_root = {
-                let attr_root_page = self.file.superblock().attribute_index_root;
-                let mut index = AttributeIndex::new(&mut self.file, attr_root_page)?;
-                for (entity_id, attribute_id) in &to_remove {
-                    index.remove(attribute_id, entity_id)?;
-                }
-                index.root_page()
-            };
-
-            // Remove from entity-attribute index
-            let entity_attr_root = {
-                let ea_root_page = self.file.superblock().entity_attribute_index_root;
-                let mut index = EntityAttributeIndex::new(&mut self.file, ea_root_page)?;
-                for (entity_id, attribute_id) in &to_remove {
-                    index.remove(entity_id, attribute_id)?;
-                }
-                index.root_page()
-            };
-
-            // Update root pages
-            self.file.superblock_mut().primary_index_root = primary_root;
-            self.file.superblock_mut().attribute_index_root = attribute_root;
-            self.file.superblock_mut().entity_attribute_index_root = entity_attr_root;
-            self.file.write_superblock()?;
-            self.file.sync()?;
-        }
-
-        Ok(GcResult {
-            records_scanned,
-            records_removed,
-            bytes_freed,
-            min_active_snapshot: min_active,
-        })
     }
 
     /// Get the current checkpoint state.
@@ -656,6 +592,164 @@ impl Database {
     pub fn subscribe_to_changes(&self, connection_id: ConnectionId) -> FilteredChangeReceiver {
         FilteredChangeReceiver::new(self.change_tx.subscribe(), connection_id)
     }
+
+    /// Get a clone of the GC notify handle.
+    ///
+    /// This is used by the background GC task to wait for signals that
+    /// there is work to be done.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is needed for async task
+    pub fn gc_notify(&self) -> Arc<tokio::sync::Notify> {
+        Arc::clone(&self.gc_notify)
+    }
+
+    /// Get statistics about pending garbage collection.
+    #[must_use]
+    pub fn gc_stats(&self) -> GcStats {
+        GcStats {
+            pending_tombstones: self.tombstone_list.count(),
+            min_active_snapshot: self.active_snapshots.min_active(),
+        }
+    }
+
+    /// Process a batch of eligible tombstones.
+    ///
+    /// This is called by the background GC task to incrementally process
+    /// tombstones. It removes records from all indexes and updates the
+    /// tombstone list.
+    ///
+    /// # Arguments
+    /// * `batch_size` - Maximum number of tombstones to process
+    ///
+    /// # Returns
+    /// Statistics about the GC operation.
+    pub fn gc_tick(&mut self, batch_size: usize) -> Result<GcTickResult, DatabaseError> {
+        let min_active = self.active_snapshots.min_active();
+
+        // Pop eligible tombstones from the list
+        let tombstones = self
+            .tombstone_list
+            .pop_batch(&mut self.file, min_active, batch_size)?;
+
+        if tombstones.is_empty() {
+            return Ok(GcTickResult {
+                records_removed: 0,
+                tombstones_remaining: self.tombstone_list.count(),
+            });
+        }
+
+        let records_removed = tombstones.len() as u64;
+
+        // Remove from all indexes
+        self.remove_tombstoned_records(&tombstones)?;
+
+        // Persist tombstone list state
+        self.persist_tombstone_metadata()?;
+
+        Ok(GcTickResult {
+            records_removed,
+            tombstones_remaining: self.tombstone_list.count(),
+        })
+    }
+
+    /// Synchronously process all eligible tombstones.
+    ///
+    /// Unlike the incremental `gc_tick()`, this processes all eligible
+    /// tombstones in one call. Use sparingly as it may block other operations.
+    pub fn force_gc(&mut self) -> Result<GcStats, DatabaseError> {
+        loop {
+            let result = self.gc_tick(1000)?;
+            if result.records_removed == 0 {
+                break;
+            }
+        }
+
+        Ok(GcStats {
+            pending_tombstones: self.tombstone_list.count(),
+            min_active_snapshot: self.active_snapshots.min_active(),
+        })
+    }
+
+    /// Remove tombstoned records from all three indexes.
+    fn remove_tombstoned_records(&mut self, tombstones: &[Tombstone]) -> Result<(), DatabaseError> {
+        if tombstones.is_empty() {
+            return Ok(());
+        }
+
+        // Remove from primary index
+        let primary_root = {
+            let root_page = self.file.superblock().primary_index_root;
+            if root_page == 0 {
+                0
+            } else {
+                let mut index = PrimaryIndex::new(&mut self.file, root_page)?;
+                for t in tombstones {
+                    index.remove(&t.entity_id, &t.attribute_id)?;
+                }
+                index.root_page()
+            }
+        };
+
+        // Remove from attribute index
+        let attribute_root = {
+            let root_page = self.file.superblock().attribute_index_root;
+            if root_page == 0 {
+                0
+            } else {
+                let mut index = AttributeIndex::new(&mut self.file, root_page)?;
+                for t in tombstones {
+                    index.remove(&t.attribute_id, &t.entity_id)?;
+                }
+                index.root_page()
+            }
+        };
+
+        // Remove from entity-attribute index
+        let entity_attr_root = {
+            let root_page = self.file.superblock().entity_attribute_index_root;
+            if root_page == 0 {
+                0
+            } else {
+                let mut index = EntityAttributeIndex::new(&mut self.file, root_page)?;
+                for t in tombstones {
+                    index.remove(&t.entity_id, &t.attribute_id)?;
+                }
+                index.root_page()
+            }
+        };
+
+        // Update root pages if they changed
+        if primary_root != 0 {
+            self.file.superblock_mut().primary_index_root = primary_root;
+        }
+        if attribute_root != 0 {
+            self.file.superblock_mut().attribute_index_root = attribute_root;
+        }
+        if entity_attr_root != 0 {
+            self.file.superblock_mut().entity_attribute_index_root = entity_attr_root;
+        }
+
+        self.file.write_superblock()?;
+        self.file.sync()?;
+
+        Ok(())
+    }
+
+    /// Persist tombstone list metadata to the superblock.
+    fn persist_tombstone_metadata(&mut self) -> Result<(), DatabaseError> {
+        let sb = self.file.superblock_mut();
+        sb.tombstone_head_page = self.tombstone_list.head_page_id();
+        sb.tombstone_tail_page = self.tombstone_list.tail_page_id();
+        sb.tombstone_tail_slot = self.tombstone_list.tail_slot() as u64;
+        sb.tombstone_count = self.tombstone_list.count();
+
+        self.file.write_superblock()?;
+
+        // Also persist the head slot to the head page for recovery
+        self.tombstone_list.persist_head_slot(&mut self.file)?;
+
+        Ok(())
+    }
 }
 
 /// A WAL-backed transaction.
@@ -666,6 +760,8 @@ pub struct WalTransaction<'a> {
     file: &'a mut DatabaseFile,
     checkpoint_state: &'a mut CheckpointState,
     clock: &'a mut Clock<SystemTimeSource>,
+    tombstone_list: &'a mut TombstoneList,
+    gc_notify: Arc<tokio::sync::Notify>,
     txn_id: TxnId,
     hlc: HlcTimestamp,
     /// Buffered operations to be written on commit
@@ -680,10 +776,13 @@ pub struct WalTransaction<'a> {
 
 impl<'a> WalTransaction<'a> {
     #[allow(clippy::missing_const_for_fn)] // broadcast::Sender is not const
+    #[allow(clippy::too_many_arguments)] // Transaction needs access to all database state
     fn new(
         file: &'a mut DatabaseFile,
         checkpoint_state: &'a mut CheckpointState,
         clock: &'a mut Clock<SystemTimeSource>,
+        tombstone_list: &'a mut TombstoneList,
+        gc_notify: Arc<tokio::sync::Notify>,
         txn_id: TxnId,
         hlc: HlcTimestamp,
         change_tx: broadcast::Sender<ChangeNotification>,
@@ -693,6 +792,8 @@ impl<'a> WalTransaction<'a> {
             file,
             checkpoint_state,
             clock,
+            tombstone_list,
+            gc_notify,
             txn_id,
             hlc,
             operations: Vec::new(),
@@ -921,6 +1022,9 @@ impl<'a> WalTransaction<'a> {
         // Step 5: Apply operations to index
         self.apply_to_index(txn_id, hlc)?;
 
+        // Step 5b: Add tombstones for delete operations
+        let has_deletes = self.add_tombstones_for_deletes(txn_id)?;
+
         // Step 6: Broadcast change notifications
         self.broadcast_changes(hlc);
 
@@ -937,6 +1041,11 @@ impl<'a> WalTransaction<'a> {
         if self.file.has_wal() {
             let checkpoint_hlc = self.clock.tick();
             maybe_checkpoint(self.file, self.checkpoint_state, checkpoint_hlc)?;
+        }
+
+        // Step 9: Signal GC task if we added tombstones (non-blocking)
+        if has_deletes {
+            self.gc_notify.notify_one();
         }
 
         Ok(())
@@ -1053,6 +1162,38 @@ impl<'a> WalTransaction<'a> {
         self.file.superblock_mut().entity_attribute_index_root = entity_attribute_root;
 
         Ok(())
+    }
+
+    /// Add tombstones for delete operations in this transaction.
+    ///
+    /// Returns `true` if any tombstones were added.
+    fn add_tombstones_for_deletes(&mut self, txn_id: TxnId) -> Result<bool, DatabaseError> {
+        let mut has_deletes = false;
+
+        for op in &self.operations {
+            if let PendingTriple::Delete {
+                entity_id,
+                attribute_id,
+            } = op
+            {
+                let tombstone = Tombstone::new(*entity_id, *attribute_id, txn_id);
+                self.tombstone_list.append(tombstone);
+                has_deletes = true;
+            }
+        }
+
+        // Flush tombstones to disk if any were added
+        if has_deletes {
+            self.tombstone_list.flush(self.file)?;
+            // Update superblock with tombstone metadata
+            let sb = self.file.superblock_mut();
+            sb.tombstone_head_page = self.tombstone_list.head_page_id();
+            sb.tombstone_tail_page = self.tombstone_list.tail_page_id();
+            sb.tombstone_tail_slot = self.tombstone_list.tail_slot() as u64;
+            sb.tombstone_count = self.tombstone_list.count();
+        }
+
+        Ok(has_deletes)
     }
 
     /// Broadcast change notifications to all subscribers.
@@ -1286,18 +1427,23 @@ impl<'a> Snapshot<'a> {
     }
 }
 
-/// Result of a garbage collection operation.
+/// Statistics about pending garbage collection.
 #[derive(Debug)]
-pub struct GcResult {
-    /// Number of records scanned during GC.
-    pub records_scanned: u64,
-    /// Number of records physically removed.
-    pub records_removed: u64,
-    /// Approximate bytes freed (based on serialized record size).
-    pub bytes_freed: u64,
-    /// The minimum active snapshot at time of GC.
-    /// Records deleted before this transaction were eligible for removal.
+pub struct GcStats {
+    /// Number of tombstones (deleted records) awaiting GC.
+    pub pending_tombstones: u64,
+    /// The minimum active snapshot transaction ID.
+    /// Tombstones with `deleted_txn >= min_active_snapshot` cannot be collected.
     pub min_active_snapshot: Option<TxnId>,
+}
+
+/// Result of an incremental GC tick.
+#[derive(Debug)]
+pub struct GcTickResult {
+    /// Number of records physically removed in this tick.
+    pub records_removed: u64,
+    /// Number of tombstones remaining after this tick.
+    pub tombstones_remaining: u64,
 }
 
 /// Errors that can occur during database operations.
@@ -1321,6 +1467,8 @@ pub enum DatabaseError {
     Checkpoint(CheckpointError),
     /// Clock error (excessive drift).
     Clock(ClockError),
+    /// Tombstone list error.
+    Tombstone(TombstoneError),
     /// Triple not found for update/delete.
     NotFound,
     /// Mutex/RwLock was poisoned.
@@ -1341,6 +1489,7 @@ impl std::fmt::Display for DatabaseError {
             Self::Recovery(e) => write!(f, "recovery error: {e}"),
             Self::Checkpoint(e) => write!(f, "checkpoint error: {e}"),
             Self::Clock(e) => write!(f, "clock error: {e}"),
+            Self::Tombstone(e) => write!(f, "tombstone error: {e}"),
             Self::NotFound => write!(f, "triple not found"),
             Self::LockPoisoned => write!(f, "database lock poisoned"),
             Self::NotConnected => write!(f, "connection not established"),
@@ -1360,6 +1509,7 @@ impl std::error::Error for DatabaseError {
             Self::Recovery(e) => Some(e),
             Self::Checkpoint(e) => Some(e),
             Self::Clock(e) => Some(e),
+            Self::Tombstone(e) => Some(e),
             Self::NotFound | Self::LockPoisoned | Self::NotConnected => None,
         }
     }
@@ -1416,6 +1566,12 @@ impl From<CheckpointError> for DatabaseError {
 impl From<ClockError> for DatabaseError {
     fn from(e: ClockError) -> Self {
         Self::Clock(e)
+    }
+}
+
+impl From<TombstoneError> for DatabaseError {
+    fn from(e: TombstoneError) -> Self {
+        Self::Tombstone(e)
     }
 }
 
@@ -2043,10 +2199,9 @@ mod tests {
         }
 
         // Run GC - should remove the deleted records
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_scanned, 10); // All records scanned
-        assert_eq!(result.records_removed, 5); // 5 deleted records removed
-        assert!(result.bytes_freed > 0);
+        let result = db.force_gc().expect("gc");
+        // All tombstones should be processed
+        assert_eq!(result.pending_tombstones, 0);
         assert!(result.min_active_snapshot.is_none()); // No active snapshots
 
         // Verify only 5 records remain
@@ -2092,16 +2247,17 @@ mod tests {
         }
 
         // Run GC - should NOT remove the record because snapshot at txn=1 can still see it
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 0); // Nothing removed
+        let result = db.force_gc().expect("gc");
+        // Tombstone should still be pending (blocked by active snapshot)
+        assert_eq!(result.pending_tombstones, 1);
         assert_eq!(result.min_active_snapshot, Some(1));
 
         // Release the snapshot
         db.release_snapshot(snapshot_txn);
 
         // Run GC again - now it should be removed
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 1);
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 0);
         assert!(result.min_active_snapshot.is_none());
     }
 
@@ -2126,11 +2282,10 @@ mod tests {
             txn.commit().expect("commit");
         }
 
-        // Run GC - nothing to collect
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_scanned, 5);
-        assert_eq!(result.records_removed, 0);
-        assert_eq!(result.bytes_freed, 0);
+        // Run GC - nothing to collect (no tombstones were created)
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 0);
+        assert!(result.min_active_snapshot.is_none());
     }
 
     #[test]
@@ -2140,10 +2295,9 @@ mod tests {
         let mut db = Database::create(&path, pool).expect("create db");
 
         // Run GC on empty database
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_scanned, 0);
-        assert_eq!(result.records_removed, 0);
-        assert_eq!(result.bytes_freed, 0);
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 0);
+        assert!(result.min_active_snapshot.is_none());
     }
 
     #[test]
@@ -2197,8 +2351,9 @@ mod tests {
         }
 
         // GC: min_active = 1, can't remove either (both deleted after txn=1)
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 0);
+        let result = db.force_gc().expect("gc");
+        // 2 tombstones should still be pending
+        assert_eq!(result.pending_tombstones, 2);
         assert_eq!(result.min_active_snapshot, Some(1));
 
         // Release snapshot 1
@@ -2206,16 +2361,16 @@ mod tests {
 
         // GC: min_active = 2, can remove first record (deleted at txn=2, which is not < 2)
         // Wait - deleted_txn=2 is NOT < min_active=2, so it shouldn't be GC'd
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 0);
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 2);
         assert_eq!(result.min_active_snapshot, Some(2));
 
         // Release snapshot 2
         db.release_snapshot(snapshot2_txn);
 
         // GC: no active snapshots, both records should be removed
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 2);
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 0);
         assert!(result.min_active_snapshot.is_none());
     }
 
@@ -2421,8 +2576,8 @@ mod tests {
         }
 
         // GC should clean up from all indexes
-        let result = db.collect_garbage().expect("gc");
-        assert_eq!(result.records_removed, 1);
+        let result = db.force_gc().expect("gc");
+        assert_eq!(result.pending_tombstones, 0);
 
         // Verify the record is gone from secondary indexes too
         {

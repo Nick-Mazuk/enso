@@ -21,6 +21,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
+use crate::storage::gc::{GcConfig, spawn_gc_task};
 use crate::storage::{Database, DatabaseError};
 
 /// Maximum length for an `app_api_key`.
@@ -128,8 +129,19 @@ impl DatabaseRegistry {
             );
         }
 
+        // Get the GC notify handle before wrapping in RwLock
+        let gc_notify = database.gc_notify();
+
         let db_arc = Arc::new(RwLock::new(database));
         databases.insert(app_api_key.to_string(), Arc::clone(&db_arc));
+
+        // Spawn background GC task with weak reference to prevent cycles
+        // The task will exit cleanly when the database is dropped
+        // Only spawn if we're inside a tokio runtime (may not be in some test contexts)
+        if tokio::runtime::Handle::try_current().is_ok() {
+            let weak_db = Arc::downgrade(&db_arc);
+            let _gc_handle = spawn_gc_task(weak_db, gc_notify, GcConfig::default());
+        }
 
         tracing::info!("Opened database for app '{}'", app_api_key);
 

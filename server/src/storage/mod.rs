@@ -41,6 +41,7 @@ pub mod buffer_pool;
 pub mod checkpoint;
 mod database;
 mod file;
+pub mod gc;
 pub mod hlc;
 pub mod indexes;
 pub mod io;
@@ -49,6 +50,7 @@ mod page;
 pub mod recovery;
 mod superblock;
 pub mod time;
+pub mod tombstone;
 mod transaction;
 pub mod wal;
 
@@ -58,8 +60,9 @@ pub use checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
     maybe_checkpoint, perform_checkpoint,
 };
-pub use database::{Database, DatabaseError, GcResult, Snapshot};
+pub use database::{Database, DatabaseError, GcStats, GcTickResult, Snapshot};
 pub use file::{DatabaseFile, FileError};
+pub use gc::{GcConfig, spawn_gc_task};
 pub use hlc::{Clock as HlcClock, ClockError as HlcClockError};
 pub use indexes::primary::{PrimaryIndex, PrimaryIndexError};
 pub use io::{Storage, StorageError};
@@ -67,6 +70,7 @@ pub use page::{PAGE_SIZE, Page, PageError, PageHeader, PageId, PageType};
 pub use recovery::{RecoveryError, RecoveryResult, needs_recovery, recover};
 pub use superblock::{Superblock, SuperblockError};
 pub use time::{SystemTimeSource, TimeSource};
+pub use tombstone::{Tombstone, TombstoneError, TombstoneList};
 pub use transaction::{Transaction, TransactionError};
 pub use wal::{LogRecord, LogRecordPayload, LogRecordType, Lsn, Wal, WalError};
 

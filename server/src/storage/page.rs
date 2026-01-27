@@ -36,6 +36,8 @@ pub enum PageType {
     Free = 0x06,
     /// Transaction log page
     TransactionLog = 0x07,
+    /// Tombstone list page (for incremental GC)
+    TombstoneList = 0x08,
 }
 
 impl TryFrom<u8> for PageType {
@@ -50,6 +52,7 @@ impl TryFrom<u8> for PageType {
             0x05 => Ok(Self::Overflow),
             0x06 => Ok(Self::Free),
             0x07 => Ok(Self::TransactionLog),
+            0x08 => Ok(Self::TombstoneList),
             _ => Err(value),
         }
     }

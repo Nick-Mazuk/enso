@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
+use crate::storage::tombstone::{Tombstone, TombstoneError, TombstoneList};
 use crate::storage::wal::{LogRecordPayload, Lsn, WalError};
 use crate::types::HlcTimestamp;
 use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
@@ -195,6 +196,20 @@ pub fn recover(file: &mut DatabaseFile) -> Result<RecoveryResult, RecoveryError>
     // Get primary index root
     let root_page = file.superblock().primary_index_root;
 
+    // Load tombstone list from superblock metadata
+    let superblock = file.superblock();
+    #[allow(clippy::cast_possible_truncation)] // Slot indices always fit in usize
+    let tombstone_tail_slot = superblock.tombstone_tail_slot as usize;
+    let mut tombstone_list = TombstoneList::from_persisted(
+        superblock.tombstone_head_page,
+        0, // head_slot is loaded separately from the head page
+        superblock.tombstone_tail_page,
+        tombstone_tail_slot,
+        superblock.tombstone_count,
+    );
+    // Load current head slot position from disk
+    tombstone_list.load_head_slot(file)?;
+
     // Create primary index for applying changes
     {
         let mut index = PrimaryIndex::new(file, root_page)?;
@@ -212,11 +227,14 @@ pub fn recover(file: &mut DatabaseFile) -> Result<RecoveryResult, RecoveryError>
                 operations_applied += 1;
             }
 
-            // Apply deletes
+            // Apply deletes and add tombstones
             for (entity_id, attribute_id) in &txn.deletes {
                 // Mark as deleted with this transaction ID
                 if index.mark_deleted(entity_id, attribute_id, *txn_id).is_ok() {
                     operations_applied += 1;
+                    // Add tombstone for incremental GC
+                    let tombstone = Tombstone::new(*entity_id, *attribute_id, *txn_id);
+                    tombstone_list.append(tombstone);
                 }
             }
         }
@@ -226,6 +244,13 @@ pub fn recover(file: &mut DatabaseFile) -> Result<RecoveryResult, RecoveryError>
         let file = index.file_mut();
         file.superblock_mut().primary_index_root = new_root;
     }
+
+    // Flush tombstones and update superblock
+    tombstone_list.flush(file)?;
+    file.superblock_mut().tombstone_head_page = tombstone_list.head_page_id();
+    file.superblock_mut().tombstone_tail_page = tombstone_list.tail_page_id();
+    file.superblock_mut().tombstone_tail_slot = tombstone_list.tail_slot() as u64;
+    file.superblock_mut().tombstone_count = tombstone_list.count();
 
     // Update next_txn_id to be higher than any recovered transaction
     let max_txn_id = pending_txns.keys().copied().max().unwrap_or(0);
@@ -282,6 +307,8 @@ pub enum RecoveryError {
     Index(PrimaryIndexError),
     /// Triple deserialization error.
     Triple(TripleError),
+    /// Tombstone list error.
+    Tombstone(TombstoneError),
     /// Corrupt WAL - found commit without begin.
     OrphanCommit(TxnId),
 }
@@ -293,6 +320,7 @@ impl std::fmt::Display for RecoveryError {
             Self::Wal(e) => write!(f, "recovery WAL error: {e}"),
             Self::Index(e) => write!(f, "recovery index error: {e}"),
             Self::Triple(e) => write!(f, "recovery triple error: {e}"),
+            Self::Tombstone(e) => write!(f, "recovery tombstone error: {e}"),
             Self::OrphanCommit(txn_id) => {
                 write!(f, "recovery found commit without begin for txn {txn_id}")
             }
@@ -307,6 +335,7 @@ impl std::error::Error for RecoveryError {
             Self::Wal(e) => Some(e),
             Self::Index(e) => Some(e),
             Self::Triple(e) => Some(e),
+            Self::Tombstone(e) => Some(e),
             Self::OrphanCommit(_) => None,
         }
     }
@@ -333,6 +362,12 @@ impl From<PrimaryIndexError> for RecoveryError {
 impl From<TripleError> for RecoveryError {
     fn from(e: TripleError) -> Self {
         Self::Triple(e)
+    }
+}
+
+impl From<TombstoneError> for RecoveryError {
+    fn from(e: TombstoneError) -> Self {
+        Self::Tombstone(e)
     }
 }
 
