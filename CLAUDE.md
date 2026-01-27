@@ -28,6 +28,7 @@ Testing:
 
 - Always include tests for new features or bug fixes.
 - Test with invalid data and states, not just the happy path.
+- Never ignore or skip tests.
 
 Simplicity:
 
