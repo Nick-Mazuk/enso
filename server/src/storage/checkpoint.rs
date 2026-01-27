@@ -368,8 +368,14 @@ impl From<WalError> for CheckpointError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::storage::wal::DEFAULT_WAL_CAPACITY;
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -471,7 +477,8 @@ mod tests {
     #[test]
     fn test_perform_checkpoint() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Initialize WAL
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
@@ -509,7 +516,8 @@ mod tests {
     #[test]
     fn test_maybe_checkpoint() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let config = CheckpointConfig::new(5, 0); // Checkpoint after 5 txns
@@ -533,7 +541,8 @@ mod tests {
     #[test]
     fn test_force_checkpoint() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let config = CheckpointConfig::new(1000, 1_000_000); // High thresholds
@@ -552,13 +561,14 @@ mod tests {
     #[test]
     fn test_checkpoint_persistence() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         let checkpoint_lsn;
         let checkpoint_hlc = HlcTimestamp::new(5000, 10);
 
         // Create database and checkpoint
         {
-            let mut file = DatabaseFile::create(&path).expect("create db");
+            let mut file = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
             file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
             let config = CheckpointConfig::default();
@@ -571,7 +581,7 @@ mod tests {
 
         // Reopen and verify
         {
-            let file = DatabaseFile::open(&path).expect("open db");
+            let file = DatabaseFile::open(&path, Arc::clone(&pool)).expect("open db");
 
             assert_eq!(file.superblock().last_checkpoint_lsn, checkpoint_lsn);
             assert_eq!(file.superblock().last_checkpoint_hlc, checkpoint_hlc);
@@ -581,7 +591,8 @@ mod tests {
     #[test]
     fn test_multiple_checkpoints() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let config = CheckpointConfig::default();

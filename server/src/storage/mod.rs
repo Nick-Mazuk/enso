@@ -14,12 +14,14 @@
 //!
 //! ```no_run
 //! use server::storage::{DatabaseFile, Transaction};
+//! use server::storage::buffer_pool::BufferPool;
 //! use server::types::{EntityId, AttributeId, TripleValue};
 //! use std::path::Path;
 //!
-//! // Create a new database
+//! // Create a buffer pool and new database
+//! let pool = BufferPool::new(100);
 //! let path = Path::new("/tmp/my_database");
-//! let mut db = DatabaseFile::create(path).unwrap();
+//! let mut db = DatabaseFile::create(path, pool).unwrap();
 //!
 //! // Begin a transaction
 //! let mut txn = Transaction::begin(&mut db).unwrap();

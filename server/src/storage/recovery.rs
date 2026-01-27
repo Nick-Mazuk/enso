@@ -339,9 +339,15 @@ impl From<TripleError> for RecoveryError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::storage::wal::{DEFAULT_WAL_CAPACITY, LogRecordPayload};
     use crate::types::TripleValue;
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -352,7 +358,8 @@ mod tests {
     #[test]
     fn test_recover_empty_wal() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let result = recover(&mut file).expect("recover");
@@ -365,7 +372,8 @@ mod tests {
     #[test]
     fn test_recover_no_wal() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         // Don't init WAL
 
         let result = recover(&mut file).expect("recover");
@@ -377,7 +385,8 @@ mod tests {
     #[test]
     fn test_recover_committed_transaction() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -439,7 +448,8 @@ mod tests {
     #[test]
     fn test_recover_uncommitted_transaction() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -492,7 +502,8 @@ mod tests {
     #[test]
     fn test_recover_multiple_transactions() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -588,7 +599,8 @@ mod tests {
     #[test]
     fn test_recover_delete_operation() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -656,7 +668,8 @@ mod tests {
     #[test]
     fn test_needs_recovery_empty() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         assert!(!needs_recovery(&mut file).expect("needs_recovery"));
@@ -665,7 +678,8 @@ mod tests {
     #[test]
     fn test_needs_recovery_with_uncommitted() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         // Write some WAL records
@@ -688,7 +702,8 @@ mod tests {
     #[test]
     fn test_recovery_updates_next_txn_id() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -732,7 +747,8 @@ mod tests {
     fn test_recover_interleaved_transactions() {
         // Test recovery with interleaved transactions (concurrent writes)
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -816,7 +832,8 @@ mod tests {
     fn test_recover_insert_then_delete_same_key() {
         // Test recovery when same key is inserted and deleted in same transaction
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -880,7 +897,8 @@ mod tests {
     fn test_recover_multiple_inserts_same_key() {
         // Test recovery when same key is inserted multiple times (update scenario)
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -948,7 +966,8 @@ mod tests {
     fn test_recover_checkpoint_record() {
         // Test that checkpoint records don't affect recovery
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);
@@ -1008,7 +1027,8 @@ mod tests {
         // Test that insert records with bytes < 32 are silently ignored
         // This tests the safety check at line 139: if bytes.len() >= 32
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
         file.init_wal(DEFAULT_WAL_CAPACITY).expect("init wal");
 
         let hlc = HlcTimestamp::new(1000, 0);

@@ -364,14 +364,21 @@ mod tests {
     use super::*;
     use crate::query::types::Variable;
     use crate::storage::Database;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::types::{AttributeId, EntityId, TripleValue as StorageTripleValue};
+    use std::sync::Arc;
     use tempfile::tempdir;
 
-    fn create_test_db_with_data() -> (tempfile::TempDir, std::path::PathBuf) {
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
+
+    fn create_test_db_with_data() -> (tempfile::TempDir, std::path::PathBuf, Arc<BufferPool>) {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
-        let mut db = Database::create(&path).expect("create db");
+        let mut db = Database::create(&path, Arc::clone(&pool)).expect("create db");
 
         // Insert test data
         {
@@ -415,13 +422,13 @@ mod tests {
         }
 
         db.close().expect("close");
-        (dir, path)
+        (dir, path, pool)
     }
 
     #[test]
     fn test_simple_query() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -446,8 +453,8 @@ mod tests {
 
     #[test]
     fn test_query_with_concrete_entity() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -472,8 +479,8 @@ mod tests {
 
     #[test]
     fn test_query_with_multiple_patterns() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -504,8 +511,8 @@ mod tests {
 
     #[test]
     fn test_optional_pattern() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -544,8 +551,8 @@ mod tests {
 
     #[test]
     fn test_where_not_pattern() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -578,8 +585,8 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -611,8 +618,8 @@ mod tests {
 
     #[test]
     fn test_value_match() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -637,8 +644,8 @@ mod tests {
 
     #[test]
     fn test_empty_result() {
-        let (_dir, path) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path).expect("open db");
+        let (_dir, path, pool) = create_test_db_with_data();
+        let (mut db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -662,8 +669,9 @@ mod tests {
     fn test_query_empty_database() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
-        let mut db = Database::create(&path).expect("create db");
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let txn_id = {
             let mut snapshot = db.begin_readonly();
@@ -690,8 +698,9 @@ mod tests {
     fn test_snapshot_isolation_in_query() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
-        let mut db = Database::create(&path).expect("create db");
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Create name field
         let name_field = AttributeId::from_string("name");

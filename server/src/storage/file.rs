@@ -7,7 +7,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::io::{Storage, StorageError};
 use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
 use crate::storage::superblock::{Superblock, SuperblockError};
@@ -25,20 +25,11 @@ impl DatabaseFile {
     /// Create a new database file at the given path.
     ///
     /// Returns an error if the file already exists.
-    /// Uses the default buffer pool capacity (512 pages = 4MB).
-    pub fn create(path: &Path) -> Result<Self, FileError> {
-        Self::create_with_pool_capacity(path, DEFAULT_POOL_CAPACITY)
-    }
-
-    /// Create a new database file with a custom buffer pool capacity.
-    ///
-    /// Returns an error if the file already exists.
-    pub fn create_with_pool_capacity(path: &Path, pool_capacity: usize) -> Result<Self, FileError> {
+    /// The provided buffer pool is shared across all databases.
+    pub fn create(path: &Path, buffer_pool: Arc<BufferPool>) -> Result<Self, FileError> {
         if path.exists() {
             return Err(FileError::AlreadyExists(path.to_path_buf()));
         }
-
-        let buffer_pool = BufferPool::new(pool_capacity);
 
         let mut file = OpenOptions::new()
             .read(true)
@@ -65,15 +56,8 @@ impl DatabaseFile {
 
     /// Open an existing database file.
     ///
-    /// Uses the default buffer pool capacity (512 pages = 4MB).
-    pub fn open(path: &Path) -> Result<Self, FileError> {
-        Self::open_with_pool_capacity(path, DEFAULT_POOL_CAPACITY)
-    }
-
-    /// Open an existing database file with a custom buffer pool capacity.
-    pub fn open_with_pool_capacity(path: &Path, pool_capacity: usize) -> Result<Self, FileError> {
-        let buffer_pool = BufferPool::new(pool_capacity);
-
+    /// The provided buffer pool is shared across all databases.
+    pub fn open(path: &Path, buffer_pool: Arc<BufferPool>) -> Result<Self, FileError> {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -489,24 +473,31 @@ impl Storage for DatabaseFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use std::fs;
     use tempfile::tempdir;
+
+    /// Create a test buffer pool with reasonable capacity for tests.
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     #[test]
     fn test_create_and_open() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
         // Create a new database
         {
-            let db = DatabaseFile::create(&path).expect("create db");
+            let db = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
             assert_eq!(db.total_pages(), 1);
             assert_eq!(db.superblock().next_txn_id, 1);
         }
 
         // Reopen it
         {
-            let db = DatabaseFile::open(&path).expect("open db");
+            let db = DatabaseFile::open(&path, Arc::clone(&pool)).expect("open db");
             assert_eq!(db.total_pages(), 1);
             assert_eq!(db.superblock().next_txn_id, 1);
         }
@@ -516,12 +507,13 @@ mod tests {
     fn test_create_already_exists() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
         // Create the file
         fs::write(&path, b"existing").expect("write file");
 
         // Try to create database - should fail
-        let result = DatabaseFile::create(&path);
+        let result = DatabaseFile::create(&path, pool);
         assert!(matches!(result, Err(FileError::AlreadyExists(_))));
     }
 
@@ -529,8 +521,9 @@ mod tests {
     fn test_allocate_and_write_pages() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
-        let mut db = DatabaseFile::create(&path).expect("create db");
+        let mut db = DatabaseFile::create(&path, pool).expect("create db");
 
         // Allocate 5 new pages
         let first_page = db.allocate_pages(5).expect("allocate");
@@ -551,8 +544,9 @@ mod tests {
     fn test_page_out_of_bounds() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
-        let mut db = DatabaseFile::create(&path).expect("create db");
+        let mut db = DatabaseFile::create(&path, pool).expect("create db");
 
         // Try to read page that doesn't exist
         let result = db.read_page(100);
@@ -563,10 +557,11 @@ mod tests {
     fn test_superblock_persistence() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
         // Create and modify superblock
         {
-            let mut db = DatabaseFile::create(&path).expect("create db");
+            let mut db = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
             db.superblock_mut().next_txn_id = 42;
             db.superblock_mut().primary_index_root = 5;
             db.write_superblock().expect("write superblock");
@@ -575,7 +570,7 @@ mod tests {
 
         // Reopen and verify
         {
-            let db = DatabaseFile::open(&path).expect("open db");
+            let db = DatabaseFile::open(&path, pool).expect("open db");
             assert_eq!(db.superblock().next_txn_id, 42);
             assert_eq!(db.superblock().primary_index_root, 5);
         }
@@ -585,10 +580,11 @@ mod tests {
     fn test_page_data_persistence() {
         let dir = tempdir().expect("create temp dir");
         let path = dir.path().join("test.db");
+        let pool = test_pool();
 
         // Write data
         {
-            let mut db = DatabaseFile::create(&path).expect("create db");
+            let mut db = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
             db.allocate_pages(2).expect("allocate");
 
             let mut page = db.buffer_pool().lease_page_zeroed().expect("lease page");
@@ -600,7 +596,7 @@ mod tests {
 
         // Read back
         {
-            let mut db = DatabaseFile::open(&path).expect("open db");
+            let mut db = DatabaseFile::open(&path, pool).expect("open db");
             let page = db.read_page(1).expect("read");
             assert_eq!(page.read_u64(100), 0xDEAD_BEEF_CAFE_BABE);
         }

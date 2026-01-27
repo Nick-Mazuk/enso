@@ -6,6 +6,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::client_connection::ClientConnection;
 use crate::proto;
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::{Database, FilteredChangeReceiver};
 
 /// Counter for generating unique test database IDs.
@@ -33,8 +34,11 @@ impl TestClient {
         // Remove if exists
         let _ = std::fs::remove_file(&db_path);
 
+        // Create buffer pool for the test database
+        let pool = BufferPool::new(100);
+
         #[allow(clippy::expect_used)]
-        let database = Database::create(&db_path).expect("Failed to create test database");
+        let database = Database::create(&db_path, pool).expect("Failed to create test database");
 
         // Database now handles broadcast channel internally
         // ClientConnection::new() puts the connection in Connected state

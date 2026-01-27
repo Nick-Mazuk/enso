@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::client_connection::ClientConnection;
 use crate::proto;
 use crate::storage::Database;
+use crate::storage::buffer_pool::BufferPool;
 
 /// Counter for generating unique simulator instance IDs.
 static SIMULATOR_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -166,7 +167,10 @@ impl Simulator {
         // Remove if exists
         let _ = std::fs::remove_file(&db_path);
 
-        let database = match Database::create(&db_path) {
+        // Create a buffer pool for the simulator database
+        let pool = BufferPool::new(100);
+
+        let database = match Database::create(&db_path, pool) {
             Ok(db) => db,
             Err(e) => {
                 return SimulationResult {

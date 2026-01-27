@@ -20,8 +20,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::storage::page::{PAGE_SIZE, Page};
 
-/// Default buffer pool capacity in pages (512 pages = 4MB).
-pub const DEFAULT_POOL_CAPACITY: usize = 512;
+/// Default buffer pool capacity in pages (262,144 pages = 2GB).
+/// This is sized for a shared pool across all open databases.
+pub const DEFAULT_POOL_CAPACITY: usize = 262_144;
 
 /// A buffer pool that pre-allocates page buffers.
 ///

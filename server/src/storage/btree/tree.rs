@@ -588,9 +588,15 @@ impl From<OverflowError> for BTreeError {
 mod tests {
     use super::*;
     use crate::storage::btree::node::make_key;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::storage::file::DatabaseFile;
     use crate::types::{AttributeId, EntityId};
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -601,7 +607,8 @@ mod tests {
     #[test]
     fn test_btree_basic_operations() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -627,7 +634,8 @@ mod tests {
     #[test]
     fn test_btree_update() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -648,7 +656,8 @@ mod tests {
     #[test]
     fn test_btree_remove() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -666,7 +675,8 @@ mod tests {
     #[test]
     fn test_btree_iteration() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -695,7 +705,8 @@ mod tests {
     #[test]
     fn test_btree_many_inserts() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -727,7 +738,8 @@ mod tests {
     #[test]
     fn test_btree_iter_from() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -752,12 +764,13 @@ mod tests {
     #[test]
     fn test_btree_persistence() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         let root_page;
 
         // Create and populate tree
         {
-            let mut file = DatabaseFile::create(&path).expect("create db");
+            let mut file = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
             let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
             for i in 0..100u8 {
@@ -775,7 +788,7 @@ mod tests {
 
         // Reopen and verify
         {
-            let mut file = DatabaseFile::open(&path).expect("open db");
+            let mut file = DatabaseFile::open(&path, Arc::clone(&pool)).expect("open db");
             let stored_root = file.superblock().primary_index_root;
             assert_eq!(stored_root, root_page);
 
@@ -793,7 +806,8 @@ mod tests {
     #[test]
     fn test_btree_overflow_value() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -830,7 +844,8 @@ mod tests {
     #[test]
     fn test_btree_mixed_inline_and_overflow() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 
@@ -864,7 +879,8 @@ mod tests {
     #[test]
     fn test_btree_very_large_overflow() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut tree = BTree::new(&mut file, 0).expect("create tree");
 

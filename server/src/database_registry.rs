@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
 use crate::storage::{Database, DatabaseError};
 
 /// Maximum length for an `app_api_key`.
@@ -35,6 +36,8 @@ pub struct DatabaseRegistry {
     databases: RwLock<HashMap<String, Arc<RwLock<Database>>>>,
     /// Base directory where database files are stored.
     base_directory: PathBuf,
+    /// Shared buffer pool for all databases.
+    buffer_pool: Arc<BufferPool>,
 }
 
 impl DatabaseRegistry {
@@ -44,11 +47,29 @@ impl DatabaseRegistry {
     ///
     /// * `base_directory` - Directory where database files will be stored.
     ///   Each app's database will be at `{base_directory}/{app_api_key}.db`.
+    ///
+    /// Initializes a shared 2GB buffer pool for all databases.
     #[must_use]
     pub fn new(base_directory: PathBuf) -> Self {
         Self {
             databases: RwLock::new(HashMap::new()),
             base_directory,
+            buffer_pool: BufferPool::new(DEFAULT_POOL_CAPACITY),
+        }
+    }
+
+    /// Create a new database registry with a custom buffer pool capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_directory` - Directory where database files will be stored.
+    /// * `pool_capacity` - Number of 8KB pages in the shared buffer pool.
+    #[must_use]
+    pub fn with_pool_capacity(base_directory: PathBuf, pool_capacity: usize) -> Self {
+        Self {
+            databases: RwLock::new(HashMap::new()),
+            base_directory,
+            buffer_pool: BufferPool::new(pool_capacity),
         }
     }
 
@@ -94,7 +115,8 @@ impl DatabaseRegistry {
 
         // Create the database
         let db_path = self.base_directory.join(format!("{app_api_key}.db"));
-        let (database, recovery_result) = Database::open_or_create(&db_path)?;
+        let (database, recovery_result) =
+            Database::open_or_create(&db_path, Arc::clone(&self.buffer_pool))?;
 
         if let Some(result) = recovery_result {
             tracing::info!(

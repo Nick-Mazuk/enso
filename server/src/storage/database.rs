@@ -9,12 +9,14 @@
 //!
 //! ```no_run
 //! use server::storage::Database;
+//! use server::storage::buffer_pool::BufferPool;
 //! use server::types::{EntityId, AttributeId, TripleValue};
 //! use std::path::Path;
 //!
-//! // Create a new database (initializes WAL)
+//! // Create a buffer pool and new database (initializes WAL)
+//! let pool = BufferPool::new(100);
 //! let path = Path::new("/tmp/my_database");
-//! let mut db = Database::create(path).unwrap();
+//! let mut db = Database::create(path, pool).unwrap();
 //!
 //! // Begin a transaction
 //! let entity_id = EntityId([1u8; 16]);
@@ -28,10 +30,12 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use tokio::sync::broadcast;
 
 use crate::storage::FilteredChangeReceiver;
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
     maybe_checkpoint,
@@ -242,9 +246,10 @@ impl Database {
     ///
     /// The path must not already exist. Initializes WAL with default capacity.
     /// Uses node ID 0 for single-node deployments.
-    pub fn create(path: &Path) -> Result<Self, DatabaseError> {
+    pub fn create(path: &Path, pool: Arc<BufferPool>) -> Result<Self, DatabaseError> {
         Self::create_with_options(
             path,
+            pool,
             DEFAULT_WAL_CAPACITY,
             CheckpointConfig::default(),
             DEFAULT_NODE_ID,
@@ -255,16 +260,18 @@ impl Database {
     ///
     /// # Arguments
     /// * `path` - Path for the database file
+    /// * `pool` - Shared buffer pool for page allocations
     /// * `wal_capacity` - Capacity of the write-ahead log in bytes
     /// * `checkpoint_config` - Configuration for automatic checkpointing
     /// * `node_id` - Unique identifier for this node (for distributed deployments)
     pub fn create_with_options(
         path: &Path,
+        pool: Arc<BufferPool>,
         wal_capacity: u64,
         checkpoint_config: CheckpointConfig,
         node_id: u32,
     ) -> Result<Self, DatabaseError> {
-        let mut file = DatabaseFile::create(path)?;
+        let mut file = DatabaseFile::create(path, pool)?;
 
         // Initialize WAL
         file.init_wal(wal_capacity)?;
@@ -288,22 +295,27 @@ impl Database {
     ///
     /// Runs crash recovery if needed to restore consistent state.
     /// Uses node ID 0 for single-node deployments.
-    pub fn open(path: &Path) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
-        Self::open_with_options(path, CheckpointConfig::default(), DEFAULT_NODE_ID)
+    pub fn open(
+        path: &Path,
+        pool: Arc<BufferPool>,
+    ) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
+        Self::open_with_options(path, pool, CheckpointConfig::default(), DEFAULT_NODE_ID)
     }
 
     /// Open an existing database with custom options.
     ///
     /// # Arguments
     /// * `path` - Path to the existing database file
+    /// * `pool` - Shared buffer pool for page allocations
     /// * `checkpoint_config` - Configuration for automatic checkpointing
     /// * `node_id` - Unique identifier for this node (for distributed deployments)
     pub fn open_with_options(
         path: &Path,
+        pool: Arc<BufferPool>,
         checkpoint_config: CheckpointConfig,
         node_id: u32,
     ) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
-        let mut file = DatabaseFile::open(path)?;
+        let mut file = DatabaseFile::open(path, pool)?;
 
         // Run recovery if needed
         let recovery_result = if file.has_wal() && recovery::needs_recovery(&mut file)? {
@@ -334,11 +346,14 @@ impl Database {
     }
 
     /// Open an existing database or create a new one if it doesn't exist.
-    pub fn open_or_create(path: &Path) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
+    pub fn open_or_create(
+        path: &Path,
+        pool: Arc<BufferPool>,
+    ) -> Result<(Self, Option<RecoveryResult>), DatabaseError> {
         if path.exists() {
-            Self::open(path)
+            Self::open(path, pool)
         } else {
-            let db = Self::create(path)?;
+            let db = Self::create(path, pool)?;
             Ok((db, None))
         }
     }
@@ -400,11 +415,13 @@ impl Database {
     ///
     /// ```no_run
     /// use server::storage::Database;
+    /// use server::storage::buffer_pool::BufferPool;
     /// use server::types::{EntityId, AttributeId};
     /// use std::path::Path;
     ///
+    /// let pool = BufferPool::new(100);
     /// let path = Path::new("/tmp/my_database");
-    /// let mut db = Database::create(path).unwrap();
+    /// let mut db = Database::create(path, pool).unwrap();
     ///
     /// let mut snapshot = db.begin_readonly();
     /// let entity = EntityId([1u8; 16]);
@@ -1405,8 +1422,13 @@ impl From<ClockError> for DatabaseError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::types::{AttributeId, EntityId};
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -1417,10 +1439,11 @@ mod tests {
     #[test]
     fn test_database_create_and_commit() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         // Create database
         {
-            let mut db = Database::create(&path).expect("create db");
+            let mut db = Database::create(&path, Arc::clone(&pool)).expect("create db");
             let mut txn = db.begin(0).expect("begin txn");
 
             let entity_id = EntityId([1u8; 16]);
@@ -1435,7 +1458,7 @@ mod tests {
 
         // Reopen and verify (with recovery)
         {
-            let (mut db, recovery) = Database::open(&path).expect("open db");
+            let (mut db, recovery) = Database::open(&path, Arc::clone(&pool)).expect("open db");
 
             // Recovery might have run
             if let Some(result) = recovery {
@@ -1459,17 +1482,20 @@ mod tests {
     #[test]
     fn test_database_open_or_create() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         // First call creates
         {
-            let (db, recovery) = Database::open_or_create(&path).expect("open_or_create");
+            let (db, recovery) =
+                Database::open_or_create(&path, Arc::clone(&pool)).expect("open_or_create");
             assert!(recovery.is_none()); // New database, no recovery
             drop(db);
         }
 
         // Second call opens
         {
-            let (mut db, _) = Database::open_or_create(&path).expect("open_or_create again");
+            let (mut db, _) =
+                Database::open_or_create(&path, Arc::clone(&pool)).expect("open_or_create again");
             let txn = db.begin(0).expect("begin");
             txn.abort();
         }
@@ -1478,10 +1504,11 @@ mod tests {
     #[test]
     fn test_database_abort_no_persist() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         // Create and abort transaction
         {
-            let mut db = Database::create(&path).expect("create db");
+            let mut db = Database::create(&path, Arc::clone(&pool)).expect("create db");
             let mut txn = db.begin(0).expect("begin txn");
 
             txn.insert(
@@ -1494,7 +1521,7 @@ mod tests {
 
         // Reopen and verify data is NOT there
         {
-            let (mut db, _) = Database::open(&path).expect("open db");
+            let (mut db, _) = Database::open(&path, Arc::clone(&pool)).expect("open db");
             let mut txn = db.begin(0).expect("begin txn");
 
             let record = txn
@@ -1508,8 +1535,9 @@ mod tests {
     #[test]
     fn test_database_update_and_delete() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
-        let mut db = Database::create(&path).expect("create db");
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert
         {
@@ -1566,7 +1594,8 @@ mod tests {
     #[test]
     fn test_database_not_found_errors() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let mut txn = db.begin(0).expect("begin");
 
@@ -1588,7 +1617,8 @@ mod tests {
     #[test]
     fn test_database_multiple_transactions() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Multiple sequential transactions
         for i in 0..10u8 {
@@ -1620,7 +1650,8 @@ mod tests {
     #[test]
     fn test_database_checkpoint() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert some data
         {
@@ -1644,10 +1675,11 @@ mod tests {
     #[test]
     fn test_database_recovery_committed() {
         let (_dir, path) = create_test_db();
+        let pool = test_pool();
 
         // Create database and insert without clean close
         {
-            let mut db = Database::create(&path).expect("create db");
+            let mut db = Database::create(&path, Arc::clone(&pool)).expect("create db");
             let mut txn = db.begin(0).expect("begin");
             txn.insert(
                 EntityId([1u8; 16]),
@@ -1660,7 +1692,7 @@ mod tests {
 
         // Reopen - recovery should find the committed data
         {
-            let (mut db, recovery) = Database::open(&path).expect("open db");
+            let (mut db, recovery) = Database::open(&path, Arc::clone(&pool)).expect("open db");
 
             // Might have run recovery
             if let Some(result) = recovery {
@@ -1687,7 +1719,8 @@ mod tests {
     #[test]
     fn test_database_empty_commit() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Empty transaction should commit successfully
         let txn = db.begin(0).expect("begin");
@@ -1699,7 +1732,8 @@ mod tests {
     #[test]
     fn test_snapshot_basic_read() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert data
         {
@@ -1730,7 +1764,8 @@ mod tests {
     #[test]
     fn test_snapshot_isolation() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert initial data (txn_id = 1)
         {
@@ -1788,7 +1823,8 @@ mod tests {
     #[test]
     fn test_snapshot_sees_deleted_records() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert data (txn_id = 1)
         {
@@ -1828,7 +1864,8 @@ mod tests {
     #[test]
     fn test_snapshot_entity_scan() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let entity = EntityId([1u8; 16]);
 
@@ -1856,7 +1893,8 @@ mod tests {
     #[test]
     fn test_snapshot_count() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert 10 records
         {
@@ -1907,7 +1945,8 @@ mod tests {
     #[test]
     fn test_active_snapshot_tracking() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert data
         {
@@ -1942,7 +1981,8 @@ mod tests {
     #[test]
     fn test_snapshot_collect_all() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert records
         {
@@ -1972,7 +2012,8 @@ mod tests {
     #[test]
     fn test_gc_removes_deleted_records() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert records
         {
@@ -2021,7 +2062,8 @@ mod tests {
     #[test]
     fn test_gc_respects_active_snapshots() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert a record (txn_id = 1)
         {
@@ -2066,7 +2108,8 @@ mod tests {
     #[test]
     fn test_gc_no_deleted_records() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert records (no deletes)
         {
@@ -2093,7 +2136,8 @@ mod tests {
     #[test]
     fn test_gc_empty_database() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Run GC on empty database
         let result = db.collect_garbage().expect("gc");
@@ -2105,7 +2149,8 @@ mod tests {
     #[test]
     fn test_gc_multiple_snapshots() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         // Insert records (txn_id = 1)
         {
@@ -2214,7 +2259,8 @@ mod tests {
     #[test]
     fn test_secondary_index_entities_with_attribute() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let attr1 = AttributeId([1u8; 16]);
         let attr2 = AttributeId([2u8; 16]);
@@ -2257,7 +2303,8 @@ mod tests {
     #[test]
     fn test_secondary_index_attributes_for_entity() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let entity1 = EntityId([1u8; 16]);
         let entity2 = EntityId([2u8; 16]);
@@ -2302,7 +2349,8 @@ mod tests {
     #[test]
     fn test_secondary_index_visibility() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let entity = EntityId([1u8; 16]);
         let attr1 = AttributeId([10u8; 16]);
@@ -2352,7 +2400,8 @@ mod tests {
     #[test]
     fn test_secondary_index_gc_integration() {
         let (_dir, path) = create_test_db();
-        let mut db = Database::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
 
         let entity = EntityId([1u8; 16]);
         let attr = AttributeId([10u8; 16]);

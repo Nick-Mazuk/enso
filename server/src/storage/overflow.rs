@@ -301,7 +301,13 @@ impl From<FileError> for OverflowError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -334,7 +340,8 @@ mod tests {
     #[test]
     fn test_overflow_single_page() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Value that fits in one overflow page
         let value = vec![0xABu8; 2048];
@@ -349,7 +356,8 @@ mod tests {
     #[test]
     fn test_overflow_multiple_pages() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Value that spans multiple overflow pages
         let value = vec![0xCDu8; 20000]; // ~3 pages needed
@@ -364,7 +372,8 @@ mod tests {
     #[test]
     fn test_overflow_free() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Write a value that spans multiple pages
         let value = vec![0xEFu8; 20000];
@@ -378,7 +387,8 @@ mod tests {
     #[test]
     fn test_overflow_exact_page_boundary() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Value that exactly fills one page
         let value = vec![0x11u8; OVERFLOW_DATA_PER_PAGE];
@@ -391,7 +401,8 @@ mod tests {
     #[test]
     fn test_overflow_variable_data() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         // Value with varying byte patterns
         let mut value = Vec::with_capacity(15000);

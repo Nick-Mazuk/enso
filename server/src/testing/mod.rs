@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::{Database, DatabaseError};
 
 static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -18,5 +19,8 @@ pub fn new_test_database() -> Result<Database, DatabaseError> {
     // Remove if it exists from a previous run
     let _ = std::fs::remove_file(&path);
 
-    Database::create(&path)
+    // Create a buffer pool for the test database
+    let pool = BufferPool::new(100);
+
+    Database::create(&path, pool)
 }

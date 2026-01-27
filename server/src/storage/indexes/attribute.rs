@@ -313,9 +313,15 @@ impl From<BTreeError> for AttributeIndexError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::storage::file::DatabaseFile;
     use crate::types::{AttributeId, EntityId};
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -326,7 +332,8 @@ mod tests {
     #[test]
     fn test_attribute_index_basic() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut index = AttributeIndex::new(&mut file, 0).expect("create index");
 
@@ -356,7 +363,8 @@ mod tests {
     #[test]
     fn test_attribute_index_scan() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut index = AttributeIndex::new(&mut file, 0).expect("create index");
 
@@ -397,7 +405,8 @@ mod tests {
     #[test]
     fn test_attribute_index_visibility() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut index = AttributeIndex::new(&mut file, 0).expect("create index");
 
@@ -425,7 +434,8 @@ mod tests {
     #[test]
     fn test_attribute_index_remove() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut index = AttributeIndex::new(&mut file, 0).expect("create index");
 
@@ -442,7 +452,8 @@ mod tests {
     #[test]
     fn test_attribute_scan_with_visibility() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut index = AttributeIndex::new(&mut file, 0).expect("create index");
 

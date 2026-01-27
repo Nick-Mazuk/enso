@@ -236,8 +236,14 @@ impl From<TripleError> for TransactionError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
     use crate::storage::file::DatabaseFile;
+    use std::sync::Arc;
     use tempfile::tempdir;
+
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(100)
+    }
 
     fn create_test_db() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().expect("create temp dir");
@@ -248,7 +254,8 @@ mod tests {
     #[test]
     fn test_transaction_insert_and_get() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
 
         {
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
@@ -275,7 +282,7 @@ mod tests {
 
         // Verify persistence
         {
-            let mut file = DatabaseFile::open(&path).expect("open db");
+            let mut file = DatabaseFile::open(&path, Arc::clone(&pool)).expect("open db");
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
             let entity_id = EntityId([1u8; 16]);
@@ -297,7 +304,8 @@ mod tests {
     #[test]
     fn test_transaction_update() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
@@ -323,7 +331,8 @@ mod tests {
     #[test]
     fn test_transaction_delete() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
@@ -349,7 +358,8 @@ mod tests {
     #[test]
     fn test_transaction_update_not_found() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
@@ -366,7 +376,8 @@ mod tests {
     #[test]
     fn test_transaction_delete_not_found() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, pool).expect("create db");
 
         let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
@@ -383,7 +394,8 @@ mod tests {
     #[test]
     fn test_transaction_multiple_entities() {
         let (_dir, path) = create_test_db();
-        let mut file = DatabaseFile::create(&path).expect("create db");
+        let pool = test_pool();
+        let mut file = DatabaseFile::create(&path, Arc::clone(&pool)).expect("create db");
 
         {
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
@@ -410,7 +422,7 @@ mod tests {
 
         // Verify by scanning entity 5
         {
-            let mut file = DatabaseFile::open(&path).expect("open db");
+            let mut file = DatabaseFile::open(&path, Arc::clone(&pool)).expect("open db");
             let mut txn = Transaction::begin(&mut file).expect("begin txn");
 
             let mut entity_bytes = [0u8; 16];
