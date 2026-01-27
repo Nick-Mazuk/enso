@@ -52,7 +52,7 @@ describe("database.entity.create", () => {
 		>();
 	});
 
-	it("creates a triple in the store", () => {
+	it("creates a triple in the store", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -63,7 +63,7 @@ describe("database.entity.create", () => {
 		});
 		const store = new Store();
 		const database = createDatabase(schema, store);
-		const result = database.users.create({ name: "John Doe", age: 30 });
+		const result = await database.users.create({ name: "John Doe", age: 30 });
 		expect(store.size()).toBe(3); // id, name, age
 		assert(result.success, "Expected the query to work");
 		// biome-ignore lint/suspicious/noExplicitAny: needed to test runtime behavior
@@ -75,7 +75,7 @@ describe("database.entity.create", () => {
 		});
 	});
 
-	it("create errors if required field is not present", () => {
+	it("create errors if required field is not present", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -86,7 +86,7 @@ describe("database.entity.create", () => {
 
 		const store = new Store();
 		const database = createDatabase(schema, store);
-		const result = database.users.create(
+		const result = await database.users.create(
 			// @ts-expect-error
 			{},
 		);
@@ -112,7 +112,7 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		database.users.create({ name: "John Doe", age: 30 });
+		await database.users.create({ name: "John Doe", age: 30 });
 
 		const result = await database.users.query({
 			fields: { age: true, name: true },
@@ -138,8 +138,8 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		database.users.create({ name: "John Doe", age: 30 });
-		database.users.create({ name: "John Doe" });
+		await database.users.create({ name: "John Doe", age: 30 });
+		await database.users.create({ name: "John Doe" });
 
 		const result = await database.users.query({
 			fields: { age: true, name: true },
@@ -165,7 +165,7 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user = database.users.create({ name: "John Doe", age: 30 });
+		const user = await database.users.create({ name: "John Doe", age: 30 });
 		assert(user.success, "User was not created successfully");
 
 		const result = await database.users.query({ fields: { id: true } });
@@ -188,7 +188,7 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user = database.users.create({ name: "John Doe", age: 30 });
+		const user = await database.users.create({ name: "John Doe", age: 30 });
 		assert(user.success, "User was not created successfully");
 
 		const result = await database.users.query({
@@ -218,14 +218,14 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		// User 1: Create a normal user
-		const user1 = database.users.create({ name: "John Doe", age: 30 });
+		const user1 = await database.users.create({ name: "John Doe", age: 30 });
 		assert(user1.success, "User 1 was not created successfully");
 
 		// User 2: Simulate a user with missing 'name' triple.
 		// We do this by adding triples directly to the store,
 		// bypassing the database.create() guarantees.
 		const user2Id = "id-user-2";
-		store.add(
+		await store.add(
 			[Id(user2Id), Field("users/id"), Value(user2Id)],
 			[Id(user2Id), Field("users/age"), Value(40)],
 			// DO NOT add the 'users/name' triple
@@ -268,8 +268,8 @@ describe("database.entity.query", () => {
 		const database = createDatabase(schema, store);
 
 		// User 1: Create a normal user
-		database.users.create({ age: 30 });
-		database.users.create({});
+		await database.users.create({ age: 30 });
+		await database.users.create({});
 
 		const result = await database.users.query({
 			fields: { age: true },
@@ -337,8 +337,8 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		database.users.create({ name: "John Doe", age: 30 });
-		database.users.create({ name: "Jane Doe" });
+		await database.users.create({ name: "John Doe", age: 30 });
+		await database.users.create({ name: "Jane Doe" });
 
 		const result = await database.users.query({ fields: {} });
 		assert(result.success, "expected query to succeed");
@@ -387,8 +387,8 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		database.users.create({ name: "John Doe" });
-		database.posts.create({ name: "Jane Doe" });
+		await database.users.create({ name: "John Doe" });
+		await database.posts.create({ name: "Jane Doe" });
 
 		const result = await database.users.query({ fields: { name: true } });
 		assert(result.success, "expected query to succeed");
@@ -412,9 +412,9 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user1 = database.users.create({});
+		const user1 = await database.users.create({});
 		assert(user1.success, "Expected create to succeed");
-		const user2 = database.users.create({});
+		const user2 = await database.users.create({});
 		assert(user2.success, "Expected create to succeed");
 
 		const result = await database.users.query({
@@ -438,9 +438,9 @@ describe("database.entity.query", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user1 = database.users.create({});
+		const user1 = await database.users.create({});
 		assert(user1.success, "Expected create to succeed");
-		const user2 = database.users.create({});
+		const user2 = await database.users.create({});
 		assert(user2.success, "Expected create to succeed");
 
 		const result = await database.users.query({
@@ -471,12 +471,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				isVerified: true,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -505,12 +505,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				isVerified: true,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -541,12 +541,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				isVerified: true,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // isVerified is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // isVerified is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -575,12 +575,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: "hello",
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -609,12 +609,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: "hello",
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -645,12 +645,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: "hello",
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -676,12 +676,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: 1,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -707,12 +707,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: 1,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -740,12 +740,12 @@ describe("database.entity.query", () => {
 			const store = new Store();
 			const database = createDatabase(schema, store);
 
-			const user1 = database.users.create({
+			const user1 = await database.users.create({
 				name: "user 1",
 				maybeDefined: 1,
 			});
 			assert(user1.success, "Expected create to succeed");
-			const user2 = database.users.create({ name: "user 2" }); // maybeDefined is not defined
+			const user2 = await database.users.create({ name: "user 2" }); // maybeDefined is not defined
 			assert(user2.success, "Expected create to succeed");
 
 			const result = await database.users.query({
@@ -772,8 +772,8 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -795,8 +795,8 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -818,9 +818,9 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
-		db.items.create({ val: 30 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
+		await db.items.create({ val: 30 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -844,8 +844,8 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -867,8 +867,8 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -890,8 +890,8 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -913,10 +913,10 @@ describe("database.entity.query number filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 5 });
-		db.items.create({ val: 10 });
-		db.items.create({ val: 15 });
-		db.items.create({ val: 20 });
+		await db.items.create({ val: 5 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 15 });
+		await db.items.create({ val: 20 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -946,10 +946,10 @@ describe("database.entity.create with refs", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user = database.users.create({ name: "Alice" });
+		const user = await database.users.create({ name: "Alice" });
 		assert(user.success, "User creation failed");
 
-		const post = database.posts.create({
+		const post = await database.posts.create({
 			title: "Hello World",
 			authorId: user.data.id,
 		});
@@ -978,7 +978,7 @@ describe("database.entity.create with refs", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const post = database.posts.create({});
+		const post = await database.posts.create({});
 		assert(post.success, "Post creation failed");
 		expect(post.data.authorId).toBeUndefined();
 
@@ -1004,14 +1004,14 @@ describe("database.entity.create with refs", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user1 = database.users.create({ name: "Alice" });
-		const user2 = database.users.create({ name: "Bob" });
+		const user1 = await database.users.create({ name: "Alice" });
+		const user2 = await database.users.create({ name: "Bob" });
 
 		assert(user1.success, "User1 creation failed");
 		assert(user2.success, "User2 creation failed");
 
-		database.posts.create({ authorId: user1.data.id });
-		database.posts.create({ authorId: user2.data.id });
+		await database.posts.create({ authorId: user1.data.id });
+		await database.posts.create({ authorId: user2.data.id });
 
 		const result = await database.posts.query({
 			fields: { authorId: true },
@@ -1037,14 +1037,14 @@ describe("database.entity.create with refs", () => {
 		const store = new Store();
 		const database = createDatabase(schema, store);
 
-		const user1 = database.users.create({ name: "Alice" });
-		const user2 = database.users.create({ name: "Bob" });
+		const user1 = await database.users.create({ name: "Alice" });
+		const user2 = await database.users.create({ name: "Bob" });
 
 		assert(user1.success, "User1 creation failed");
 		assert(user2.success, "User2 creation failed");
 
-		database.posts.create({ authorId: user1.data.id });
-		database.posts.create({ authorId: user2.data.id });
+		await database.posts.create({ authorId: user1.data.id });
+		await database.posts.create({ authorId: user2.data.id });
 
 		const result = await database.posts.query({
 			fields: { authorId: true },
@@ -1069,8 +1069,8 @@ describe("database.entity.query number filters edge cases", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 10.5 });
-		db.items.create({ val: 20.1 });
+		await db.items.create({ val: 10.5 });
+		await db.items.create({ val: 20.1 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1175,7 +1175,7 @@ describe("database.entity.query number filters edge cases", () => {
 		// Create item without the field. It should take fallback 100.
 		db.items.create({});
 		// Create item with explicit field.
-		db.items.create({ val: 50 });
+		await db.items.create({ val: 50 });
 
 		const result = await db.items.query({
 			fields: { id: true, val: true },
@@ -1199,7 +1199,7 @@ describe("database.entity.query number filters edge cases", () => {
 		const db = createDatabase(schema, store);
 
 		db.items.create({});
-		db.items.create({ val: 50 });
+		await db.items.create({ val: 50 });
 
 		const result = await db.items.query({
 			fields: { id: true }, // Not asking for 'val'
@@ -1223,8 +1223,8 @@ describe("database.entity.query boolean filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: true });
-		db.items.create({ val: false });
+		await db.items.create({ val: true });
+		await db.items.create({ val: false });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1246,8 +1246,8 @@ describe("database.entity.query boolean filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: true });
-		db.items.create({ val: false });
+		await db.items.create({ val: true });
+		await db.items.create({ val: false });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1272,7 +1272,7 @@ describe("database.entity.query boolean filters", () => {
 		// Create item without the field. It should take fallback true.
 		db.items.create({});
 		// Create item with explicit field.
-		db.items.create({ val: false });
+		await db.items.create({ val: false });
 
 		const result = await db.items.query({
 			fields: { id: true, val: true },
@@ -1297,8 +1297,8 @@ describe("database.entity.query string filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "Alice" });
-		db.users.create({ name: "Bob" });
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Bob" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1320,8 +1320,8 @@ describe("database.entity.query string filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "Alice" });
-		db.users.create({ name: "Bob" });
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Bob" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1343,9 +1343,9 @@ describe("database.entity.query string filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "Alice" });
-		db.users.create({ name: "Alicia" });
-		db.users.create({ name: "Bob" });
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Alicia" });
+		await db.users.create({ name: "Bob" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1369,9 +1369,9 @@ describe("database.entity.query string filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "Alice" });
-		db.users.create({ name: "Alicia" });
-		db.users.create({ name: "Bob" });
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Alicia" });
+		await db.users.create({ name: "Bob" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1395,9 +1395,9 @@ describe("database.entity.query string filters", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "Alice" });
-		db.users.create({ name: "Beatrice" });
-		db.users.create({ name: "Bob" });
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Beatrice" });
+		await db.users.create({ name: "Bob" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1449,7 +1449,7 @@ describe("database.entity.query limit", () => {
 		const db = createDatabase(schema, store);
 
 		for (let i = 0; i < 10; i++) {
-			db.items.create({ val: i });
+			await db.items.create({ val: i });
 		}
 
 		const result = await db.items.query({
@@ -1472,8 +1472,8 @@ describe("database.entity.query limit", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 1 });
-		db.items.create({ val: 2 });
+		await db.items.create({ val: 1 });
+		await db.items.create({ val: 2 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1495,7 +1495,7 @@ describe("database.entity.query limit", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 1 });
+		await db.items.create({ val: 1 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1518,7 +1518,7 @@ describe("database.entity.query limit", () => {
 		const db = createDatabase(schema, store);
 
 		for (let i = 0; i < 10; i++) {
-			db.items.create({ val: i });
+			await db.items.create({ val: i });
 		}
 
 		const result = await db.items.query({
@@ -1545,9 +1545,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "C" });
-		db.users.create({ name: "A" });
-		db.users.create({ name: "B" });
+		await db.users.create({ name: "C" });
+		await db.users.create({ name: "A" });
+		await db.users.create({ name: "B" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1567,9 +1567,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.users.create({ name: "A" });
-		db.users.create({ name: "C" });
-		db.users.create({ name: "B" });
+		await db.users.create({ name: "A" });
+		await db.users.create({ name: "C" });
+		await db.users.create({ name: "B" });
 
 		const result = await db.users.query({
 			fields: { name: true },
@@ -1589,9 +1589,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 3 });
-		db.items.create({ val: 1 });
-		db.items.create({ val: 2 });
+		await db.items.create({ val: 3 });
+		await db.items.create({ val: 1 });
+		await db.items.create({ val: 2 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1611,9 +1611,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 1 });
-		db.items.create({ val: 3 });
-		db.items.create({ val: 2 });
+		await db.items.create({ val: 1 });
+		await db.items.create({ val: 3 });
+		await db.items.create({ val: 2 });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1633,9 +1633,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: true });
-		db.items.create({ val: false });
-		db.items.create({ val: true });
+		await db.items.create({ val: true });
+		await db.items.create({ val: false });
+		await db.items.create({ val: true });
 
 		const result = await db.items.query({
 			fields: { val: true },
@@ -1689,9 +1689,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		const i1 = db.items.create({ val: 1 });
-		const i2 = db.items.create({}); // undefined
-		const i3 = db.items.create({ val: 2 });
+		const i1 = await db.items.create({ val: 1 });
+		const i2 = await db.items.create({}); // undefined
+		const i3 = await db.items.create({ val: 2 });
 		assert(i1.success, "Expect item to be created");
 		assert(i2.success, "Expect item to be created");
 		assert(i3.success, "Expect item to be created");
@@ -1719,9 +1719,9 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		const i1 = db.items.create({ val: 1 });
-		const i2 = db.items.create({}); // undefined
-		const i3 = db.items.create({ val: 2 });
+		const i1 = await db.items.create({ val: 1 });
+		const i2 = await db.items.create({}); // undefined
+		const i3 = await db.items.create({ val: 2 });
 		assert(i1.success, "Expect item to be created");
 		assert(i2.success, "Expect item to be created");
 		assert(i3.success, "Expect item to be created");
@@ -1750,8 +1750,8 @@ describe("database.entity.query sorting", () => {
 		const db = createDatabase(schema, store);
 
 		// IDs are random, so we can't predict them, but we can verify the order is consistent with the values
-		const u1 = db.users.create({ name: "A" });
-		const u2 = db.users.create({ name: "B" });
+		const u1 = await db.users.create({ name: "A" });
+		const u2 = await db.users.create({ name: "B" });
 		assert(u1.success, "Expect item to be created");
 		assert(u2.success, "Expect item to be created");
 
@@ -1775,10 +1775,10 @@ describe("database.entity.query sorting", () => {
 		const store = new Store();
 		const db = createDatabase(schema, store);
 
-		db.items.create({ val: 5 });
-		db.items.create({ val: 1 });
-		db.items.create({ val: 10 });
-		db.items.create({ val: 2 });
+		await db.items.create({ val: 5 });
+		await db.items.create({ val: 1 });
+		await db.items.create({ val: 10 });
+		await db.items.create({ val: 2 });
 
 		const result = await db.items.query({
 			fields: { val: true },

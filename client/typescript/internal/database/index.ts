@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { assert } from "../../../shared/assert.js";
 import type { Field, FieldKind, FieldValue, Schema } from "../schema/types.js";
-import type { Store } from "../store/index.js";
+import type { StoreInterface } from "../store/store-interface.js";
 import {
 	type Datom,
 	type Filter,
@@ -34,7 +34,7 @@ export const createDatabase = <
 	S extends Schema<Record<string, Record<string, Field<FieldValue, boolean>>>>,
 >(
 	schema: S,
-	store: Store,
+	store: StoreInterface,
 ): Database<S> => {
 	const database: Partial<Database<S>> = {};
 	for (const entity in schema.entities) {
@@ -45,7 +45,7 @@ export const createDatabase = <
 			`Entity '${entity}' not found in schema`,
 		);
 		database[entity as keyof S["entities"]] = {
-			create: (fields) => {
+			create: async (fields) => {
 				for (const schemaField in entitySchema) {
 					if (!Object.hasOwn(entitySchema, schemaField)) continue;
 					const fieldDefinition = entitySchema[schemaField];
@@ -75,11 +75,10 @@ export const createDatabase = <
 					]);
 				}
 				triples.push([id, StoreField(`${entity}/id`), Value(id)]);
-				store.add(...triples);
+				await store.add(...triples);
 				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 				return { success: true, data: { ...fields, id } } as any;
 			},
-			// biome-ignore lint/suspicious/useAwait: The async will be needed in the future
 			query: async (opts) => {
 				const selectedFields = Object.keys(opts.fields);
 				// validate all selected fields are in the schema
@@ -133,7 +132,7 @@ export const createDatabase = <
 					]);
 				}
 
-				const response = store.query({
+				const response = await store.query({
 					find,
 					where,
 					optional,
@@ -197,8 +196,8 @@ export const createDatabase = <
 					}),
 				};
 			},
-			delete: (id) => {
-				store.deleteAllById(Id(id));
+			delete: async (id) => {
+				await store.deleteAllById(Id(id));
 				return { data: undefined, success: true };
 			},
 		};
