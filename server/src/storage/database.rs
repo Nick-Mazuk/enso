@@ -28,9 +28,9 @@
 //! txn.commit().unwrap();  // Writes to WAL, then applies to index
 //! ```
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 
@@ -42,8 +42,14 @@ use crate::storage::checkpoint::{
 };
 use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::hlc::{Clock, ClockError};
+#[cfg(unix)]
+use crate::storage::indexes::attribute::AttributeIndexReader;
 use crate::storage::indexes::attribute::{AttributeIndex, AttributeIndexError};
+#[cfg(unix)]
+use crate::storage::indexes::entity_attribute::EntityAttributeIndexReader;
 use crate::storage::indexes::entity_attribute::{EntityAttributeIndex, EntityAttributeIndexError};
+#[cfg(unix)]
+use crate::storage::indexes::primary::PrimaryIndexReader;
 use crate::storage::indexes::primary::{PrimaryIndex, PrimaryIndexError};
 use crate::storage::recovery::{self, RecoveryError, RecoveryResult};
 use crate::storage::time::SystemTimeSource;
@@ -161,52 +167,83 @@ fn apply_ops_to_secondary_index<I: SecondaryIndexOps>(
 
 /// Tracks active read-only snapshots for garbage collection.
 ///
-/// When a snapshot is created, its transaction ID is added to this set.
-/// When the snapshot is released, its ID is removed.
-/// The minimum ID in this set determines which deleted records can be garbage collected.
+/// When a snapshot is created, its transaction ID is added to this map with a reference count.
+/// When the snapshot is released, the count is decremented (or removed when it reaches 0).
+/// The minimum ID in this map determines which deleted records can be garbage collected.
+///
+/// Uses interior mutability via `Mutex` to allow concurrent snapshot registration
+/// without requiring exclusive access to the containing `Database`.
 #[derive(Debug, Default)]
 struct ActiveSnapshots {
-    /// Set of transaction IDs for active snapshots.
-    /// Uses a `BTreeSet` for efficient `min()` operation.
-    active: BTreeSet<TxnId>,
+    /// Map of transaction IDs to reference counts for active snapshots.
+    /// Uses a `BTreeMap` for efficient `min()` operation.
+    /// Wrapped in `Mutex` to allow concurrent access.
+    active: Mutex<BTreeMap<TxnId, usize>>,
 }
 
 impl ActiveSnapshots {
     /// Register a new active snapshot.
     ///
+    /// Multiple snapshots can be registered at the same `txn_id` (concurrent reads).
+    ///
     /// # Panics
-    /// Panics if the `txn_id` is already registered (indicates a programming error).
-    fn register(&mut self, txn_id: TxnId) {
-        let inserted = self.active.insert(txn_id);
-        assert!(
-            inserted,
-            "Snapshot txn_id {txn_id} already registered - duplicate snapshot registration"
-        );
+    /// Panics if the mutex is poisoned.
+    fn register(&self, txn_id: TxnId) {
+        let Ok(mut active) = self.active.lock() else {
+            panic!("ActiveSnapshots mutex poisoned");
+        };
+        *active.entry(txn_id).or_insert(0) += 1;
     }
 
     /// Unregister a snapshot when it's released.
     ///
+    /// Decrements the reference count, removing the entry when it reaches 0.
+    ///
     /// # Panics
     /// Panics if the `txn_id` was not registered (indicates a programming error).
-    fn unregister(&mut self, txn_id: TxnId) {
-        let removed = self.active.remove(&txn_id);
-        assert!(
-            removed,
-            "Snapshot txn_id {txn_id} was not registered - releasing unregistered snapshot"
-        );
+    /// Panics if the mutex is poisoned.
+    fn unregister(&self, txn_id: TxnId) {
+        let Ok(mut active) = self.active.lock() else {
+            panic!("ActiveSnapshots mutex poisoned");
+        };
+        match active.get_mut(&txn_id) {
+            Some(count) if *count > 1 => {
+                *count -= 1;
+            }
+            Some(_) => {
+                active.remove(&txn_id);
+            }
+            None => {
+                panic!(
+                    "Snapshot txn_id {txn_id} was not registered - releasing unregistered snapshot"
+                );
+            }
+        }
     }
 
     /// Get the minimum active snapshot transaction ID.
     ///
     /// Returns None if there are no active snapshots.
     /// Deleted records with `deleted_txn` < this value can be garbage collected.
+    ///
+    /// # Panics
+    /// Panics if the mutex is poisoned.
     fn min_active(&self) -> Option<TxnId> {
-        self.active.first().copied()
+        let Ok(active) = self.active.lock() else {
+            panic!("ActiveSnapshots mutex poisoned");
+        };
+        active.first_key_value().map(|(&txn_id, _)| txn_id)
     }
 
-    /// Get the count of active snapshots.
+    /// Get the count of active snapshots (total across all `txn_id`s).
+    ///
+    /// # Panics
+    /// Panics if the mutex is poisoned.
     fn count(&self) -> usize {
-        self.active.len()
+        let Ok(active) = self.active.lock() else {
+            panic!("ActiveSnapshots mutex poisoned");
+        };
+        active.values().sum()
     }
 }
 
@@ -465,7 +502,8 @@ impl Database {
     /// let txn_id = snapshot.close(); // Returns the snapshot's txn_id
     /// db.release_snapshot(txn_id);   // Allow garbage collection
     /// ```
-    pub fn begin_readonly(&mut self) -> Snapshot<'_> {
+    #[cfg(unix)]
+    pub fn begin_readonly(&self) -> Snapshot<'_> {
         // Snapshot sees all committed transactions (next_txn_id - 1)
         let txn_id = self.file.superblock().next_txn_id.saturating_sub(1);
         let hlc = self.clock.last();
@@ -473,7 +511,7 @@ impl Database {
         // Register the snapshot for garbage collection tracking
         self.active_snapshots.register(txn_id);
 
-        Snapshot::new(&mut self.file, txn_id, hlc)
+        Snapshot::new(&self.file, txn_id, hlc)
     }
 
     /// Release a snapshot and allow garbage collection.
@@ -481,7 +519,7 @@ impl Database {
     /// Call this after closing a snapshot to remove it from the active
     /// snapshot list. This allows deleted records that were visible to
     /// this snapshot to be garbage collected.
-    pub fn release_snapshot(&mut self, txn_id: TxnId) {
+    pub fn release_snapshot(&self, txn_id: TxnId) {
         self.active_snapshots.unregister(txn_id);
     }
 
@@ -1285,16 +1323,21 @@ impl Drop for WalTransaction<'_> {
 /// The snapshot is tracked for garbage collection. Deleted records
 /// visible to any active snapshot cannot be physically removed.
 /// Always close snapshots when done to allow garbage collection.
+/// Read-only snapshot for concurrent database access.
+///
+/// Uses position-independent reads to allow concurrent access from multiple threads.
+#[cfg(unix)]
 pub struct Snapshot<'a> {
-    file: &'a mut DatabaseFile,
+    file: &'a DatabaseFile,
     /// The transaction ID this snapshot sees.
     txn_id: TxnId,
     /// HLC timestamp when the snapshot was created.
     hlc: HlcTimestamp,
 }
 
+#[cfg(unix)]
 impl<'a> Snapshot<'a> {
-    const fn new(file: &'a mut DatabaseFile, txn_id: TxnId, hlc: HlcTimestamp) -> Self {
+    const fn new(file: &'a DatabaseFile, txn_id: TxnId, hlc: HlcTimestamp) -> Self {
         Self { file, txn_id, hlc }
     }
 
@@ -1316,12 +1359,12 @@ impl<'a> Snapshot<'a> {
     ///
     /// Returns the record only if it's visible at this snapshot.
     pub fn get(
-        &mut self,
+        &self,
         entity_id: &EntityId,
         attribute_id: &AttributeId,
     ) -> Result<Option<TripleRecord>, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
-        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let index = PrimaryIndexReader::new(self.file, root_page);
 
         Ok(index.get_visible(entity_id, attribute_id, self.txn_id)?)
     }
@@ -1329,12 +1372,9 @@ impl<'a> Snapshot<'a> {
     /// Scan all triples for an entity.
     ///
     /// Returns only triples visible at this snapshot.
-    pub fn scan_entity(
-        &mut self,
-        entity_id: &EntityId,
-    ) -> Result<Vec<TripleRecord>, DatabaseError> {
+    pub fn scan_entity(&self, entity_id: &EntityId) -> Result<Vec<TripleRecord>, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
-        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let index = PrimaryIndexReader::new(self.file, root_page);
         let mut scan = index.scan_entity_visible(entity_id, self.txn_id)?;
 
         let mut results = Vec::new();
@@ -1348,9 +1388,9 @@ impl<'a> Snapshot<'a> {
     /// Count all visible triples in the index.
     ///
     /// Note: This counts records visible at this snapshot.
-    pub fn count(&mut self) -> Result<usize, DatabaseError> {
+    pub fn count(&self) -> Result<usize, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
-        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let index = PrimaryIndexReader::new(self.file, root_page);
         let mut cursor = index.cursor_visible(self.txn_id)?;
 
         let mut count = 0;
@@ -1364,9 +1404,9 @@ impl<'a> Snapshot<'a> {
     /// Collect all visible triples in key order.
     ///
     /// Returns records visible at this snapshot.
-    pub fn collect_all(&mut self) -> Result<Vec<TripleRecord>, DatabaseError> {
+    pub fn collect_all(&self) -> Result<Vec<TripleRecord>, DatabaseError> {
         let root_page = self.file.superblock().primary_index_root;
-        let mut index = PrimaryIndex::new(self.file, root_page)?;
+        let index = PrimaryIndexReader::new(self.file, root_page);
         let mut cursor = index.cursor_visible(self.txn_id)?;
 
         let mut results = Vec::new();
@@ -1382,11 +1422,11 @@ impl<'a> Snapshot<'a> {
     /// Uses the attribute index for efficient lookup.
     /// Returns only entities visible at this snapshot.
     pub fn get_entities_with_attribute(
-        &mut self,
+        &self,
         attribute_id: &AttributeId,
     ) -> Result<Vec<EntityId>, DatabaseError> {
         let root_page = self.file.superblock().attribute_index_root;
-        let mut index = AttributeIndex::new(self.file, root_page)?;
+        let index = AttributeIndexReader::new(self.file, root_page);
         let mut scan = index.scan_attribute_visible(attribute_id, self.txn_id)?;
 
         let mut entities = Vec::new();
@@ -1402,11 +1442,11 @@ impl<'a> Snapshot<'a> {
     /// Uses the entity-attribute index for efficient lookup.
     /// Returns only attributes visible at this snapshot.
     pub fn get_attributes_for_entity(
-        &mut self,
+        &self,
         entity_id: &EntityId,
     ) -> Result<Vec<AttributeId>, DatabaseError> {
         let root_page = self.file.superblock().entity_attribute_index_root;
-        let mut index = EntityAttributeIndex::new(self.file, root_page)?;
+        let index = EntityAttributeIndexReader::new(self.file, root_page);
         let mut scan = index.scan_entity_visible(entity_id, self.txn_id)?;
 
         let mut attributes = Vec::new();
@@ -2588,5 +2628,85 @@ mod tests {
             assert!(attrs.is_empty());
             txn.abort();
         }
+    }
+
+    #[test]
+    fn test_concurrent_reads() {
+        use std::sync::RwLock;
+        use std::thread;
+
+        let (_dir, path) = create_test_db();
+        let pool = test_pool();
+        let mut db = Database::create(&path, pool).expect("create db");
+
+        // Insert test data
+        {
+            let mut txn = db.begin(0).expect("begin");
+            for i in 0..100u8 {
+                let mut entity = [0u8; 16];
+                entity[0] = i;
+                txn.insert(
+                    EntityId(entity),
+                    AttributeId([1u8; 16]),
+                    TripleValue::Number(f64::from(i)),
+                );
+            }
+            txn.commit().expect("commit");
+        }
+
+        // Wrap in RwLock to test concurrent reads
+        let db = Arc::new(RwLock::new(db));
+
+        // Spawn multiple threads that each acquire a read lock and read data
+        let handles: Vec<_> = (0..10)
+            .map(|thread_id| {
+                let db_clone = Arc::clone(&db);
+                thread::spawn(move || {
+                    // Each thread acquires a read lock (not write lock)
+                    let Ok(db_guard) = db_clone.read() else {
+                        panic!("Failed to acquire read lock");
+                    };
+
+                    // Create snapshot and read data
+                    let snapshot = db_guard.begin_readonly();
+
+                    // Verify can read all data
+                    for i in 0..100u8 {
+                        let mut entity = [0u8; 16];
+                        entity[0] = i;
+                        let record = snapshot
+                            .get(&EntityId(entity), &AttributeId([1u8; 16]))
+                            .expect("get");
+                        assert!(
+                            record.is_some(),
+                            "thread {} missing record {}",
+                            thread_id,
+                            i
+                        );
+                        assert_eq!(record.unwrap().value, TripleValue::Number(f64::from(i)));
+                    }
+
+                    let count = snapshot.count().expect("count");
+                    assert_eq!(count, 100);
+
+                    let txn_id = snapshot.close();
+                    db_guard.release_snapshot(txn_id);
+
+                    thread_id
+                })
+            })
+            .collect();
+
+        // Wait for all threads to complete
+        for handle in handles {
+            let thread_id = handle.join().expect("thread panicked");
+            assert!(thread_id < 10);
+        }
+
+        // Verify database still works after concurrent reads
+        let Ok(db_guard) = db.read() else {
+            panic!("Failed to acquire read lock");
+        };
+        assert_eq!(db_guard.active_snapshot_count(), 0);
     }
 }

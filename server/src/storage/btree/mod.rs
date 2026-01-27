@@ -36,3 +36,5 @@ pub use node::{
     NodeType, compare_keys, make_key, split_key,
 };
 pub use tree::{BTree, BTreeError, BTreeIterator};
+#[cfg(unix)]
+pub use tree::{BTreeReader, BTreeReaderIterator};

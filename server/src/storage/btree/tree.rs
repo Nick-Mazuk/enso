@@ -14,6 +14,8 @@ use crate::storage::btree::node::{
     InternalNode, Key, LeafEntry, LeafNode, MAX_INLINE_VALUE_SIZE, NodeError, NodeHeader, NodeType,
 };
 use crate::storage::file::{DatabaseFile, FileError};
+#[cfg(unix)]
+use crate::storage::overflow::read_overflow_at;
 use crate::storage::overflow::{
     OverflowError, OverflowRef, free_overflow, read_overflow, write_overflow,
 };
@@ -483,6 +485,211 @@ impl<'a> BTree<'a> {
         }
 
         Ok(count)
+    }
+}
+
+/// Read-only B-tree accessor for concurrent snapshot reads.
+///
+/// This struct provides read-only access to the B-tree using position-independent
+/// reads (`read_page_at`), which allows concurrent reads from multiple threads
+/// without requiring mutable access to the database file.
+#[cfg(unix)]
+pub struct BTreeReader<'a> {
+    file: &'a DatabaseFile,
+    root_page: PageId,
+}
+
+#[cfg(unix)]
+impl<'a> BTreeReader<'a> {
+    /// Create a new read-only B-tree accessor.
+    ///
+    /// # Pre-conditions
+    /// - `root_page` must be a valid B-tree root (not 0)
+    #[must_use]
+    pub const fn new(file: &'a DatabaseFile, root_page: PageId) -> Self {
+        Self { file, root_page }
+    }
+
+    /// Get the root page ID.
+    #[must_use]
+    pub const fn root_page(&self) -> PageId {
+        self.root_page
+    }
+
+    /// Look up a value by key.
+    ///
+    /// If the value is stored in overflow pages, it will be read and returned.
+    pub fn get(&self, key: &Key) -> Result<Option<Vec<u8>>, BTreeError> {
+        let leaf_page_id = self.find_leaf(key)?;
+        let page = self.file.read_page_at(leaf_page_id)?;
+        let leaf = LeafNode::from_page(&page)?;
+
+        match leaf.get(key) {
+            Some(stored_value) => {
+                // Check if this is an overflow reference
+                if let Some(overflow_ref) = OverflowRef::from_bytes(stored_value) {
+                    // Read from overflow pages
+                    let value = read_overflow_at(self.file, &overflow_ref)?;
+                    Ok(Some(value))
+                } else {
+                    // Inline value
+                    Ok(Some(stored_value.to_vec()))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Find the leaf page that should contain the given key.
+    fn find_leaf(&self, key: &Key) -> Result<PageId, BTreeError> {
+        let mut current_page_id = self.root_page;
+
+        loop {
+            let page = self.file.read_page_at(current_page_id)?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+
+            match header.node_type {
+                NodeType::Leaf => return Ok(current_page_id),
+                NodeType::Internal => {
+                    let node = InternalNode::from_page(&page)?;
+                    let child_idx = node.find_child_index(key);
+                    current_page_id = node.children[child_idx];
+                }
+            }
+        }
+    }
+
+    /// Create a cursor over all entries in key order.
+    pub fn cursor(&self) -> Result<BTreeReaderIterator<'_>, BTreeError> {
+        // Find the leftmost leaf
+        let mut current_page_id = self.root_page;
+
+        loop {
+            let page = self.file.read_page_at(current_page_id)?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+
+            match header.node_type {
+                NodeType::Leaf => {
+                    return Ok(BTreeReaderIterator {
+                        file: self.file,
+                        current_page_id,
+                        current_index: 0,
+                        current_entries: None,
+                    });
+                }
+                NodeType::Internal => {
+                    let node = InternalNode::from_page(&page)?;
+                    current_page_id = node.children[0];
+                }
+            }
+        }
+    }
+
+    /// Create an iterator starting from a given key.
+    pub fn iter_from(&self, start_key: &Key) -> Result<BTreeReaderIterator<'_>, BTreeError> {
+        let leaf_page_id = self.find_leaf(start_key)?;
+        let page = self.file.read_page_at(leaf_page_id)?;
+        let leaf = LeafNode::from_page(&page)?;
+
+        // Find the starting index
+        let start_index = leaf.find_index(start_key).unwrap_or_else(|i| i);
+
+        Ok(BTreeReaderIterator {
+            file: self.file,
+            current_page_id: leaf_page_id,
+            current_index: start_index,
+            current_entries: Some(leaf.entries),
+        })
+    }
+
+    /// Count the total number of entries in the tree.
+    pub fn count(&self) -> Result<usize, BTreeError> {
+        let mut count = 0;
+        let mut current_page_id = self.root_page;
+
+        // Find leftmost leaf
+        loop {
+            let page = self.file.read_page_at(current_page_id)?;
+            let header =
+                NodeHeader::from_page(&page).ok_or(BTreeError::Node(NodeError::InvalidHeader))?;
+
+            match header.node_type {
+                NodeType::Leaf => break,
+                NodeType::Internal => {
+                    let node = InternalNode::from_page(&page)?;
+                    current_page_id = node.children[0];
+                }
+            }
+        }
+
+        // Scan all leaves
+        loop {
+            let page = self.file.read_page_at(current_page_id)?;
+            let leaf = LeafNode::from_page(&page)?;
+            count += leaf.entries.len();
+
+            if leaf.header.next_leaf == 0 {
+                break;
+            }
+            current_page_id = leaf.header.next_leaf;
+        }
+
+        Ok(count)
+    }
+}
+
+/// Read-only iterator over B-tree entries.
+///
+/// Uses position-independent reads for concurrent access.
+#[cfg(unix)]
+pub struct BTreeReaderIterator<'a> {
+    file: &'a DatabaseFile,
+    current_page_id: PageId,
+    current_index: usize,
+    current_entries: Option<Vec<LeafEntry>>,
+}
+
+#[cfg(unix)]
+impl BTreeReaderIterator<'_> {
+    /// Get the next entry.
+    pub fn next_entry(&mut self) -> Result<Option<(Key, Vec<u8>)>, BTreeError> {
+        loop {
+            // Load current page entries if needed
+            if self.current_entries.is_none() {
+                if self.current_page_id == 0 {
+                    return Ok(None);
+                }
+
+                let page = self.file.read_page_at(self.current_page_id)?;
+                let leaf = LeafNode::from_page(&page)?;
+                self.current_entries = Some(leaf.entries);
+            }
+
+            let Some(entries) = &self.current_entries else {
+                return Ok(None);
+            };
+
+            if self.current_index < entries.len() {
+                let entry = &entries[self.current_index];
+                let result = (entry.key, Vec::from(entry.value.as_slice()));
+                self.current_index += 1;
+                return Ok(Some(result));
+            }
+
+            // Move to next leaf
+            let page = self.file.read_page_at(self.current_page_id)?;
+            let leaf = LeafNode::from_page(&page)?;
+
+            if leaf.header.next_leaf == 0 {
+                return Ok(None);
+            }
+
+            self.current_page_id = leaf.header.next_leaf;
+            self.current_index = 0;
+            self.current_entries = None;
+        }
     }
 }
 

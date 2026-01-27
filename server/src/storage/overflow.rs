@@ -213,6 +213,48 @@ pub fn read_overflow(
     Ok(result)
 }
 
+/// Read a large value from overflow pages using position-independent reads.
+///
+/// This is a read-only version of `read_overflow` that uses `read_page_at`
+/// to allow concurrent reads without requiring mutable access to the file.
+#[cfg(unix)]
+pub fn read_overflow_at(
+    file: &DatabaseFile,
+    overflow_ref: &OverflowRef,
+) -> Result<Vec<u8>, OverflowError> {
+    let mut result = Vec::with_capacity(overflow_ref.total_length as usize);
+    let mut current_page_id = overflow_ref.first_page;
+
+    while current_page_id != 0 {
+        let page = file.read_page_at(current_page_id)?;
+
+        // Verify page type
+        let page_type = page.read_u8(0);
+        if page_type != PageType::Overflow as u8 {
+            return Err(OverflowError::InvalidPageType(page_type));
+        }
+
+        // Read overflow header
+        let next_page = page.read_u64(PageHeader::SIZE);
+        let data_length = page.read_u32(PageHeader::SIZE + 8) as usize;
+
+        // Read data
+        let data = page.read_bytes(OVERFLOW_DATA_OFFSET, data_length);
+        result.extend_from_slice(data);
+
+        current_page_id = next_page;
+    }
+
+    if result.len() != overflow_ref.total_length as usize {
+        return Err(OverflowError::LengthMismatch {
+            expected: overflow_ref.total_length as usize,
+            actual: result.len(),
+        });
+    }
+
+    Ok(result)
+}
+
 /// Free overflow pages.
 ///
 /// Follows the overflow page chain and marks pages as free.

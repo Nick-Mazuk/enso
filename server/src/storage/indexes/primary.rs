@@ -4,6 +4,8 @@
 //! It is backed by a B-tree and provides efficient point lookups and entity scans.
 
 use crate::storage::btree::{BTree, BTreeError, make_key, split_key};
+#[cfg(unix)]
+use crate::storage::btree::{BTreeReader, BTreeReaderIterator};
 use crate::storage::file::DatabaseFile;
 use crate::storage::page::PageId;
 use crate::types::{AttributeId, EntityId, TripleError, TripleRecord, TxnId};
@@ -194,6 +196,196 @@ impl<'a> PrimaryIndex<'a> {
             cursor,
             snapshot_txn: Some(snapshot_txn),
         })
+    }
+}
+
+/// Read-only primary index accessor for concurrent snapshot reads.
+///
+/// Uses position-independent reads to allow concurrent access from multiple threads.
+#[cfg(unix)]
+pub struct PrimaryIndexReader<'a> {
+    tree: BTreeReader<'a>,
+}
+
+#[cfg(unix)]
+impl<'a> PrimaryIndexReader<'a> {
+    /// Create a new read-only primary index accessor.
+    ///
+    /// # Pre-conditions
+    /// - `root_page` must be a valid primary index root (not 0)
+    #[must_use]
+    pub const fn new(file: &'a DatabaseFile, root_page: PageId) -> Self {
+        let tree = BTreeReader::new(file, root_page);
+        Self { tree }
+    }
+
+    /// Look up a single triple by entity and attribute ID.
+    pub fn get(
+        &self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+    ) -> Result<Option<TripleRecord>, PrimaryIndexError> {
+        let key = make_key(entity_id, attribute_id);
+        let value = self.tree.get(&key)?;
+
+        match value {
+            Some(bytes) => {
+                let record = TripleRecord::from_bytes(&bytes)?;
+                Ok(Some(record))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Look up a single triple, checking visibility against a snapshot.
+    pub fn get_visible(
+        &self,
+        entity_id: &EntityId,
+        attribute_id: &AttributeId,
+        snapshot_txn: TxnId,
+    ) -> Result<Option<TripleRecord>, PrimaryIndexError> {
+        let record = self.get(entity_id, attribute_id)?;
+
+        match record {
+            Some(r) if r.is_visible_to(snapshot_txn) => Ok(Some(r)),
+            _ => Ok(None),
+        }
+    }
+
+    /// Scan all triples for an entity.
+    ///
+    /// Returns an iterator over all triples where `entity_id` matches.
+    /// This returns all versions including deleted records.
+    pub fn scan_entity(
+        &self,
+        entity_id: &EntityId,
+    ) -> Result<EntityScanReaderIterator<'_>, PrimaryIndexError> {
+        let start_key = make_key(entity_id, &AttributeId::default());
+        let cursor = self.tree.iter_from(&start_key)?;
+
+        Ok(EntityScanReaderIterator {
+            cursor,
+            entity_id: *entity_id,
+            snapshot_txn: None,
+            done: false,
+        })
+    }
+
+    /// Scan all visible triples for an entity at a given snapshot.
+    ///
+    /// Returns an iterator over triples visible to `snapshot_txn`.
+    pub fn scan_entity_visible(
+        &self,
+        entity_id: &EntityId,
+        snapshot_txn: TxnId,
+    ) -> Result<EntityScanReaderIterator<'_>, PrimaryIndexError> {
+        let start_key = make_key(entity_id, &AttributeId::default());
+        let cursor = self.tree.iter_from(&start_key)?;
+
+        Ok(EntityScanReaderIterator {
+            cursor,
+            entity_id: *entity_id,
+            snapshot_txn: Some(snapshot_txn),
+            done: false,
+        })
+    }
+
+    /// Count the total number of triples in the index.
+    pub fn count(&self) -> Result<usize, PrimaryIndexError> {
+        Ok(self.tree.count()?)
+    }
+
+    /// Create a cursor over all triples in key order.
+    pub fn cursor(&self) -> Result<PrimaryIndexReaderCursor<'_>, PrimaryIndexError> {
+        let cursor = self.tree.cursor()?;
+        Ok(PrimaryIndexReaderCursor {
+            cursor,
+            snapshot_txn: None,
+        })
+    }
+
+    /// Create a cursor over all visible triples at a given snapshot.
+    pub fn cursor_visible(
+        &self,
+        snapshot_txn: TxnId,
+    ) -> Result<PrimaryIndexReaderCursor<'_>, PrimaryIndexError> {
+        let cursor = self.tree.cursor()?;
+        Ok(PrimaryIndexReaderCursor {
+            cursor,
+            snapshot_txn: Some(snapshot_txn),
+        })
+    }
+}
+
+/// Read-only cursor over all triples in the primary index.
+#[cfg(unix)]
+pub struct PrimaryIndexReaderCursor<'a> {
+    cursor: BTreeReaderIterator<'a>,
+    snapshot_txn: Option<TxnId>,
+}
+
+#[cfg(unix)]
+impl PrimaryIndexReaderCursor<'_> {
+    /// Get the next triple record.
+    pub fn next_record(&mut self) -> Result<Option<TripleRecord>, PrimaryIndexError> {
+        loop {
+            let Some((_, value)) = self.cursor.next_entry()? else {
+                return Ok(None);
+            };
+
+            let record = TripleRecord::from_bytes(&value)?;
+
+            if let Some(snapshot_txn) = self.snapshot_txn {
+                if record.is_visible_to(snapshot_txn) {
+                    return Ok(Some(record));
+                }
+            } else {
+                return Ok(Some(record));
+            }
+        }
+    }
+}
+
+/// Read-only iterator over triples for a specific entity.
+#[cfg(unix)]
+pub struct EntityScanReaderIterator<'a> {
+    cursor: BTreeReaderIterator<'a>,
+    entity_id: EntityId,
+    snapshot_txn: Option<TxnId>,
+    done: bool,
+}
+
+#[cfg(unix)]
+impl EntityScanReaderIterator<'_> {
+    /// Get the next triple for this entity.
+    pub fn next_record(&mut self) -> Result<Option<TripleRecord>, PrimaryIndexError> {
+        if self.done {
+            return Ok(None);
+        }
+
+        loop {
+            let Some((key, value)) = self.cursor.next_entry()? else {
+                self.done = true;
+                return Ok(None);
+            };
+
+            let (entity_id, _) = split_key(&key);
+
+            if entity_id != self.entity_id {
+                self.done = true;
+                return Ok(None);
+            }
+
+            let record = TripleRecord::from_bytes(&value)?;
+
+            if let Some(snapshot_txn) = self.snapshot_txn {
+                if record.is_visible_to(snapshot_txn) {
+                    return Ok(Some(record));
+                }
+            } else {
+                return Ok(Some(record));
+            }
+        }
     }
 }
 

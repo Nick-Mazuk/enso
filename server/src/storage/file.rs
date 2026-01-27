@@ -4,6 +4,8 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(unix)]
+use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -120,6 +122,36 @@ impl DatabaseFile {
 
         self.file
             .read_exact(page.as_bytes_mut())
+            .map_err(FileError::Io)?;
+
+        Ok(page)
+    }
+
+    /// Read a page from the file using pread (position-independent).
+    ///
+    /// This method uses `pread` via `FileExt::read_exact_at()` which does not
+    /// modify the file cursor position. This allows concurrent reads from
+    /// multiple threads without requiring mutable access.
+    ///
+    /// Returns an error if page is out of bounds or buffer pool is exhausted.
+    #[cfg(unix)]
+    pub fn read_page_at(&self, page_id: PageId) -> Result<Page, FileError> {
+        if page_id >= self.superblock.total_page_count {
+            return Err(FileError::PageOutOfBounds {
+                page_id,
+                total_pages: self.superblock.total_page_count,
+            });
+        }
+
+        // Lease a page buffer from the pool
+        let mut page = self
+            .buffer_pool
+            .lease_page()
+            .ok_or(FileError::BufferPoolExhausted)?;
+
+        let offset = page_id * PAGE_SIZE_U64;
+        self.file
+            .read_exact_at(page.as_bytes_mut(), offset)
             .map_err(FileError::Io)?;
 
         Ok(page)

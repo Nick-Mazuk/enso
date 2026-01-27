@@ -17,6 +17,8 @@
 //! The value stores the `created_txn` for MVCC visibility.
 
 use crate::storage::btree::{BTree, BTreeError, KEY_SIZE, Key};
+#[cfg(unix)]
+use crate::storage::btree::{BTreeReader, BTreeReaderIterator};
 use crate::storage::file::DatabaseFile;
 use crate::storage::page::PageId;
 use crate::types::{AttributeId, EntityId, TxnId};
@@ -198,6 +200,138 @@ impl<'a> AttributeIndex<'a> {
     /// Count all entries in the index.
     pub fn count(&mut self) -> Result<usize, AttributeIndexError> {
         Ok(self.tree.count()?)
+    }
+}
+
+/// Read-only attribute index accessor for concurrent snapshot reads.
+#[cfg(unix)]
+pub struct AttributeIndexReader<'a> {
+    tree: BTreeReader<'a>,
+}
+
+#[cfg(unix)]
+impl<'a> AttributeIndexReader<'a> {
+    /// Create a new read-only attribute index accessor.
+    #[must_use]
+    pub const fn new(file: &'a DatabaseFile, root_page: PageId) -> Self {
+        let tree = BTreeReader::new(file, root_page);
+        Self { tree }
+    }
+
+    /// Get the MVCC metadata for an (attribute, entity) pair.
+    pub fn get(
+        &self,
+        attribute_id: &AttributeId,
+        entity_id: &EntityId,
+    ) -> Result<Option<(TxnId, TxnId)>, AttributeIndexError> {
+        let key = make_attribute_key(attribute_id, entity_id);
+        match self.tree.get(&key)? {
+            Some(value) if value.len() >= ENTRY_VALUE_SIZE => {
+                let created_txn = u64::from_le_bytes([
+                    value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7],
+                ]);
+                let deleted_txn = u64::from_le_bytes([
+                    value[8], value[9], value[10], value[11], value[12], value[13], value[14],
+                    value[15],
+                ]);
+                Ok(Some((created_txn, deleted_txn)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Check if an entry is visible to a given transaction.
+    pub fn is_visible(
+        &self,
+        attribute_id: &AttributeId,
+        entity_id: &EntityId,
+        snapshot_txn: TxnId,
+    ) -> Result<bool, AttributeIndexError> {
+        match self.get(attribute_id, entity_id)? {
+            Some((created_txn, deleted_txn)) => {
+                let visible =
+                    created_txn <= snapshot_txn && (deleted_txn == 0 || deleted_txn > snapshot_txn);
+                Ok(visible)
+            }
+            None => Ok(false),
+        }
+    }
+
+    /// Scan all visible entities with a given attribute at a snapshot.
+    pub fn scan_attribute_visible(
+        &self,
+        attribute_id: &AttributeId,
+        snapshot_txn: TxnId,
+    ) -> Result<AttributeScanReaderIterator<'_>, AttributeIndexError> {
+        let start_key = make_attribute_key(attribute_id, &EntityId::default());
+        let cursor = self.tree.iter_from(&start_key)?;
+
+        Ok(AttributeScanReaderIterator {
+            cursor,
+            attribute_id: *attribute_id,
+            snapshot_txn: Some(snapshot_txn),
+            done: false,
+        })
+    }
+
+    /// Count all entries in the index.
+    pub fn count(&self) -> Result<usize, AttributeIndexError> {
+        Ok(self.tree.count()?)
+    }
+}
+
+/// Read-only iterator over entities with a specific attribute.
+#[cfg(unix)]
+pub struct AttributeScanReaderIterator<'a> {
+    cursor: BTreeReaderIterator<'a>,
+    attribute_id: AttributeId,
+    snapshot_txn: Option<TxnId>,
+    done: bool,
+}
+
+#[cfg(unix)]
+impl AttributeScanReaderIterator<'_> {
+    /// Get the next entity ID with this attribute.
+    pub fn next_entity(&mut self) -> Result<Option<EntityId>, AttributeIndexError> {
+        if self.done {
+            return Ok(None);
+        }
+
+        loop {
+            let Some((key, value)) = self.cursor.next_entry()? else {
+                self.done = true;
+                return Ok(None);
+            };
+
+            let (attr_id, entity_id) = split_attribute_key(&key);
+
+            if attr_id != self.attribute_id {
+                self.done = true;
+                return Ok(None);
+            }
+
+            if let Some(snapshot_txn) = self.snapshot_txn {
+                if value.len() >= ENTRY_VALUE_SIZE {
+                    let created_txn = u64::from_le_bytes([
+                        value[0], value[1], value[2], value[3], value[4], value[5], value[6],
+                        value[7],
+                    ]);
+                    let deleted_txn = u64::from_le_bytes([
+                        value[8], value[9], value[10], value[11], value[12], value[13], value[14],
+                        value[15],
+                    ]);
+
+                    let visible = created_txn <= snapshot_txn
+                        && (deleted_txn == 0 || deleted_txn > snapshot_txn);
+
+                    if !visible {
+                        continue;
+                    }
+                }
+            }
+
+            return Ok(Some(entity_id));
+        }
     }
 }
 

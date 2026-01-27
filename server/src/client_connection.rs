@@ -459,7 +459,7 @@ impl ClientConnection {
         };
 
         // First, read existing values to compare HLCs
-        let mut snapshot = db.begin_readonly();
+        let snapshot = db.begin_readonly();
         // Track: (triple, should_update, is_insert)
         let mut updates_to_apply: Vec<(_, bool, bool)> = Vec::with_capacity(triples.len());
 
@@ -532,7 +532,7 @@ impl ClientConnection {
         let mut response_triples = Vec::with_capacity(keys.len());
 
         // Begin a read-only snapshot to get current values
-        let mut snapshot = db.begin_readonly();
+        let snapshot = db.begin_readonly();
 
         for (entity_id, attribute_id) in keys {
             if let Ok(Some(record)) = snapshot.get(&entity_id, &attribute_id) {
@@ -596,8 +596,8 @@ impl ClientConnection {
             };
         };
 
-        // Acquire write lock (needed for begin_readonly which mutates Database state)
-        let Ok(mut db) = db_arc.write() else {
+        // Acquire read lock (concurrent reads are allowed)
+        let Ok(db) = db_arc.read() else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
@@ -624,11 +624,11 @@ impl ClientConnection {
         };
 
         // Begin a read-only snapshot
-        let mut snapshot = db.begin_readonly();
+        let snapshot = db.begin_readonly();
 
         // Execute the query
         let result = {
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let engine = QueryEngine::new(&snapshot);
             engine.execute(&query)
         };
 

@@ -21,17 +21,17 @@ use crate::types::{AttributeId, TripleRecord};
 
 /// The query engine evaluates queries against a database snapshot.
 pub struct QueryEngine<'a, 'b> {
-    snapshot: &'a mut Snapshot<'b>,
+    snapshot: &'a Snapshot<'b>,
 }
 
 impl<'a, 'b> QueryEngine<'a, 'b> {
     /// Create a new query engine for a database snapshot.
-    pub const fn new(snapshot: &'a mut Snapshot<'b>) -> Self {
+    pub const fn new(snapshot: &'a Snapshot<'b>) -> Self {
         Self { snapshot }
     }
 
     /// Execute a query and return results.
-    pub fn execute(&mut self, query: &Query) -> Result<QueryResult, DatabaseError> {
+    pub fn execute(&self, query: &Query) -> Result<QueryResult, DatabaseError> {
         // Start with a single empty context
         let mut contexts = vec![QueryContext::new()];
 
@@ -89,7 +89,7 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 
     /// Match a pattern against all triples, extending each context.
     fn match_pattern_all(
-        &mut self,
+        &self,
         pattern: &Pattern,
         contexts: Vec<QueryContext>,
     ) -> Result<Vec<QueryContext>, DatabaseError> {
@@ -105,7 +105,7 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 
     /// Match a pattern against all triples with the given context.
     fn match_pattern(
-        &mut self,
+        &self,
         pattern: &Pattern,
         ctx: &QueryContext,
     ) -> Result<Vec<QueryContext>, DatabaseError> {
@@ -123,7 +123,7 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 
     /// Get candidate triples based on pattern constraints.
     fn get_candidate_triples(
-        &mut self,
+        &self,
         pattern: &Pattern,
         ctx: &QueryContext,
     ) -> Result<Vec<Triple>, DatabaseError> {
@@ -295,7 +295,7 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 
     /// Match an optional pattern (left join).
     fn match_optional_pattern(
-        &mut self,
+        &self,
         pattern: &Pattern,
         contexts: Vec<QueryContext>,
     ) -> Result<Vec<QueryContext>, DatabaseError> {
@@ -317,7 +317,7 @@ impl<'a, 'b> QueryEngine<'a, 'b> {
 
     /// Match a negation pattern (anti-join).
     fn match_negation_pattern(
-        &mut self,
+        &self,
         pattern: &Pattern,
         contexts: Vec<QueryContext>,
     ) -> Result<Vec<QueryContext>, DatabaseError> {
