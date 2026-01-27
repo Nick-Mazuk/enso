@@ -10,25 +10,21 @@
  * - Subscription handlers are invoked for matching subscription_id updates
  */
 
-import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { assert } from "../../../shared/assert.js";
 import {
+	type ClientMessage,
 	ClientMessageSchema,
 	ConnectRequestSchema,
-	QueryRequestSchema,
-	ServerMessageSchema,
-	SubscribeRequestSchema,
-	TripleUpdateRequestSchema,
-	UnsubscribeRequestSchema,
-	type ClientMessage,
 	type QueryRequest,
+	ServerMessageSchema,
 	type ServerResponse,
-	type SubscribeRequest,
+	SubscribeRequestSchema,
 	type SubscriptionUpdate,
 	type Triple,
-	type TripleUpdateRequest,
-	type UnsubscribeRequest,
+	TripleUpdateRequestSchema,
+	UnsubscribeRequestSchema,
 } from "../../proto/protocol_pb.js";
-import { assert } from "../../../shared/assert.js";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -117,7 +113,7 @@ export class Connection {
 		}
 	}
 
-	private async establishConnection(): Promise<void> {
+	private establishConnection(): Promise<void> {
 		this.connectionState = "connecting";
 
 		return new Promise<void>((resolve, reject) => {
@@ -125,15 +121,16 @@ export class Connection {
 				this.ws = new WebSocket(this.url);
 				this.ws.binaryType = "arraybuffer";
 
-				this.ws.onopen = async () => {
+				this.ws.onopen = () => {
 					try {
 						// Send ConnectRequest
 						const connectRequest = create(ConnectRequestSchema, {
 							appApiKey: this.apiKey,
 						});
 
+						const requestId = this.nextRequestId++;
 						const message = create(ClientMessageSchema, {
-							requestId: this.nextRequestId++,
+							requestId,
 							payload: {
 								case: "connect",
 								value: connectRequest,
@@ -141,10 +138,10 @@ export class Connection {
 						});
 
 						const binary = toBinary(ClientMessageSchema, message);
-						this.ws!.send(binary);
+						this.ws?.send(binary);
 
 						// Wait for response
-						this.pendingRequests.set(message.requestId!, {
+						this.pendingRequests.set(requestId, {
 							resolve: () => {
 								this.connectionState = "connected";
 								this.reconnectAttempts = 0;
@@ -165,7 +162,7 @@ export class Connection {
 					this.handleMessage(event);
 				};
 
-				this.ws.onerror = (event: Event) => {
+				this.ws.onerror = (_event: Event) => {
 					const error = new Error("WebSocket error");
 					if (this.connectionState === "connecting") {
 						reject(error);
@@ -200,10 +197,7 @@ export class Connection {
 						this.pendingRequests.delete(response.requestId);
 
 						// Check for error status
-						if (
-							response.status !== undefined &&
-							response.status.code !== 0
-						) {
+						if (response.status !== undefined && response.status.code !== 0) {
 							pending.reject(
 								new Error(response.status.message || "Request failed"),
 							);
@@ -292,9 +286,7 @@ export class Connection {
 	 * @param payload - The payload to send
 	 * @returns A promise that resolves with the server response
 	 */
-	async send(
-		payload: ClientMessage["payload"],
-	): Promise<ServerResponse> {
+	async send(payload: ClientMessage["payload"]): Promise<ServerResponse> {
 		if (this.connectionState !== "connected") {
 			await this.connect();
 		}
@@ -329,7 +321,7 @@ export class Connection {
 			triples,
 		});
 
-		return this.send({
+		return await this.send({
 			case: "tripleUpdateRequest",
 			value: request,
 		});
@@ -342,7 +334,7 @@ export class Connection {
 	 * @returns A promise that resolves with the query results
 	 */
 	async sendQuery(query: QueryRequest): Promise<ServerResponse> {
-		return this.send({
+		return await this.send({
 			case: "query",
 			value: query,
 		});

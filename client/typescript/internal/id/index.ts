@@ -53,13 +53,17 @@ export const stringToBytes = (id: string): Uint8Array => {
 
 	// XOR each input byte into the hash and apply FNV prime mixing
 	for (let i = 0; i < encoded.length; i++) {
-		const inputByte = encoded[i]!;
+		const inputByte = encoded[i];
+		if (inputByte === undefined) continue;
 		const targetIdx = i % ID_LENGTH;
-		bytes[targetIdx] ^= inputByte;
+		const currentTarget = bytes[targetIdx] ?? 0;
+		bytes[targetIdx] = currentTarget ^ inputByte;
 
 		// Mix with neighboring bytes for better distribution
 		const nextIdx = (targetIdx + 1) % ID_LENGTH;
-		bytes[nextIdx] ^= (bytes[targetIdx]! * 0x01000193) & 0xff;
+		const currentNext = bytes[nextIdx] ?? 0;
+		bytes[nextIdx] =
+			currentNext ^ (((currentTarget ^ inputByte) * 0x01000193) & 0xff);
 	}
 
 	return bytes;
@@ -79,8 +83,8 @@ export const stringToBytes = (id: string): Uint8Array => {
  */
 export const bytesToString = (bytes: Uint8Array): string => {
 	let result = "";
-	for (let i = 0; i < bytes.length; i++) {
-		result += bytes[i]!.toString(16).padStart(2, "0");
+	for (const byte of bytes) {
+		result += byte.toString(16).padStart(2, "0");
 	}
 	return result;
 };

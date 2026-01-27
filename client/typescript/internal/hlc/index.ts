@@ -36,7 +36,7 @@ const generateNodeId = (): number => {
 	) {
 		const array = new Uint32Array(1);
 		globalThis.crypto.getRandomValues(array);
-		return array[0]!;
+		return array[0] ?? 0;
 	}
 	// Fallback to Math.random
 	return Math.floor(Math.random() * 0xffffffff);

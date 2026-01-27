@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { HlcClock, compareTimestamps } from "./index.js";
+import { compareTimestamps, HlcClock } from "./index.js";
 
 describe("HLC timestamp utilities", () => {
 	describe("HlcClock", () => {

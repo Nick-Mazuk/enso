@@ -1,11 +1,11 @@
-import { describe, expect, it, mock, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { create, toBinary } from "@bufbuild/protobuf";
-import { Connection } from "./index.js";
 import {
 	ServerMessageSchema,
 	ServerResponseSchema,
 	SubscriptionUpdateSchema,
 } from "../../proto/protocol_pb.js";
+import { Connection } from "./index.js";
 
 // Mock WebSocket
 class MockWebSocket {
@@ -93,12 +93,12 @@ describe("Connection", () => {
 		expect(ws).toBeDefined();
 
 		// Simulate WebSocket opening
-		ws!.simulateOpen();
+		ws?.simulateOpen();
 
 		// Wait for ConnectRequest to be sent
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		expect(ws!.sentMessages.length).toBe(1);
+		expect(ws?.sentMessages.length).toBe(1);
 
 		// Simulate server response
 		const response = create(ServerResponseSchema, {
@@ -110,7 +110,7 @@ describe("Connection", () => {
 				value: response,
 			},
 		});
-		ws!.simulateMessage(toBinary(ServerMessageSchema, serverMessage));
+		ws?.simulateMessage(toBinary(ServerMessageSchema, serverMessage));
 
 		await connectPromise;
 		expect(connection.getState()).toBe("connected");
@@ -121,7 +121,8 @@ describe("Connection", () => {
 		const connectPromise = connection.connect();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const ws = MockWebSocket.instances[0]!;
+		const ws = MockWebSocket.instances[0];
+		if (!ws) throw new Error("WebSocket not created");
 		ws.simulateOpen();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -145,7 +146,8 @@ describe("Connection", () => {
 		const connectPromise = connection.connect();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		const ws = MockWebSocket.instances[0]!;
+		const ws = MockWebSocket.instances[0];
+		if (!ws) throw new Error("WebSocket not created");
 		ws.simulateOpen();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -153,19 +155,20 @@ describe("Connection", () => {
 		// Respond to connect request
 		const connectResponse = create(ServerResponseSchema, { requestId: 1 });
 		ws.simulateMessage(
-			toBinary(ServerMessageSchema,
+			toBinary(
+				ServerMessageSchema,
 				create(ServerMessageSchema, {
 					payload: { case: "response", value: connectResponse },
-				})
-			)
+				}),
+			),
 		);
 
 		await connectPromise;
 
 		// Set up subscription handler
 		let receivedUpdate: unknown = null;
-		const subscribePromise = connection.subscribe(42, (update) => {
-			receivedUpdate = update;
+		const subscribePromise = connection.subscribe(42, (subscriptionUpdate) => {
+			receivedUpdate = subscriptionUpdate;
 		});
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -173,11 +176,12 @@ describe("Connection", () => {
 		// Respond to subscribe request
 		const subscribeResponse = create(ServerResponseSchema, { requestId: 2 });
 		ws.simulateMessage(
-			toBinary(ServerMessageSchema,
+			toBinary(
+				ServerMessageSchema,
 				create(ServerMessageSchema, {
 					payload: { case: "response", value: subscribeResponse },
-				})
-			)
+				}),
+			),
 		);
 
 		await subscribePromise;
@@ -188,11 +192,12 @@ describe("Connection", () => {
 			changes: [],
 		});
 		ws.simulateMessage(
-			toBinary(ServerMessageSchema,
+			toBinary(
+				ServerMessageSchema,
 				create(ServerMessageSchema, {
 					payload: { case: "subscriptionUpdate", value: update },
-				})
-			)
+				}),
+			),
 		);
 
 		expect(receivedUpdate).not.toBeNull();

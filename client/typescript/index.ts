@@ -40,9 +40,13 @@ export const createClient = async <
 		if (!opts.apiKey) {
 			throw new Error("apiKey is required when serverUrl is provided");
 		}
-		return Client.createWithServer(opts.schema, opts.serverUrl, opts.apiKey);
+		return await Client.createWithServer(
+			opts.schema,
+			opts.serverUrl,
+			opts.apiKey,
+		);
 	}
-	return Client.createInMemory(opts.schema);
+	return Promise.resolve(Client.createInMemory(opts.schema));
 };
 
 /**
@@ -76,10 +80,10 @@ class Client<
 	 * @returns A client using in-memory storage
 	 */
 	static createInMemory<
-		S extends Schema<
+		TSchema extends Schema<
 			Record<string, Record<string, Field<FieldValue, boolean>>>
 		>,
-	>(schema: S): Client<S> {
+	>(schema: TSchema): Client<TSchema> {
 		const store = new Store();
 		return new Client(schema, store, null);
 	}
@@ -93,10 +97,14 @@ class Client<
 	 * @returns A promise that resolves to a connected client
 	 */
 	static async createWithServer<
-		S extends Schema<
+		TSchema extends Schema<
 			Record<string, Record<string, Field<FieldValue, boolean>>>
 		>,
-	>(schema: S, serverUrl: string, apiKey: string): Promise<Client<S>> {
+	>(
+		schema: TSchema,
+		serverUrl: string,
+		apiKey: string,
+	): Promise<Client<TSchema>> {
 		const connection = new Connection(serverUrl, apiKey);
 		await connection.connect();
 

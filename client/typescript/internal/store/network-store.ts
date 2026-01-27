@@ -11,25 +11,23 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { Connection } from "../connection/index.js";
-import { HlcClock } from "../hlc/index.js";
-import { fieldToAttributeId, stringToBytes, bytesToString } from "../id/index.js";
 import {
+	type ChangeRecord,
+	HlcTimestampSchema,
+	type QueryPattern as ProtoQueryPattern,
+	type Triple as ProtoTriple,
 	QueryPatternSchema,
 	QueryPatternVariableSchema,
 	QueryRequestSchema,
+	type QueryResultRow,
 	TripleSchema,
 	TripleValueSchema,
-	HlcTimestampSchema,
-	type ChangeRecord,
-	type QueryPattern as ProtoQueryPattern,
-	type QueryResultRow,
-	type Triple as ProtoTriple,
-	ChangeType,
 } from "../../proto/protocol_pb.js";
+import type { Connection } from "../connection/index.js";
+import { HlcClock } from "../hlc/index.js";
+import { fieldToAttributeId, stringToBytes } from "../id/index.js";
 import {
 	type Datom,
-	type Field,
 	type Filter,
 	type Id,
 	isVariable,
@@ -107,14 +105,14 @@ export class NetworkStore {
 		if (triples.length === 0) return;
 
 		// Track in pendingWrites for optimistic UI
-		const entityId = triples[0]![0];
+		const firstTriple = triples[0];
+		if (!firstTriple) return;
+		const entityId = firstTriple[0];
 		this.pendingWrites.set(entityId, triples);
 
 		try {
 			// Convert to protocol format
-			const protoTriples = triples.map((triple) =>
-				this.tripleToProto(triple),
-			);
+			const protoTriples = triples.map((triple) => this.tripleToProto(triple));
 
 			// Send to server
 			await this.connection.sendTripleUpdate(protoTriples);
@@ -296,8 +294,10 @@ export class NetworkStore {
 				}),
 			),
 			where: query.where.map((pattern) => this.patternToProto(pattern)),
-			optional: query.optional?.map((pattern) => this.patternToProto(pattern)) ?? [],
-			whereNot: query.whereNot?.map((pattern) => this.patternToProto(pattern)) ?? [],
+			optional:
+				query.optional?.map((pattern) => this.patternToProto(pattern)) ?? [],
+			whereNot:
+				query.whereNot?.map((pattern) => this.patternToProto(pattern)) ?? [],
 		});
 	}
 

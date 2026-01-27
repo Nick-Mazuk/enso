@@ -1,10 +1,9 @@
 import { assert } from "../../../shared/assert.js";
 import { QueryContext } from "./query-context.js";
-import type { StoreInterface, Query } from "./store-interface.js";
+import type { Query, StoreInterface } from "./store-interface.js";
 import {
 	type Datom,
 	type Field,
-	type Filter,
 	type Id,
 	isVariable,
 	type QueryPattern,
@@ -25,7 +24,7 @@ export class Store implements StoreInterface {
 	private valueIndex: Map<Value, Triple[]> = new Map();
 	private tripleCount = 0;
 
-	async add(...triples: Triple[]): Promise<void> {
+	add(...triples: Triple[]): Promise<void> {
 		// TODO: Check for duplicates -- if the id/field already exists, update the value
 		for (const triple of triples) {
 			this.addToIndex(this.idIndex, triple[0], triple);
@@ -33,6 +32,7 @@ export class Store implements StoreInterface {
 			this.addToIndex(this.valueIndex, triple[2], triple);
 		}
 		this.tripleCount += triples.length;
+		return Promise.resolve();
 	}
 
 	private addToIndex(index: Map<Datom, Triple[]>, key: Datom, triple: Triple) {
@@ -43,7 +43,7 @@ export class Store implements StoreInterface {
 		}
 	}
 
-	async query<Find extends QueryVariable[]>(query: Query<Find>): Promise<Datom[][]> {
+	query<Find extends QueryVariable[]>(query: Query<Find>): Promise<Datom[][]> {
 		let contexts = this.queryMultiplePatterns(query.where);
 		if (query.optional && query.optional.length > 0 && contexts.length > 0) {
 			for (const pattern of query.optional) {
@@ -69,11 +69,12 @@ export class Store implements StoreInterface {
 				}),
 			);
 		}
-		return contexts.map((context) => {
+		const result = contexts.map((context) => {
 			return query.find.map((datom) => {
-				return isVariable(datom) ? context.get(datom) : datom;
+				return isVariable(datom) ? (context.get(datom) as Datom) : datom;
 			});
 		});
+		return Promise.resolve(result);
 	}
 
 	// For a given pattern and triple, it determines if the pattern can match the triple.
@@ -182,7 +183,7 @@ export class Store implements StoreInterface {
 		return newContexts;
 	}
 
-	async deleteAllById(id: Id): Promise<void> {
+	deleteAllById(id: Id): Promise<void> {
 		// TODO: potentially instead just add a tombstone triple to handle replication.
 		const triples = this.idIndex.get(id) ?? [];
 		this.tripleCount -= triples.length;
@@ -210,6 +211,7 @@ export class Store implements StoreInterface {
 				}
 			}
 		}
+		return Promise.resolve();
 	}
 
 	size() {

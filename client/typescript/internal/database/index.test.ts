@@ -1449,6 +1449,7 @@ describe("database.entity.query limit", () => {
 		const db = createDatabase(schema, store);
 
 		for (let i = 0; i < 10; i++) {
+			// biome-ignore lint/performance/noAwaitInLoops: Sequential creation for test
 			await db.items.create({ val: i });
 		}
 
@@ -1518,6 +1519,7 @@ describe("database.entity.query limit", () => {
 		const db = createDatabase(schema, store);
 
 		for (let i = 0; i < 10; i++) {
+			// biome-ignore lint/performance/noAwaitInLoops: Sequential creation for test
 			await db.items.create({ val: i });
 		}
 
