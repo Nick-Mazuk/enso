@@ -18,6 +18,9 @@
 //! - Control exactly when writes become durable
 //! - Simulate partial writes and corruption
 
+use std::sync::Arc;
+
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::page::{Page, PageId};
 use crate::storage::superblock::Superblock;
 use crate::storage::wal::{LogRecord, LogRecordPayload, Lsn, WalError};
@@ -40,6 +43,8 @@ pub enum StorageError {
     InjectedFault(String),
     /// Corruption detected.
     Corruption(String),
+    /// Buffer pool exhausted - no buffers available.
+    BufferPoolExhausted,
 }
 
 impl std::fmt::Display for StorageError {
@@ -58,6 +63,7 @@ impl std::fmt::Display for StorageError {
             Self::Wal(e) => write!(f, "WAL error: {e}"),
             Self::InjectedFault(msg) => write!(f, "injected fault: {msg}"),
             Self::Corruption(msg) => write!(f, "corruption: {msg}"),
+            Self::BufferPoolExhausted => write!(f, "buffer pool exhausted"),
         }
     }
 }
@@ -97,12 +103,19 @@ impl From<WalError> for StorageError {
 /// - `allocate_pages` extends the storage capacity
 /// - Superblock changes are persisted on `write_superblock` + `sync`
 pub trait Storage {
+    // ========== Buffer Pool ==========
+
+    /// Get a reference to the buffer pool.
+    ///
+    /// The buffer pool is used to lease page buffers for read and write operations.
+    fn buffer_pool(&self) -> &Arc<BufferPool>;
+
     // ========== Page Operations ==========
 
     /// Read a page from storage.
     ///
     /// Returns the page content at the given page ID.
-    /// Returns an error if the page ID is out of bounds.
+    /// Returns an error if the page ID is out of bounds or buffer pool exhausted.
     fn read_page(&mut self, page_id: PageId) -> Result<Page, StorageError>;
 
     /// Write a page to storage.

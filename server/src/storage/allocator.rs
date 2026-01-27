@@ -8,6 +8,9 @@
 // but that's not a practical concern for this storage engine.
 #![allow(clippy::cast_possible_truncation)]
 
+use std::sync::Arc;
+
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::page::{Page, PageHeader, PageId, PageType};
 
 /// Number of bits per byte.
@@ -110,14 +113,15 @@ impl PageAllocator {
     }
 
     /// Serialize the bitmap to pages.
-    #[must_use]
-    pub fn to_pages(&self) -> Vec<Page> {
+    ///
+    /// Returns `None` if the buffer pool is exhausted.
+    pub fn to_pages(&self, pool: &Arc<BufferPool>) -> Option<Vec<Page>> {
         let num_pages = bitmap_pages_needed(self.total_pages);
         let mut pages = Vec::with_capacity(num_pages as usize);
 
         let mut offset = 0;
         for _ in 0..num_pages {
-            let mut page = Page::new();
+            let mut page = pool.lease_page_zeroed()?;
 
             // Write page header
             let header = PageHeader {
@@ -135,7 +139,7 @@ impl PageAllocator {
             pages.push(page);
         }
 
-        pages
+        Some(pages)
     }
 
     /// Allocate a single free page.
@@ -416,6 +420,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_to_pages() {
+        let pool = BufferPool::new(10);
         let mut alloc = PageAllocator::new(1000);
 
         // Allocate some pages
@@ -423,7 +428,7 @@ mod tests {
             alloc.allocate();
         }
 
-        let pages = alloc.to_pages();
+        let pages = alloc.to_pages(&pool).expect("should serialize");
         let restored = PageAllocator::from_pages(&pages, 1000);
 
         assert_eq!(restored.total_pages(), alloc.total_pages());

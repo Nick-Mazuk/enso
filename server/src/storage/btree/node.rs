@@ -552,6 +552,7 @@ pub fn split_key(key: &Key) -> (EntityId, AttributeId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::buffer_pool::BufferPool;
 
     #[test]
     fn test_key_operations() {
@@ -567,11 +568,12 @@ mod tests {
 
     #[test]
     fn test_internal_node_roundtrip() {
+        let pool = BufferPool::new(10);
         let mut node = InternalNode::new(0);
         node.keys = vec![[1u8; KEY_SIZE], [2u8; KEY_SIZE], [3u8; KEY_SIZE]];
         node.children = vec![10, 20, 30, 40];
 
-        let mut page = Page::new();
+        let mut page = pool.lease_page_zeroed().expect("should lease");
         node.write_to_page(&mut page);
 
         let restored = InternalNode::from_page(&page).expect("should parse");
@@ -584,12 +586,13 @@ mod tests {
 
     #[test]
     fn test_leaf_node_roundtrip() {
+        let pool = BufferPool::new(10);
         let mut node = LeafNode::new(0);
         node.insert([1u8; KEY_SIZE], b"value1".to_vec());
         node.insert([2u8; KEY_SIZE], b"value2".to_vec());
         node.insert([3u8; KEY_SIZE], b"value3".to_vec());
 
-        let mut page = Page::new();
+        let mut page = pool.lease_page_zeroed().expect("should lease");
         node.write_to_page(&mut page);
 
         let restored = LeafNode::from_page(&page).expect("should parse");

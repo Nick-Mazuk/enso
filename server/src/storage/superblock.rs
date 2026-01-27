@@ -5,6 +5,9 @@
 // PAGE_SIZE is a compile-time constant that fits in u32.
 #![allow(clippy::cast_possible_truncation)]
 
+use std::sync::Arc;
+
+use crate::storage::buffer_pool::BufferPool;
 use crate::storage::page::{PAGE_SIZE, Page, PageId};
 use crate::types::HlcTimestamp;
 
@@ -110,9 +113,10 @@ impl Superblock {
     }
 
     /// Serialize the superblock to a page.
-    #[must_use]
-    pub fn to_page(&self) -> Page {
-        let mut page = Page::new();
+    ///
+    /// Returns `None` if the buffer pool is exhausted.
+    pub fn to_page(&self, pool: &Arc<BufferPool>) -> Option<Page> {
+        let mut page = pool.lease_page_zeroed()?;
 
         page.write_bytes(offsets::MAGIC, &MAGIC);
         page.write_u32(offsets::FORMAT_VERSION, self.format_version);
@@ -139,7 +143,7 @@ impl Superblock {
         page.write_u64(offsets::NEXT_TXN_ID, self.next_txn_id);
         page.write_u64(offsets::SCHEMA_VERSION, self.schema_version);
 
-        page
+        Some(page)
     }
 
     /// Deserialize a superblock from a page.
@@ -227,8 +231,14 @@ impl std::error::Error for SuperblockError {}
 mod tests {
     use super::*;
 
+    fn test_pool() -> Arc<BufferPool> {
+        BufferPool::new(10)
+    }
+
     #[test]
     fn test_superblock_roundtrip() {
+        let pool = test_pool();
+
         let mut sb = Superblock::new();
         sb.file_size = 1024 * 1024;
         sb.total_page_count = 128;
@@ -243,7 +253,7 @@ mod tests {
             node_id: 1,
         };
 
-        let page = sb.to_page();
+        let page = sb.to_page(&pool).expect("should serialize");
         let restored = Superblock::from_page(&page).expect("should parse");
 
         assert_eq!(restored.format_version, FORMAT_VERSION);
@@ -262,7 +272,8 @@ mod tests {
 
     #[test]
     fn test_superblock_invalid_magic() {
-        let mut page = Page::new();
+        let pool = test_pool();
+        let mut page = pool.lease_page_zeroed().expect("should lease");
         page.write_bytes(0, b"BADMAGIC");
 
         let result = Superblock::from_page(&page);

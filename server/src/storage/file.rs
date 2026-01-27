@@ -5,7 +5,9 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
+use std::sync::Arc;
 
+use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
 use crate::storage::io::{Storage, StorageError};
 use crate::storage::page::{PAGE_SIZE, PAGE_SIZE_U64, Page, PageId};
 use crate::storage::superblock::{Superblock, SuperblockError};
@@ -16,16 +18,27 @@ use crate::types::HlcTimestamp;
 pub struct DatabaseFile {
     file: File,
     superblock: Superblock,
+    buffer_pool: Arc<BufferPool>,
 }
 
 impl DatabaseFile {
     /// Create a new database file at the given path.
     ///
     /// Returns an error if the file already exists.
+    /// Uses the default buffer pool capacity (512 pages = 4MB).
     pub fn create(path: &Path) -> Result<Self, FileError> {
+        Self::create_with_pool_capacity(path, DEFAULT_POOL_CAPACITY)
+    }
+
+    /// Create a new database file with a custom buffer pool capacity.
+    ///
+    /// Returns an error if the file already exists.
+    pub fn create_with_pool_capacity(path: &Path, pool_capacity: usize) -> Result<Self, FileError> {
         if path.exists() {
             return Err(FileError::AlreadyExists(path.to_path_buf()));
         }
+
+        let buffer_pool = BufferPool::new(pool_capacity);
 
         let mut file = OpenOptions::new()
             .read(true)
@@ -36,16 +49,31 @@ impl DatabaseFile {
 
         // Initialize with a fresh superblock
         let superblock = Superblock::new();
-        let page = superblock.to_page();
+        let page = superblock
+            .to_page(&buffer_pool)
+            .ok_or(FileError::BufferPoolExhausted)?;
 
         file.write_all(page.as_bytes()).map_err(FileError::Io)?;
         file.sync_all().map_err(FileError::Io)?;
 
-        Ok(Self { file, superblock })
+        Ok(Self {
+            file,
+            superblock,
+            buffer_pool,
+        })
     }
 
     /// Open an existing database file.
+    ///
+    /// Uses the default buffer pool capacity (512 pages = 4MB).
     pub fn open(path: &Path) -> Result<Self, FileError> {
+        Self::open_with_pool_capacity(path, DEFAULT_POOL_CAPACITY)
+    }
+
+    /// Open an existing database file with a custom buffer pool capacity.
+    pub fn open_with_pool_capacity(path: &Path, pool_capacity: usize) -> Result<Self, FileError> {
+        let buffer_pool = BufferPool::new(pool_capacity);
+
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -56,10 +84,21 @@ impl DatabaseFile {
         let mut buf = [0u8; PAGE_SIZE];
         file.read_exact(&mut buf).map_err(FileError::Io)?;
 
-        let page = Page::from_bytes(buf);
+        // Create a page from the buffer to parse the superblock
+        let page = buffer_pool
+            .lease_page()
+            .ok_or(FileError::BufferPoolExhausted)?;
+        // Copy the read bytes into the page buffer
+        let mut page = page;
+        page.as_bytes_mut().copy_from_slice(&buf);
+
         let superblock = Superblock::from_page(&page).map_err(FileError::Superblock)?;
 
-        Ok(Self { file, superblock })
+        Ok(Self {
+            file,
+            superblock,
+            buffer_pool,
+        })
     }
 
     /// Get a reference to the superblock.
@@ -74,6 +113,8 @@ impl DatabaseFile {
     }
 
     /// Read a page from the file.
+    ///
+    /// Returns an error if page is out of bounds or buffer pool is exhausted.
     pub fn read_page(&mut self, page_id: PageId) -> Result<Page, FileError> {
         if page_id >= self.superblock.total_page_count {
             return Err(FileError::PageOutOfBounds {
@@ -82,15 +123,22 @@ impl DatabaseFile {
             });
         }
 
+        // Lease a page buffer from the pool
+        let mut page = self
+            .buffer_pool
+            .lease_page()
+            .ok_or(FileError::BufferPoolExhausted)?;
+
         let offset = page_id * PAGE_SIZE_U64;
         self.file
             .seek(SeekFrom::Start(offset))
             .map_err(FileError::Io)?;
 
-        let mut buf = [0u8; PAGE_SIZE];
-        self.file.read_exact(&mut buf).map_err(FileError::Io)?;
+        self.file
+            .read_exact(page.as_bytes_mut())
+            .map_err(FileError::Io)?;
 
-        Ok(Page::from_bytes(buf))
+        Ok(page)
     }
 
     /// Write a page to the file.
@@ -116,7 +164,10 @@ impl DatabaseFile {
 
     /// Write the superblock to page 0.
     pub fn write_superblock(&mut self) -> Result<(), FileError> {
-        let page = self.superblock.to_page();
+        let page = self
+            .superblock
+            .to_page(&self.buffer_pool)
+            .ok_or(FileError::BufferPoolExhausted)?;
 
         self.file.seek(SeekFrom::Start(0)).map_err(FileError::Io)?;
         self.file
@@ -124,6 +175,12 @@ impl DatabaseFile {
             .map_err(FileError::Io)?;
 
         Ok(())
+    }
+
+    /// Get a reference to the buffer pool.
+    #[must_use]
+    pub const fn buffer_pool(&self) -> &Arc<BufferPool> {
+        &self.buffer_pool
     }
 
     /// Allocate new pages at the end of the file.
@@ -263,6 +320,8 @@ pub enum FileError {
     Superblock(SuperblockError),
     /// Page ID out of bounds.
     PageOutOfBounds { page_id: PageId, total_pages: u64 },
+    /// Buffer pool exhausted.
+    BufferPoolExhausted,
 }
 
 impl std::fmt::Display for FileError {
@@ -280,6 +339,7 @@ impl std::fmt::Display for FileError {
                     "page {page_id} out of bounds (total pages: {total_pages})"
                 )
             }
+            Self::BufferPoolExhausted => write!(f, "buffer pool exhausted"),
         }
     }
 }
@@ -289,7 +349,9 @@ impl std::error::Error for FileError {
         match self {
             Self::Io(e) => Some(e),
             Self::Superblock(e) => Some(e),
-            Self::AlreadyExists(_) | Self::PageOutOfBounds { .. } => None,
+            Self::AlreadyExists(_) | Self::PageOutOfBounds { .. } | Self::BufferPoolExhausted => {
+                None
+            }
         }
     }
 }
@@ -310,11 +372,16 @@ impl From<FileError> for StorageError {
                 format!("file already exists: {}", path.display()),
             )),
             FileError::Superblock(e) => Self::Superblock(e.to_string()),
+            FileError::BufferPoolExhausted => Self::BufferPoolExhausted,
         }
     }
 }
 
 impl Storage for DatabaseFile {
+    fn buffer_pool(&self) -> &Arc<BufferPool> {
+        Self::buffer_pool(self)
+    }
+
     fn read_page(&mut self, page_id: PageId) -> Result<Page, StorageError> {
         Self::read_page(self, page_id).map_err(StorageError::from)
     }
@@ -471,7 +538,7 @@ mod tests {
         assert_eq!(db.total_pages(), 6);
 
         // Write to a page
-        let mut page = Page::new();
+        let mut page = db.buffer_pool().lease_page_zeroed().expect("lease page");
         page.write_bytes(0, b"hello world");
         db.write_page(3, &page).expect("write page");
 
@@ -524,7 +591,7 @@ mod tests {
             let mut db = DatabaseFile::create(&path).expect("create db");
             db.allocate_pages(2).expect("allocate");
 
-            let mut page = Page::new();
+            let mut page = db.buffer_pool().lease_page_zeroed().expect("lease page");
             page.write_u64(100, 0xDEAD_BEEF_CAFE_BABE);
             db.write_page(1, &page).expect("write");
             db.write_superblock().expect("write superblock");

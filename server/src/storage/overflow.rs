@@ -26,7 +26,7 @@
 //! ```
 
 use crate::storage::file::{DatabaseFile, FileError};
-use crate::storage::page::{PAGE_SIZE, Page, PageHeader, PageId, PageType};
+use crate::storage::page::{PAGE_SIZE, PageHeader, PageId, PageType};
 
 /// Size of overflow page header (after page header).
 /// - Next page ID: 8 bytes
@@ -128,7 +128,10 @@ pub fn write_overflow(file: &mut DatabaseFile, value: &[u8]) -> Result<OverflowR
         remaining = rest;
 
         // Create the overflow page
-        let mut page = Page::new();
+        let mut page = file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(OverflowError::File(FileError::BufferPoolExhausted))?;
 
         // Write page header
         let header = PageHeader {
@@ -230,7 +233,10 @@ pub fn free_overflow(
 
         // Mark the page as free by writing a Free page type
         // This makes the pages identifiable for future reclamation
-        let mut free_page = Page::new();
+        let mut free_page = file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(OverflowError::File(FileError::BufferPoolExhausted))?;
         let header = PageHeader {
             page_type: PageType::Free,
             flags: 0,

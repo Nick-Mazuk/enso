@@ -32,6 +32,7 @@ Testing:
 Simplicity:
 
 - Minimize dependencies. Do not add new dependencies without approval.
+- Always fully complete migrations.
 
 ## Tools
 

@@ -17,7 +17,7 @@ use crate::storage::file::{DatabaseFile, FileError};
 use crate::storage::overflow::{
     OverflowError, OverflowRef, free_overflow, read_overflow, write_overflow,
 };
-use crate::storage::page::{Page, PageId};
+use crate::storage::page::PageId;
 
 /// A B-tree backed by a database file.
 pub struct BTree<'a> {
@@ -35,7 +35,10 @@ impl<'a> BTree<'a> {
             let leaf = LeafNode::new(0);
             let page_id = file.allocate_pages(1)?;
 
-            let mut page = Page::new();
+            let mut page = file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             leaf.write_to_page(&mut page);
             file.write_page(page_id, &page)?;
 
@@ -121,7 +124,11 @@ impl<'a> BTree<'a> {
         leaf.insert(key, stored_value);
 
         // Write back
-        let mut page = Page::new();
+        let mut page = self
+            .file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(FileError::BufferPoolExhausted)?;
         leaf.write_to_page(&mut page);
         self.file.write_page(leaf_page_id, &page)?;
 
@@ -152,7 +159,11 @@ impl<'a> BTree<'a> {
 
         if let Some(stored_bytes) = old_stored {
             // Write back the modified leaf
-            let mut page = Page::new();
+            let mut page = self
+                .file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             leaf.write_to_page(&mut page);
             self.file.write_page(leaf_page_id, &page)?;
 
@@ -216,11 +227,19 @@ impl<'a> BTree<'a> {
         leaf.header.next_leaf = right_page_id;
 
         // Write both leaves
-        let mut left_page = Page::new();
+        let mut left_page = self
+            .file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(FileError::BufferPoolExhausted)?;
         leaf.write_to_page(&mut left_page);
         self.file.write_page(leaf_page_id, &left_page)?;
 
-        let mut right_page = Page::new();
+        let mut right_page = self
+            .file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(FileError::BufferPoolExhausted)?;
         right_leaf.write_to_page(&mut right_page);
         self.file.write_page(right_page_id, &right_page)?;
 
@@ -229,7 +248,11 @@ impl<'a> BTree<'a> {
             let next_page = self.file.read_page(right_leaf.header.next_leaf)?;
             let mut next_leaf = LeafNode::from_page(&next_page)?;
             next_leaf.header.prev_leaf = right_page_id;
-            let mut next_page = Page::new();
+            let mut next_page = self
+                .file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             next_leaf.write_to_page(&mut next_page);
             self.file
                 .write_page(right_leaf.header.next_leaf, &next_page)?;
@@ -275,11 +298,19 @@ impl<'a> BTree<'a> {
             }
 
             // Write both internal nodes
-            let mut left_page = Page::new();
+            let mut left_page = self
+                .file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             parent.write_to_page(&mut left_page);
             self.file.write_page(parent_page_id, &left_page)?;
 
-            let mut right_page = Page::new();
+            let mut right_page = self
+                .file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             right_parent.write_to_page(&mut right_page);
             self.file.write_page(right_parent_page_id, &right_page)?;
 
@@ -297,7 +328,11 @@ impl<'a> BTree<'a> {
             // Update right child's parent pointer
             self.update_parent_pointer(right_child, parent_page_id)?;
 
-            let mut page = Page::new();
+            let mut page = self
+                .file
+                .buffer_pool()
+                .lease_page_zeroed()
+                .ok_or(FileError::BufferPoolExhausted)?;
             parent.write_to_page(&mut page);
             self.file.write_page(parent_page_id, &page)?;
         }
@@ -315,7 +350,11 @@ impl<'a> BTree<'a> {
         let new_root = InternalNode::with_children(0, left_child, key, right_child);
         let new_root_page_id = self.file.allocate_pages(1)?;
 
-        let mut page = Page::new();
+        let mut page = self
+            .file
+            .buffer_pool()
+            .lease_page_zeroed()
+            .ok_or(FileError::BufferPoolExhausted)?;
         new_root.write_to_page(&mut page);
         self.file.write_page(new_root_page_id, &page)?;
 
@@ -343,16 +382,24 @@ impl<'a> BTree<'a> {
             NodeType::Leaf => {
                 let mut node = LeafNode::from_page(&page)?;
                 node.header.parent_page = new_parent;
-                let mut page = Page::new();
-                node.write_to_page(&mut page);
-                self.file.write_page(page_id, &page)?;
+                let mut new_page = self
+                    .file
+                    .buffer_pool()
+                    .lease_page_zeroed()
+                    .ok_or(FileError::BufferPoolExhausted)?;
+                node.write_to_page(&mut new_page);
+                self.file.write_page(page_id, &new_page)?;
             }
             NodeType::Internal => {
                 let mut node = InternalNode::from_page(&page)?;
                 node.header.parent_page = new_parent;
-                let mut page = Page::new();
-                node.write_to_page(&mut page);
-                self.file.write_page(page_id, &page)?;
+                let mut new_page = self
+                    .file
+                    .buffer_pool()
+                    .lease_page_zeroed()
+                    .ok_or(FileError::BufferPoolExhausted)?;
+                node.write_to_page(&mut new_page);
+                self.file.write_page(page_id, &new_page)?;
             }
         }
 

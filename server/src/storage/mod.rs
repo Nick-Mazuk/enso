@@ -35,6 +35,7 @@
 
 mod allocator;
 pub mod btree;
+pub mod buffer_pool;
 pub mod checkpoint;
 mod database;
 mod file;
@@ -50,6 +51,7 @@ mod transaction;
 pub mod wal;
 
 pub use allocator::PageAllocator;
+pub use buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
 pub use checkpoint::{
     CheckpointConfig, CheckpointError, CheckpointResult, CheckpointState, force_checkpoint,
     maybe_checkpoint, perform_checkpoint,

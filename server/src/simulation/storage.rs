@@ -11,10 +11,12 @@
 #![allow(clippy::disallowed_methods)]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
+use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
 use crate::storage::io::{Storage, StorageError};
 use crate::storage::wal::{LogRecord, LogRecordPayload, Lsn};
 use crate::storage::{PAGE_SIZE, Page, PageId, Superblock};
@@ -106,6 +108,8 @@ pub struct SimulatedStorage {
     total_pages: u64,
     /// The superblock.
     superblock: Superblock,
+    /// Buffer pool for page allocations.
+    buffer_pool: Arc<BufferPool>,
 
     /// WAL records.
     wal_records: Vec<SimulatedWalRecord>,
@@ -159,10 +163,20 @@ impl SimulatedStorage {
     /// Create a new simulated storage with custom fault configuration.
     #[must_use]
     pub fn with_config(seed: u64, fault_config: FaultConfig) -> Self {
+        Self::with_pool_capacity(seed, fault_config, DEFAULT_POOL_CAPACITY)
+    }
+
+    /// Create a new simulated storage with custom fault configuration and pool capacity.
+    #[must_use]
+    #[allow(clippy::expect_used)] // Pool should have capacity for initial superblock
+    pub fn with_pool_capacity(seed: u64, fault_config: FaultConfig, pool_capacity: usize) -> Self {
+        let buffer_pool = BufferPool::new(pool_capacity);
+
         let mut storage = Self {
             pages: HashMap::new(),
             total_pages: 1, // Page 0 is the superblock
             superblock: Superblock::new(),
+            buffer_pool: Arc::clone(&buffer_pool),
             wal_records: Vec::new(),
             next_lsn: 1,
             wal_capacity: 0,
@@ -173,7 +187,10 @@ impl SimulatedStorage {
         };
 
         // Initialize page 0 with the superblock
-        let superblock_page = storage.superblock.to_page();
+        let superblock_page = storage
+            .superblock
+            .to_page(&buffer_pool)
+            .expect("buffer pool should have capacity for superblock");
         storage.pages.insert(0, superblock_page);
 
         storage
@@ -227,6 +244,10 @@ impl SimulatedStorage {
 }
 
 impl Storage for SimulatedStorage {
+    fn buffer_pool(&self) -> &Arc<BufferPool> {
+        &self.buffer_pool
+    }
+
     fn read_page(&mut self, page_id: PageId) -> Result<Page, StorageError> {
         self.stats.reads += 1;
 
@@ -245,8 +266,14 @@ impl Storage for SimulatedStorage {
             ));
         }
 
-        // Get or create the page
-        let mut page = self.pages.get(&page_id).cloned().unwrap_or_else(Page::new);
+        // Get or create the page (clone existing or lease zeroed from pool)
+        let mut page = match self.pages.get(&page_id) {
+            Some(existing) => existing.clone(),
+            None => self
+                .buffer_pool
+                .lease_page_zeroed()
+                .ok_or(StorageError::BufferPoolExhausted)?,
+        };
 
         // Check for corruption
         if self.should_inject_fault(self.fault_config.corruption_rate) {
@@ -326,7 +353,10 @@ impl Storage for SimulatedStorage {
     }
 
     fn write_superblock(&mut self) -> Result<(), StorageError> {
-        let page = self.superblock.to_page();
+        let page = self
+            .superblock
+            .to_page(&self.buffer_pool)
+            .ok_or(StorageError::BufferPoolExhausted)?;
         self.pages.insert(0, page);
         Ok(())
     }
@@ -469,7 +499,10 @@ mod tests {
         assert_eq!(storage.total_pages(), 6);
 
         // Write and read a page
-        let mut page = Page::new();
+        let mut page = storage
+            .buffer_pool()
+            .lease_page_zeroed()
+            .expect("should lease");
         page.write_bytes(0, b"hello world");
         storage.write_page(2, &page).unwrap();
 

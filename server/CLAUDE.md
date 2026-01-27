@@ -10,6 +10,7 @@ Code style:
 - Do not ingore doc tests
 - Put all protobuf serialization / deserialization code in @server/src/types and use the `ProtoSerializable` and `ProtoDeserializable` traits
 - NEVER surpress a clippy finding that panics (e.g., never add `#[allow(clippy::expect_used)]`).
+- Use type driven design and the type-state pattern.
 
 Documentation:
 
