@@ -122,6 +122,9 @@ export class Connection {
 
 				timeoutId = setTimeout(() => {
 					timeoutId = null;
+					if (this.ws) {
+						this.ws.close();
+					}
 					reject(
 						new Error(
 							`WebSocket connection timeout after ${CONNECTION_TIMEOUT_MS}ms to ${this.url.href}`,
@@ -139,6 +142,9 @@ export class Connection {
 
 				this.ws.onerror = () => {
 					cleanup();
+					if (this.ws) {
+						this.ws.close();
+					}
 					reject(new Error(`WebSocket connection error to ${this.url.href}`));
 				};
 
