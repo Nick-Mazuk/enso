@@ -22,6 +22,7 @@
 import { assert } from "../../../shared/assert.js";
 
 const ID_LENGTH = 16;
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
 
 /**
  * Generates a random 16-byte entity ID.
@@ -54,13 +55,17 @@ export function bytesToHex(bytes: Uint8Array): string {
 /**
  * Converts a hex string to a 16-byte array.
  *
- * Pre-conditions: hex is a 32-character hex string
+ * Pre-conditions: hex is a 32-character string containing only hex digits (0-9, a-f, A-F)
  * Post-conditions: Returns exactly 16 bytes
  */
 export function hexToBytes(hex: string): Uint8Array {
 	assert(
 		hex.length === ID_LENGTH * 2,
 		`Expected ${ID_LENGTH * 2} hex chars, got ${hex.length}`,
+	);
+	assert(
+		HEX_PATTERN.test(hex),
+		`Invalid hex string: contains non-hex characters`,
 	);
 	const bytes = new Uint8Array(ID_LENGTH);
 	for (let i = 0; i < ID_LENGTH; i++) {

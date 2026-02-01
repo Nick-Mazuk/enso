@@ -53,7 +53,11 @@ import {
 	type StoreInterface,
 	type Triple,
 	type Value,
+	Variable,
 } from "./types.js";
+
+/** Pattern to validate hex strings */
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
 
 /** Pending write operation */
 interface PendingWrite {
@@ -232,6 +236,14 @@ export class NetworkStore implements StoreInterface {
 	}
 
 	private parseFieldToAttributeId(field: string): Uint8Array {
+		// Check if field is already a hex-formatted attribute ID
+		// Handle optional "0x" prefix
+		const hexString = field.startsWith("0x") ? field.slice(2) : field;
+		// 16-byte IDs are 32 hex characters
+		if (hexString.length === 32 && HEX_PATTERN.test(hexString)) {
+			return hexToBytes(hexString);
+		}
+
 		// Field is in format "entityName/fieldName"
 		const parts = field.split("/");
 		if (parts.length === 2 && parts[0] && parts[1]) {
@@ -350,9 +362,20 @@ export class NetworkStore implements StoreInterface {
 				}
 
 				switch (protoValue.value.case) {
-					case "id":
-						rowData.push(protoValue.value.value as Datom);
+					case "id": {
+						const idValue = protoValue.value.value;
+						// Convert Uint8Array bytes to hex string if needed
+						if (
+							typeof idValue === "object" &&
+							idValue !== null &&
+							"buffer" in idValue
+						) {
+							rowData.push(bytesToHex(idValue as Uint8Array) as Datom);
+						} else {
+							rowData.push(idValue as Datom);
+						}
 						break;
+					}
 					case "tripleValue": {
 						const tv = protoValue.value.value;
 						switch (tv.value.case) {
@@ -382,18 +405,9 @@ export class NetworkStore implements StoreInterface {
 
 	private async queryEntityTriples(id: Id): Promise<[Datom, Datom][]> {
 		// Query for all triples with this entity ID
-		const entityVar = {
-			name: "entity",
-			__brand: Symbol("QueryVariable"),
-		} as QueryVariable;
-		const fieldVar = {
-			name: "field",
-			__brand: Symbol("QueryVariable"),
-		} as QueryVariable;
-		const valueVar = {
-			name: "value",
-			__brand: Symbol("QueryVariable"),
-		} as QueryVariable;
+		const entityVar = Variable("entity");
+		const fieldVar = Variable("field");
+		const valueVar = Variable("value");
 
 		const query: Query<QueryVariable[]> = {
 			find: [entityVar, fieldVar],

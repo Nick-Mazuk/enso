@@ -784,7 +784,7 @@ describe("database.entity.query number filters", () => {
 		expect(result.data).toEqual([{ val: 10 }]);
 	});
 
-	it("throws for notEquals filter (not implemented)", async () => {
+	it("returns error for notEquals filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -798,15 +798,20 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 10 });
 		await db.items.create({ val: 20 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { notEquals: 10 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { notEquals: 10 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'notEquals' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for greaterThan filter (not implemented)", async () => {
+	it("returns error for greaterThan filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -821,15 +826,20 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 20 });
 		await db.items.create({ val: 30 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { greaterThan: 15 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 15 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for greaterThanOrEqual filter (not implemented)", async () => {
+	it("returns error for greaterThanOrEqual filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -843,15 +853,20 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 10 });
 		await db.items.create({ val: 20 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { greaterThanOrEqual: 20 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThanOrEqual: 20 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThanOrEqual' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for lessThan filter (not implemented)", async () => {
+	it("returns error for lessThan filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -865,15 +880,20 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 10 });
 		await db.items.create({ val: 20 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { lessThan: 15 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { lessThan: 15 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'lessThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for lessThanOrEqual filter (not implemented)", async () => {
+	it("returns error for lessThanOrEqual filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -887,15 +907,20 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 10 });
 		await db.items.create({ val: 20 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { lessThanOrEqual: 10 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { lessThanOrEqual: 10 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'lessThanOrEqual' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for combined range filters (not implemented)", async () => {
+	it("returns error for combined range filters (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -911,12 +936,17 @@ describe("database.entity.query number filters", () => {
 		await db.items.create({ val: 15 });
 		await db.items.create({ val: 20 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { greaterThan: 5, lessThan: 20 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 5, lessThan: 20 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 });
 
@@ -1036,17 +1066,22 @@ describe("database.entity.create with refs", () => {
 		await database.posts.create({ authorId: user1.data.id });
 		await database.posts.create({ authorId: user2.data.id });
 
-		await expect(
-			database.posts.query({
-				fields: { authorId: true },
-				where: { authorId: { notEquals: user1.data.id } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await database.posts.query({
+			fields: { authorId: true },
+			where: { authorId: { notEquals: user1.data.id } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'notEquals' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 });
 
 describe("database.entity.query number filters edge cases", () => {
-	it("throws for greaterThan filter with floating point (not implemented)", async () => {
+	it("returns error for greaterThan filter with floating point (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -1060,12 +1095,17 @@ describe("database.entity.query number filters edge cases", () => {
 		await db.items.create({ val: 10.5 });
 		await db.items.create({ val: 20.1 });
 
-		await expect(
-			db.items.query({
-				fields: { val: true },
-				where: { val: { greaterThan: 10.6 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { val: true },
+			where: { val: { greaterThan: 10.6 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
 	it("returns error if number filter applied to string field", async () => {
@@ -1147,7 +1187,7 @@ describe("database.entity.query number filters edge cases", () => {
 		});
 	});
 
-	it("throws for greaterThan filter with fallback (not implemented)", async () => {
+	it("returns error for greaterThan filter with fallback (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -1164,15 +1204,20 @@ describe("database.entity.query number filters edge cases", () => {
 		// Create item with explicit field.
 		await db.items.create({ val: 50 });
 
-		await expect(
-			db.items.query({
-				fields: { id: true, val: true },
-				where: { val: { greaterThan: 80 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { id: true, val: true },
+			where: { val: { greaterThan: 80 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for greaterThan filter on non-projected field (not implemented)", async () => {
+	it("returns error for greaterThan filter on non-projected field (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {
@@ -1186,12 +1231,17 @@ describe("database.entity.query number filters edge cases", () => {
 		await db.items.create({});
 		await db.items.create({ val: 50 });
 
-		await expect(
-			db.items.query({
-				fields: { id: true }, // Not asking for 'val'
-				where: { val: { greaterThan: 80 } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.items.query({
+			fields: { id: true }, // Not asking for 'val'
+			where: { val: { greaterThan: 80 } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'greaterThan' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 });
 
@@ -1293,7 +1343,7 @@ describe("database.entity.query string filters", () => {
 		expect(result.data).toEqual([{ name: "Alice" }]);
 	});
 
-	it("throws for notEquals filter (not implemented)", async () => {
+	it("returns error for notEquals filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -1307,38 +1357,20 @@ describe("database.entity.query string filters", () => {
 		await db.users.create({ name: "Alice" });
 		await db.users.create({ name: "Bob" });
 
-		await expect(
-			db.users.query({
-				fields: { name: true },
-				where: { name: { notEquals: "Alice" } },
-			}),
-		).rejects.toThrow("not implemented");
-	});
-
-	it("throws for contains filter (not implemented)", async () => {
-		const schema = createSchema({
-			entities: {
-				users: {
-					name: t.string({ fallback: "" }),
-				},
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { notEquals: "Alice" } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'notEquals' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
 			},
 		});
-		const store = new MockStore();
-		const db = createDatabase(schema, store);
-
-		await db.users.create({ name: "Alice" });
-		await db.users.create({ name: "Alicia" });
-		await db.users.create({ name: "Bob" });
-
-		await expect(
-			db.users.query({
-				fields: { name: true },
-				where: { name: { contains: "Ali" } },
-			}),
-		).rejects.toThrow("not implemented");
 	});
 
-	it("throws for startsWith filter (not implemented)", async () => {
+	it("returns error for contains filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -1353,15 +1385,48 @@ describe("database.entity.query string filters", () => {
 		await db.users.create({ name: "Alicia" });
 		await db.users.create({ name: "Bob" });
 
-		await expect(
-			db.users.query({
-				fields: { name: true },
-				where: { name: { startsWith: "Ali" } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { contains: "Ali" } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'contains' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("throws for endsWith filter (not implemented)", async () => {
+	it("returns error for startsWith filter (not implemented)", async () => {
+		const schema = createSchema({
+			entities: {
+				users: {
+					name: t.string({ fallback: "" }),
+				},
+			},
+		});
+		const store = new MockStore();
+		const db = createDatabase(schema, store);
+
+		await db.users.create({ name: "Alice" });
+		await db.users.create({ name: "Alicia" });
+		await db.users.create({ name: "Bob" });
+
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { startsWith: "Ali" } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'startsWith' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
+	});
+
+	it("returns error for endsWith filter (not implemented)", async () => {
 		const schema = createSchema({
 			entities: {
 				users: {
@@ -1376,15 +1441,20 @@ describe("database.entity.query string filters", () => {
 		await db.users.create({ name: "Beatrice" });
 		await db.users.create({ name: "Bob" });
 
-		await expect(
-			db.users.query({
-				fields: { name: true },
-				where: { name: { endsWith: "ce" } },
-			}),
-		).rejects.toThrow("not implemented");
+		const result = await db.users.query({
+			fields: { name: true },
+			where: { name: { endsWith: "ce" } },
+		});
+		expect(result).toEqual({
+			success: false,
+			error: {
+				message:
+					"Filter 'endsWith' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.",
+			},
+		});
 	});
 
-	it("returnss error if string filter applied to number field", async () => {
+	it("returns error if string filter applied to number field", async () => {
 		const schema = createSchema({
 			entities: {
 				items: {

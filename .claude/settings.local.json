@@ -20,9 +20,7 @@
       "Bash(bun check:*)",
       "Bash(bun lint:fix:*)",
       "Bash(bun test:*)",
-      "Bash(cat:*)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(cat:*)"
     ]
   }
 }

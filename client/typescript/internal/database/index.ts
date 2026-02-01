@@ -1,5 +1,5 @@
-import { nanoid } from "nanoid";
 import { assert } from "../../../shared/assert.js";
+import { bytesToHex, generateEntityId } from "../id/index.js";
 import type { Field, FieldKind, FieldValue, Schema } from "../schema/types.js";
 import {
 	type Datom,
@@ -64,7 +64,7 @@ export const createDatabase = <
 					}
 				}
 
-				const id = Id(nanoid());
+				const id = Id(bytesToHex(generateEntityId()));
 				const triples: Triple[] = [];
 				for (const field in fields) {
 					if (!Object.hasOwn(fields, field)) continue;
@@ -279,9 +279,12 @@ const computeFilters = (opts: {
 			// Other filters (greaterThan, lessThan, contains, etc.) are not yet implemented
 			const implementedFilters = ["equals"];
 			if (!implementedFilters.includes(filter)) {
-				throw new Error(
-					`Filter '${filter}' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.`,
-				);
+				return {
+					success: false,
+					error: {
+						message: `Filter '${filter}' is not implemented. Only 'equals' and 'isDefined' filters are currently supported.`,
+					},
+				} as const;
 			}
 
 			const expectedType =

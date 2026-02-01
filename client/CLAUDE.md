@@ -1,5 +1,9 @@
 ## TypeScript styleguide
 
+Error handling:
+
+- Never throw errors. Return errors as values (like the `DatabaseResult`).
+
 Safety:
 
 - Design by contract: on all functions / classes, document pre-conditions, post-conditions, and invariants.

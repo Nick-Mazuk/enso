@@ -140,10 +140,18 @@ export class HlcClock {
 			// Received time is ahead of local
 			this.lastPhysicalTime = receivedTime;
 			this.logicalCounter = received.logicalCounter + 1;
+			assert(
+				this.logicalCounter <= 0xffffffff,
+				"Logical counter overflow - received timestamp counter too high",
+			);
 		} else if (receivedTime === this.lastPhysicalTime) {
 			// Same physical time, take max logical counter + 1
 			this.logicalCounter =
 				Math.max(this.logicalCounter, received.logicalCounter) + 1;
+			assert(
+				this.logicalCounter <= 0xffffffff,
+				"Logical counter overflow - too many events in same millisecond",
+			);
 		}
 		// else: local is already ahead, no update needed
 	}
