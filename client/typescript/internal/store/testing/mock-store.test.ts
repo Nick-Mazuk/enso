@@ -17,6 +17,7 @@ describe("add", () => {
 	it("adds a triple to an empty index", async () => {
 		const store = new MockStore();
 		await store.add([Id("x"), Field("y"), Value("z")]);
+		expect(store.size()).toBe(1);
 	});
 });
 

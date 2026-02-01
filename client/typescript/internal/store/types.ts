@@ -51,7 +51,7 @@ export type Query<Find extends QueryVariable[]> = {
 /**
  * Common interface for all store implementations.
  *
- * Both in-memory Store and NetworkStore implement this interface.
+ * Both MockStore (for testing) and NetworkStore implement this interface.
  */
 export interface StoreInterface {
 	add(...triples: Triple[]): Promise<void>;

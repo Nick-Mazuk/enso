@@ -114,9 +114,9 @@ export class Connection {
 				resolve();
 			};
 
-			this.ws.onerror = (event) => {
+			this.ws.onerror = () => {
 				this.state = "disconnected";
-				reject(new Error(`WebSocket error: ${event}`));
+				reject(new Error(`WebSocket connection error to ${this.url.href}`));
 			};
 
 			this.ws.onclose = () => {
