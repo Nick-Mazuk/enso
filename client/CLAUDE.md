@@ -1,5 +1,9 @@
 ## TypeScript styleguide
 
+Error handling:
+
+- Never throw errors. Return errors as values (like the `DatabaseResult`). If asserting an invariant, use `assert` from `packages/shared/assert.ts`.
+
 Safety:
 
 - Design by contract: on all functions / classes, document pre-conditions, post-conditions, and invariants.
@@ -36,5 +40,7 @@ For JavaScript / TypeScript, always use `bun`. Never use `npm`.
 - `bun test`: run all tests
 - `bun check`: lint and check formatting
 - `bun format`: format code
+- `bun lint:fix`: auto-fix lint errors
 - `bun typecheck`: check TypeScript types
-- `bun 
+
+Run each command from root, never run on a single file.

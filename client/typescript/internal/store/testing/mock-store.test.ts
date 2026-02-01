@@ -1,10 +1,26 @@
 import { describe, expect, it } from "bun:test";
-import { Store } from "./index.js";
+import {
+	type Datom,
+	Field,
+	Id,
+	type StoreResult,
+	Value,
+	Variable,
+} from "../types.js";
+import { MockStore } from "./mock-store.js";
 import { movies } from "./testdata/movies.js";
-import { type Datom, Field, Id, Value, Variable } from "./types.js";
 
-const sortResult = (result: (Datom | undefined)[][], index: number) => {
-	return result.sort((a, b) => {
+/** Extracts data from a StoreResult, throws if not successful */
+const unwrap = <T>(result: StoreResult<T>): T => {
+	if (!result.success) throw new Error(result.error);
+	return result.data;
+};
+
+const sortResult = (
+	result: StoreResult<(Datom | undefined)[][]>,
+	index: number,
+) => {
+	return unwrap(result).sort((a, b) => {
 		const fieldA = a[index];
 		if (fieldA === undefined) return -1;
 		const fieldB = b[index];
@@ -14,37 +30,38 @@ const sortResult = (result: (Datom | undefined)[][], index: number) => {
 };
 
 describe("add", () => {
-	it("adds a triple to an empty index", () => {
-		const store = new Store();
-		store.add([Id("x"), Field("y"), Value("z")]);
+	it("adds a triple to an empty index", async () => {
+		const store = new MockStore();
+		await store.add([Id("x"), Field("y"), Value("z")]);
+		expect(store.size()).toBe(1);
 	});
 });
 
 describe("deleteAllById", () => {
-	it("deletes all triples with the given id", () => {
-		const store = new Store();
-		store.add(...movies);
-		store.deleteAllById(Id("100"));
+	it("deletes all triples with the given id", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		await store.deleteAllById(Id("100"));
 		// There are 2 triples with the id 100:
 		expect(store.size()).toBe(movies.length - 2);
 	});
 });
 
-describe("Store.query with optional patterns", () => {
-	it("should return documents even if optional fields are missing", () => {
-		const store = new Store();
+describe("MockStore.query with optional patterns", () => {
+	it("should return documents even if optional fields are missing", async () => {
+		const store = new MockStore();
 
 		// User 1: Has 'name' (required) and 'age' (optional)
-		store.add([Id("id-1"), Field("users/name"), Value("John Doe")]);
-		store.add([Id("id-1"), Field("users/age"), Value(30)]);
+		await store.add([Id("id-1"), Field("users/name"), Value("John Doe")]);
+		await store.add([Id("id-1"), Field("users/age"), Value(30)]);
 
 		// User 2: Has 'name' (required) but NO 'age' (optional)
-		store.add([Id("id-2"), Field("users/name"), Value("Jane Smith")]);
+		await store.add([Id("id-2"), Field("users/name"), Value("Jane Smith")]);
 
 		// User 3: Has 'age' but no 'name' (should be filtered out by 'where')
-		store.add([Id("id-3"), Field("users/age"), Value(40)]);
+		await store.add([Id("id-3"), Field("users/age"), Value(40)]);
 
-		const result = store.query({
+		const result = await store.query({
 			find: [Variable("id"), Variable("name"), Variable("age")],
 			where: [[Variable("id"), Field("users/name"), Variable("name")]],
 			optional: [[Variable("id"), Field("users/age"), Variable("age")]],
@@ -66,22 +83,22 @@ describe("Store.query with optional patterns", () => {
 		]);
 	});
 
-	it("should handle multiple optional fields with mixed matches", () => {
-		const store = new Store();
+	it("should handle multiple optional fields with mixed matches", async () => {
+		const store = new MockStore();
 		// Doc 1: all fields
-		store.add([Id("id-1"), Field("users/name"), Value("Alice")]);
-		store.add([Id("id-1"), Field("users/age"), Value(30)]);
-		store.add([Id("id-1"), Field("users/dept"), Value("Engineering")]);
+		await store.add([Id("id-1"), Field("users/name"), Value("Alice")]);
+		await store.add([Id("id-1"), Field("users/age"), Value(30)]);
+		await store.add([Id("id-1"), Field("users/dept"), Value("Engineering")]);
 		// Doc 2: no dept
-		store.add([Id("id-2"), Field("users/name"), Value("Bob")]);
-		store.add([Id("id-2"), Field("users/age"), Value(40)]);
+		await store.add([Id("id-2"), Field("users/name"), Value("Bob")]);
+		await store.add([Id("id-2"), Field("users/age"), Value(40)]);
 		// Doc 3: no age
-		store.add([Id("id-3"), Field("users/name"), Value("Charlie")]);
-		store.add([Id("id-3"), Field("users/dept"), Value("Marketing")]);
+		await store.add([Id("id-3"), Field("users/name"), Value("Charlie")]);
+		await store.add([Id("id-3"), Field("users/dept"), Value("Marketing")]);
 		// Doc 4: no age, no dept
-		store.add([Id("id-4"), Field("users/name"), Value("David")]);
+		await store.add([Id("id-4"), Field("users/name"), Value("David")]);
 
-		const result = store.query({
+		const result = await store.query({
 			find: [
 				Variable("id"),
 				Variable("name"),
@@ -105,12 +122,12 @@ describe("Store.query with optional patterns", () => {
 		]);
 	});
 
-	it("should return an empty array if the 'where' clause matches nothing", () => {
-		const store = new Store();
-		store.add([Id("id-1"), Field("users/name"), Value("Alice")]);
-		store.add([Id("id-1"), Field("users/age"), Value(30)]);
+	it("should return an empty array if the 'where' clause matches nothing", async () => {
+		const store = new MockStore();
+		await store.add([Id("id-1"), Field("users/name"), Value("Alice")]);
+		await store.add([Id("id-1"), Field("users/age"), Value(30)]);
 
-		const result = store.query({
+		const result = await store.query({
 			find: [Variable("id"), Variable("name"), Variable("age")],
 			where: [
 				[Variable("id"), Field("users/name"), Value("Bob")], // This won't match
@@ -118,34 +135,34 @@ describe("Store.query with optional patterns", () => {
 			optional: [[Variable("id"), Field("users/age"), Variable("age")]],
 		});
 
-		expect(result.length).toBe(0);
+		expect(unwrap(result).length).toBe(0);
 	});
 });
 
 describe("movies example", () => {
-	it("adds the movies example to the store", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("adds the movies example to the store", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		expect(store.size()).toBe(movies.length);
 	});
 
-	it("When was Alien released?", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("When was Alien released?", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [Variable("year")],
 			where: [
 				[Variable("id"), Field("movie/title"), Value("Alien")],
 				[Variable("id"), Field("movie/year"), Variable("year")],
 			],
 		});
-		expect(result).toEqual([[Value(1979)]]);
+		expect(unwrap(result)).toEqual([[Value(1979)]]);
 	});
 
-	it("Who directed the Terminator?", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("Who directed the Terminator?", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [Variable("directorName")],
 			where: [
 				[Variable("id"), Field("movie/title"), Value("The Terminator")],
@@ -157,17 +174,17 @@ describe("movies example", () => {
 				],
 			],
 		});
-		expect(result).toEqual([[Value("James Cameron")]]);
+		expect(unwrap(result)).toEqual([[Value("James Cameron")]]);
 	});
 
-	it("What do I know about the entity with the id `200`?", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("What do I know about the entity with the id `200`?", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [Variable("attribute"), Variable("value")],
 			where: [[Id("200"), Variable("attribute"), Variable("value")]],
 		});
-		expect(result).toEqual([
+		expect(unwrap(result)).toEqual([
 			[Field("movie/title"), Value("The Terminator")],
 			[Field("movie/year"), Value(1984)],
 			[Field("movie/director"), Id("100")],
@@ -178,10 +195,10 @@ describe("movies example", () => {
 		]);
 	});
 
-	it("Which directors shot Arnold for which movies?", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("Which directors shot Arnold for which movies?", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [Variable("directorName"), Variable("movieTitle")],
 			where: [
 				[
@@ -199,7 +216,7 @@ describe("movies example", () => {
 				],
 			],
 		});
-		expect(result).toEqual([
+		expect(unwrap(result)).toEqual([
 			[Value("James Cameron"), Value("The Terminator")],
 			[Value("John McTiernan"), Value("Predator")],
 			[Value("Mark L. Lester"), Value("Commando")],
@@ -209,15 +226,15 @@ describe("movies example", () => {
 	});
 });
 
-describe("Store.query with filters", () => {
+describe("MockStore.query with filters", () => {
 	const yearVar = Variable("year");
 	const titleVar = Variable("title");
 	const idVar = Variable("id");
 
-	it("should filter numbers: greaterThan", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("should filter numbers: greaterThan", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [titleVar, yearVar],
 			where: [
 				[idVar, Field("movie/title"), titleVar],
@@ -240,10 +257,10 @@ describe("Store.query with filters", () => {
 		]);
 	});
 
-	it("should filter numbers: lessThanOrEqual", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("should filter numbers: lessThanOrEqual", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [titleVar, yearVar],
 			where: [
 				[idVar, Field("movie/title"), titleVar],
@@ -266,10 +283,10 @@ describe("Store.query with filters", () => {
 		]);
 	});
 
-	it("should filter strings: startsWith", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("should filter strings: startsWith", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [titleVar],
 			where: [[idVar, Field("movie/title"), titleVar]],
 			filters: [
@@ -289,11 +306,11 @@ describe("Store.query with filters", () => {
 		// Note: "The Terminator" will not match.
 	});
 
-	it("should filter strings: contains", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("should filter strings: contains", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		const nameVar = Variable("name");
-		const result = store.query({
+		const result = await store.query({
 			find: [nameVar],
 			where: [[idVar, Field("person/name"), nameVar]],
 			filters: [
@@ -304,13 +321,13 @@ describe("Store.query with filters", () => {
 				},
 			],
 		});
-		expect(result).toEqual([[Value("James Cameron")]]);
+		expect(unwrap(result)).toEqual([[Value("James Cameron")]]);
 	});
 
-	it("should combine multiple filters (AND)", () => {
-		const store = new Store();
-		store.add(...movies);
-		const result = store.query({
+	it("should combine multiple filters (AND)", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
+		const result = await store.query({
 			find: [titleVar, yearVar],
 			where: [
 				[idVar, Field("movie/title"), titleVar],
@@ -336,12 +353,12 @@ describe("Store.query with filters", () => {
 		]);
 	});
 
-	it("should apply filters to optional fields", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("should apply filters to optional fields", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		const nameVar = Variable("name");
 		const deathVar = Variable("death");
-		const result = store.query({
+		const result = await store.query({
 			find: [nameVar, deathVar],
 			where: [[idVar, Field("person/name"), nameVar]],
 			optional: [[idVar, Field("person/death"), deathVar]],
@@ -359,8 +376,15 @@ describe("Store.query with filters", () => {
 
 		// This should return all living people (deathVar = undefined)
 		// AND people who died after 2000.
-		const peopleWhoDiedAfter2000 = result.filter((r) => r[1] !== undefined);
-		const sorted = sortResult(peopleWhoDiedAfter2000, 0);
+		const data = unwrap(result);
+		const peopleWhoDiedAfter2000 = data.filter((r) => r[1] !== undefined);
+		const sorted = peopleWhoDiedAfter2000.sort((a, b) => {
+			const fieldA = a[0];
+			if (fieldA === undefined) return -1;
+			const fieldB = b[0];
+			if (fieldB === undefined) return 1;
+			return String(fieldA).localeCompare(String(fieldB));
+		});
 
 		expect(sorted).toEqual([
 			[Value("Charles Napier"), Value("2011-10-05T00:00:00Z")],
@@ -368,19 +392,19 @@ describe("Store.query with filters", () => {
 			[Value("Richard Crenna"), Value("2003-01-17T00:00:00Z")],
 		]);
 		// Ensure we still get living people
-		expect(result.length).toBeGreaterThan(3);
+		expect(data.length).toBeGreaterThan(3);
 	});
 
-	it("should filter booleans", () => {
-		const boolStore = new Store();
+	it("should filter booleans", async () => {
+		const boolStore = new MockStore();
 		const nameVar = Variable("name");
 		const awesomeVar = Variable("awesome");
-		boolStore.add([Id("1"), Field("person/name"), Value("Nick")]);
-		boolStore.add([Id("1"), Field("person/isAwesome"), Value(true)]);
-		boolStore.add([Id("2"), Field("person/name"), Value("SomeoneElse")]);
-		boolStore.add([Id("2"), Field("person/isAwesome"), Value(false)]);
+		await boolStore.add([Id("1"), Field("person/name"), Value("Nick")]);
+		await boolStore.add([Id("1"), Field("person/isAwesome"), Value(true)]);
+		await boolStore.add([Id("2"), Field("person/name"), Value("SomeoneElse")]);
+		await boolStore.add([Id("2"), Field("person/isAwesome"), Value(false)]);
 
-		const result = boolStore.query({
+		const result = await boolStore.query({
 			find: [nameVar],
 			where: [
 				[idVar, Field("person/name"), nameVar],
@@ -395,21 +419,21 @@ describe("Store.query with filters", () => {
 			],
 		});
 
-		expect(result).toEqual([[Value("Nick")]]);
+		expect(unwrap(result)).toEqual([[Value("Nick")]]);
 	});
 });
 
-describe("Store.query with whereNot", () => {
+describe("MockStore.query with whereNot", () => {
 	const idVar = Variable("id");
 
-	it("should filter out results: `isUndefined` equivalent", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("should filter out results: `isUndefined` equivalent", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		const nameVar = Variable("name");
 		const deathVar = Variable("death");
 
 		// Find people who are *not* dead (i.e., have no person/death triple)
-		const result = store.query({
+		const result = await store.query({
 			find: [nameVar],
 			where: [[idVar, Field("person/name"), nameVar]],
 			whereNot: [[idVar, Field("person/death"), deathVar]],
@@ -417,33 +441,34 @@ describe("Store.query with whereNot", () => {
 
 		const totalPeople = movies.filter((m) => m[1] === "person/name").length;
 		const deadPeople = movies.filter((m) => m[1] === "person/death").length;
-		expect(result.length).toBe(totalPeople - deadPeople);
+		expect(unwrap(result).length).toBe(totalPeople - deadPeople);
 	});
 
-	it("should filter out results based on a specific value", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("should filter out results based on a specific value", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		const titleVar = Variable("title");
-		const result = store.query({
+		const result = await store.query({
 			find: [titleVar],
 			where: [[idVar, Field("movie/title"), titleVar]],
 			whereNot: [[idVar, Field("movie/title"), Value("Alien")]],
 		});
 
 		const totalMovies = movies.filter((m) => m[1] === "movie/title").length;
-		expect(result.length).toBe(totalMovies - 1);
-		expect(result.some((r) => r[0] === "Alien")).toBe(false);
+		const data = unwrap(result);
+		expect(data.length).toBe(totalMovies - 1);
+		expect(data.some((r) => r[0] === "Alien")).toBe(false);
 	});
 
-	it("should interact with variable bindings from `where`", () => {
-		const store = new Store();
-		store.add(...movies);
+	it("should interact with variable bindings from `where`", async () => {
+		const store = new MockStore();
+		await store.add(...movies);
 		const directorNameVar = Variable("directorName");
 		const directorIdVar = Variable("directorId");
 
 		// Find all directors who directed a movie,
 		// *unless* they directed "The Terminator"
-		const result = store.query({
+		const result = await store.query({
 			find: [directorNameVar],
 			where: [
 				[Variable("movieId"), Field("movie/director"), directorIdVar],
@@ -454,19 +479,22 @@ describe("Store.query with whereNot", () => {
 				[Variable("otherMovie"), Field("movie/title"), Value("The Terminator")],
 			],
 		});
-		const nonJamesCameronDirectors = new Set(result.map((item) => item[0]));
+		const data = unwrap(result);
+		const nonJamesCameronDirectors = new Set(data.map((item) => item[0]));
 
-		const allDirectors = store.query({
+		const allDirectors = await store.query({
 			find: [directorNameVar],
 			where: [
 				[Variable("movieId"), Field("movie/director"), directorIdVar],
 				[directorIdVar, Field("person/name"), directorNameVar],
 			],
 		});
-		const allUniqueDirectors = new Set(allDirectors.map((item) => item[0]));
+		const allUniqueDirectors = new Set(
+			unwrap(allDirectors).map((item) => item[0]),
+		);
 
 		// We expect all directors *except* James Cameron
 		expect(nonJamesCameronDirectors.size).toBe(allUniqueDirectors.size - 1);
-		expect(result.some((r) => r[0] === "James Cameron")).toBe(false);
+		expect(data.some((r) => r[0] === "James Cameron")).toBe(false);
 	});
 });

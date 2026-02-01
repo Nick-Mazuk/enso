@@ -14,7 +14,13 @@
       "Bash(buf lint:*)",
       "Bash(bun proto-gen:*)",
       "Bash(RUST_BACKTRACE=1 cargo test:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(bun typecheck:*)",
+      "Bash(bun format:*)",
+      "Bash(bun check:*)",
+      "Bash(bun lint:fix:*)",
+      "Bash(bun test:*)",
+      "Bash(cat:*)"
     ]
   }
 }
