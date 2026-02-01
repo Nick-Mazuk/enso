@@ -2,7 +2,7 @@
 
 Error handling:
 
-- Never throw errors. Return errors as values (like the `DatabaseResult`).
+- Never throw errors. Return errors as values (like the `DatabaseResult`). If asserting an invariant, use `assert` from `packages/shared/assert.ts`.
 
 Safety:
 

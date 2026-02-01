@@ -75,7 +75,10 @@ export const createDatabase = <
 					]);
 				}
 				triples.push([id, StoreField(`${entity}/id`), Value(id)]);
-				await store.add(...triples);
+				const addResult = await store.add(...triples);
+				if (!addResult.success) {
+					return { success: false, error: { message: addResult.error } };
+				}
 				// biome-ignore lint/suspicious/noExplicitAny: need future debugging why this doesn't type check
 				return { success: true, data: { ...fields, id } } as any;
 			},
@@ -132,13 +135,17 @@ export const createDatabase = <
 					]);
 				}
 
-				const response = await store.query({
+				const queryResult = await store.query({
 					find,
 					where,
 					optional,
 					whereNot,
 					filters,
 				});
+				if (!queryResult.success) {
+					return { success: false, error: { message: queryResult.error } };
+				}
+				const response = queryResult.data;
 				let sortParams: [string, "asc" | "desc"][];
 				if (!opts.orderBy || opts.orderBy.length === 0) {
 					sortParams = [];
@@ -197,7 +204,10 @@ export const createDatabase = <
 				};
 			},
 			delete: async (id) => {
-				await store.deleteAllById(Id(id));
+				const deleteResult = await store.deleteAllById(Id(id));
+				if (!deleteResult.success) {
+					return { success: false, error: { message: deleteResult.error } };
+				}
 				return { data: undefined, success: true };
 			},
 		};

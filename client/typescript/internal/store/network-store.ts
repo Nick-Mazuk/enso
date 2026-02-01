@@ -51,6 +51,7 @@ import {
 	type QueryPattern,
 	type QueryVariable,
 	type StoreInterface,
+	type StoreResult,
 	type Triple,
 	type Value,
 	Variable,
@@ -102,13 +103,16 @@ export class NetworkStore implements StoreInterface {
 	 * Pre-conditions: Triples are valid
 	 * Post-conditions: Triples are sent to server (async)
 	 */
-	async add(...triples: Triple[]): Promise<void> {
-		if (triples.length === 0) return;
+	async add(...triples: Triple[]): Promise<StoreResult<void>> {
+		if (triples.length === 0) return { success: true, data: undefined };
 
 		const hlc = this.hlcClock.now();
-		const protoTriples = triples.map((triple) =>
-			this.convertTripleToProto(triple, hlc),
-		);
+		const protoTriples: ProtoTriple[] = [];
+		for (const triple of triples) {
+			const result = this.convertTripleToProto(triple, hlc);
+			if (!result.success) return result;
+			protoTriples.push(result.data);
+		}
 
 		const updateRequest = create(TripleUpdateRequestSchema, {
 			triples: protoTriples,
@@ -124,7 +128,9 @@ export class NetworkStore implements StoreInterface {
 				value: updateRequest,
 			});
 
-			this.handleResponse(response, "add");
+			const responseResult = this.handleResponse(response, "add");
+			if (!responseResult.success) return responseResult;
+			return { success: true, data: undefined };
 		} finally {
 			this.pendingWrites.delete(writeId);
 		}
@@ -138,24 +144,31 @@ export class NetworkStore implements StoreInterface {
 	 */
 	async query<Find extends QueryVariable[]>(
 		query: Query<Find>,
-	): Promise<Datom[][]> {
+	): Promise<StoreResult<Datom[][]>> {
 		// Check for unsupported filters
 		if (query.filters && query.filters.length > 0) {
-			throw new Error(
-				"Complex filters are not implemented. Only equality filters are supported.",
-			);
+			return {
+				success: false,
+				error:
+					"Complex filters are not implemented. Only equality filters are supported.",
+			};
 		}
 
-		const protoQuery = this.convertQueryToProto(query);
+		const protoQueryResult = this.convertQueryToProto(query);
+		if (!protoQueryResult.success) return protoQueryResult;
 
 		const response = await this.connection.send({
 			case: "query",
-			value: protoQuery,
+			value: protoQueryResult.data,
 		});
 
-		this.handleResponse(response, "query");
+		const responseResult = this.handleResponse(response, "query");
+		if (!responseResult.success) return responseResult;
 
-		return this.convertQueryResultsFromProto(response, query.find);
+		return {
+			success: true,
+			data: this.convertQueryResultsFromProto(response, query.find),
+		};
 	}
 
 	/**
@@ -164,16 +177,19 @@ export class NetworkStore implements StoreInterface {
 	 * Pre-conditions: id is a valid entity ID
 	 * Post-conditions: Delete is sent to server
 	 */
-	async deleteAllById(id: Id): Promise<void> {
+	async deleteAllById(id: Id): Promise<StoreResult<void>> {
 		// To delete, we send triples with no value (tombstone)
 		// First we need to know what fields exist for this entity
 		// For now, we'll query for all triples with this ID and send deletes
-		const queryResult = await this.queryEntityTriples(id);
+		const queryEntityResult = await this.queryEntityTriples(id);
+		if (!queryEntityResult.success) return queryEntityResult;
 
-		if (queryResult.length === 0) return;
+		if (queryEntityResult.data.length === 0) {
+			return { success: true, data: undefined };
+		}
 
 		const hlc = this.hlcClock.now();
-		const protoTriples = queryResult.map(([entityId, field]) => {
+		const protoTriples = queryEntityResult.data.map(([entityId, field]) => {
 			const entityBytes = hexToBytes(entityId as string);
 			const attributeBytes = this.parseFieldToAttributeId(field as string);
 
@@ -194,7 +210,9 @@ export class NetworkStore implements StoreInterface {
 			value: updateRequest,
 		});
 
-		this.handleResponse(response, "delete");
+		const responseResult = this.handleResponse(response, "delete");
+		if (!responseResult.success) return responseResult;
+		return { success: true, data: undefined };
 	}
 
 	/**
@@ -215,7 +233,10 @@ export class NetworkStore implements StoreInterface {
 		return this.pendingWrites.size;
 	}
 
-	private convertTripleToProto(triple: Triple, hlc: HlcTimestamp): ProtoTriple {
+	private convertTripleToProto(
+		triple: Triple,
+		hlc: HlcTimestamp,
+	): { success: true; data: ProtoTriple } | { success: false; error: string } {
 		const [id, field, value] = triple;
 
 		// Convert ID to bytes
@@ -225,14 +246,20 @@ export class NetworkStore implements StoreInterface {
 		const attributeBytes = this.parseFieldToAttributeId(field as string);
 
 		// Convert value
-		const protoValue = this.convertValueToProto(value);
+		const protoValueResult = this.convertValueToProto(value);
+		if (!protoValueResult.success) {
+			return protoValueResult;
+		}
 
-		return create(TripleSchema, {
-			entityId: entityBytes,
-			attributeId: attributeBytes,
-			value: protoValue,
-			hlc,
-		});
+		return {
+			success: true,
+			data: create(TripleSchema, {
+				entityId: entityBytes,
+				attributeId: attributeBytes,
+				value: protoValueResult.data,
+				hlc,
+			}),
+		};
 	}
 
 	private parseFieldToAttributeId(field: string): Uint8Array {
@@ -253,50 +280,86 @@ export class NetworkStore implements StoreInterface {
 		return fieldToAttributeId(this.entityName, field);
 	}
 
-	private convertValueToProto(value: Value): TripleValue {
+	private convertValueToProto(
+		value: Value,
+	): { success: true; data: TripleValue } | { success: false; error: string } {
 		const rawValue = value as string | number | boolean;
 
 		if (typeof rawValue === "string") {
-			return create(TripleValueSchema, {
-				value: { case: "string", value: rawValue },
-			});
+			return {
+				success: true,
+				data: create(TripleValueSchema, {
+					value: { case: "string", value: rawValue },
+				}),
+			};
 		}
 		if (typeof rawValue === "number") {
-			return create(TripleValueSchema, {
-				value: { case: "number", value: rawValue },
-			});
+			return {
+				success: true,
+				data: create(TripleValueSchema, {
+					value: { case: "number", value: rawValue },
+				}),
+			};
 		}
 		if (typeof rawValue === "boolean") {
-			return create(TripleValueSchema, {
-				value: { case: "boolean", value: rawValue },
-			});
+			return {
+				success: true,
+				data: create(TripleValueSchema, {
+					value: { case: "boolean", value: rawValue },
+				}),
+			};
 		}
 
-		throw new Error(`Unsupported value type: ${typeof rawValue}`);
+		return {
+			success: false,
+			error: `Unsupported value type: ${typeof rawValue}`,
+		};
 	}
 
-	private convertQueryToProto(query: Query<QueryVariable[]>): QueryRequest {
+	private convertQueryToProto(
+		query: Query<QueryVariable[]>,
+	): { success: true; data: QueryRequest } | { success: false; error: string } {
 		const find = query.find.map((v) =>
 			create(QueryPatternVariableSchema, { label: v.name }),
 		);
 
-		const where = query.where.map((p) => this.convertPatternToProto(p));
-		const optional = (query.optional ?? []).map((p) =>
-			this.convertPatternToProto(p),
-		);
-		const whereNot = (query.whereNot ?? []).map((p) =>
-			this.convertPatternToProto(p),
-		);
+		const where: ProtoQueryPattern[] = [];
+		for (const p of query.where) {
+			const result = this.convertPatternToProto(p);
+			if (!result.success) return result;
+			where.push(result.data);
+		}
 
-		return create(QueryRequestSchema, {
-			find,
-			where,
-			optional,
-			whereNot,
-		});
+		const optional: ProtoQueryPattern[] = [];
+		for (const p of query.optional ?? []) {
+			const result = this.convertPatternToProto(p);
+			if (!result.success) return result;
+			optional.push(result.data);
+		}
+
+		const whereNot: ProtoQueryPattern[] = [];
+		for (const p of query.whereNot ?? []) {
+			const result = this.convertPatternToProto(p);
+			if (!result.success) return result;
+			whereNot.push(result.data);
+		}
+
+		return {
+			success: true,
+			data: create(QueryRequestSchema, {
+				find,
+				where,
+				optional,
+				whereNot,
+			}),
+		};
 	}
 
-	private convertPatternToProto(pattern: QueryPattern): ProtoQueryPattern {
+	private convertPatternToProto(
+		pattern: QueryPattern,
+	):
+		| { success: true; data: ProtoQueryPattern }
+		| { success: false; error: string } {
 		const [entityPart, fieldPart, valuePart] = pattern;
 
 		const protoPattern = create(QueryPatternSchema, {});
@@ -334,13 +397,17 @@ export class NetworkStore implements StoreInterface {
 				value: create(QueryPatternVariableSchema, { label: valuePart.name }),
 			};
 		} else {
+			const valueResult = this.convertValueToProto(valuePart);
+			if (!valueResult.success) {
+				return valueResult;
+			}
 			protoPattern.valueGroup = {
 				case: "value",
-				value: this.convertValueToProto(valuePart),
+				value: valueResult.data,
 			};
 		}
 
-		return protoPattern;
+		return { success: true, data: protoPattern };
 	}
 
 	private convertQueryResultsFromProto(
@@ -403,7 +470,12 @@ export class NetworkStore implements StoreInterface {
 		return results;
 	}
 
-	private async queryEntityTriples(id: Id): Promise<[Datom, Datom][]> {
+	private async queryEntityTriples(
+		id: Id,
+	): Promise<
+		| { success: true; data: [Datom, Datom][] }
+		| { success: false; error: string }
+	> {
 		// Query for all triples with this entity ID
 		const entityVar = Variable("entity");
 		const fieldVar = Variable("field");
@@ -414,26 +486,36 @@ export class NetworkStore implements StoreInterface {
 			where: [[id, fieldVar, valueVar]],
 		};
 
-		const protoQuery = this.convertQueryToProto(query);
+		const protoQueryResult = this.convertQueryToProto(query);
+		if (!protoQueryResult.success) return protoQueryResult;
 
 		const response = await this.connection.send({
 			case: "query",
-			value: protoQuery,
+			value: protoQueryResult.data,
 		});
 
-		this.handleResponse(response, "queryEntityTriples");
+		const responseResult = this.handleResponse(response, "queryEntityTriples");
+		if (!responseResult.success) return responseResult;
 
-		return this.convertQueryResultsFromProto(response, [
-			entityVar,
-			fieldVar,
-		]) as [Datom, Datom][];
+		return {
+			success: true,
+			data: this.convertQueryResultsFromProto(response, [
+				entityVar,
+				fieldVar,
+			]) as [Datom, Datom][],
+		};
 	}
 
-	private handleResponse(response: ServerResponse, operation: string): void {
+	private handleResponse(
+		response: ServerResponse,
+		operation: string,
+	): { success: true } | { success: false; error: string } {
 		if (response.status && response.status.code !== 0) {
-			throw new Error(
-				`${operation} failed: ${response.status.message || "Unknown error"} (code: ${response.status.code})`,
-			);
+			return {
+				success: false,
+				error: `${operation} failed: ${response.status.message || "Unknown error"} (code: ${response.status.code})`,
+			};
 		}
+		return { success: true };
 	}
 }

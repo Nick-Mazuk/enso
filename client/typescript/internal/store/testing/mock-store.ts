@@ -8,6 +8,7 @@ import {
 	type QueryPattern,
 	type QueryVariable,
 	type StoreInterface,
+	type StoreResult,
 	type Triple,
 	type Value,
 } from "../types.js";
@@ -26,7 +27,7 @@ export class MockStore implements StoreInterface {
 	private valueIndex: Map<Value, Triple[]> = new Map();
 	private tripleCount = 0;
 
-	add(...triples: Triple[]): Promise<void> {
+	add(...triples: Triple[]): Promise<StoreResult<void>> {
 		// TODO: Check for duplicates -- if the id/field already exists, update the value
 		for (const triple of triples) {
 			this.addToIndex(this.idIndex, triple[0], triple);
@@ -34,7 +35,7 @@ export class MockStore implements StoreInterface {
 			this.addToIndex(this.valueIndex, triple[2], triple);
 		}
 		this.tripleCount += triples.length;
-		return Promise.resolve();
+		return Promise.resolve({ success: true, data: undefined });
 	}
 
 	private addToIndex(index: Map<Datom, Triple[]>, key: Datom, triple: Triple) {
@@ -47,7 +48,7 @@ export class MockStore implements StoreInterface {
 
 	query<Find extends QueryVariable[]>(
 		query: Query<Find>,
-	): Promise<(Datom | undefined)[][]> {
+	): Promise<StoreResult<(Datom | undefined)[][]>> {
 		let contexts = this.queryMultiplePatterns(query.where);
 		if (query.optional && query.optional.length > 0 && contexts.length > 0) {
 			for (const pattern of query.optional) {
@@ -73,13 +74,14 @@ export class MockStore implements StoreInterface {
 				}),
 			);
 		}
-		return Promise.resolve(
-			contexts.map((context) => {
+		return Promise.resolve({
+			success: true,
+			data: contexts.map((context) => {
 				return query.find.map((datom) => {
 					return isVariable(datom) ? context.get(datom) : datom;
 				});
 			}),
-		);
+		});
 	}
 
 	// For a given pattern and triple, it determines if the pattern can match the triple.
@@ -188,7 +190,7 @@ export class MockStore implements StoreInterface {
 		return newContexts;
 	}
 
-	deleteAllById(id: Id): Promise<void> {
+	deleteAllById(id: Id): Promise<StoreResult<void>> {
 		// TODO: potentially instead just add a tombstone triple to handle replication.
 		const triples = this.idIndex.get(id) ?? [];
 		this.tripleCount -= triples.length;
@@ -216,7 +218,7 @@ export class MockStore implements StoreInterface {
 				}
 			}
 		}
-		return Promise.resolve();
+		return Promise.resolve({ success: true, data: undefined });
 	}
 
 	size() {

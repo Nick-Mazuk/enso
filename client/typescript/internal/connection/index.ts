@@ -37,6 +37,9 @@ import type { ApiKey, ServerUrl } from "./types.js";
 /** Default timeout for requests in milliseconds */
 const DEFAULT_TIMEOUT_MS = 30000;
 
+/** Timeout for WebSocket connection establishment in milliseconds */
+const CONNECTION_TIMEOUT_MS = 10000;
+
 /** Connection states */
 type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -106,38 +109,62 @@ export class Connection {
 	private async doConnect(): Promise<void> {
 		this.state = "connecting";
 
-		await new Promise<void>((resolve, reject) => {
-			this.ws = new WebSocket(this.url.href);
-			this.ws.binaryType = "arraybuffer";
+		try {
+			await new Promise<void>((resolve, reject) => {
+				let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-			this.ws.onopen = () => {
-				resolve();
-			};
+				const cleanup = () => {
+					if (timeoutId !== null) {
+						clearTimeout(timeoutId);
+						timeoutId = null;
+					}
+				};
 
-			this.ws.onerror = () => {
-				this.state = "disconnected";
-				reject(new Error(`WebSocket connection error to ${this.url.href}`));
-			};
+				timeoutId = setTimeout(() => {
+					timeoutId = null;
+					reject(
+						new Error(
+							`WebSocket connection timeout after ${CONNECTION_TIMEOUT_MS}ms to ${this.url.href}`,
+						),
+					);
+				}, CONNECTION_TIMEOUT_MS);
 
-			this.ws.onclose = () => {
-				this.handleDisconnect();
-			};
+				this.ws = new WebSocket(this.url.href);
+				this.ws.binaryType = "arraybuffer";
 
-			this.ws.onmessage = (event) => {
-				this.handleMessage(event.data as ArrayBuffer);
-			};
-		});
+				this.ws.onopen = () => {
+					cleanup();
+					resolve();
+				};
 
-		// Send ConnectRequest
-		const response = await this.sendConnectRequest();
-		if (response.status && response.status.code !== 0) {
+				this.ws.onerror = () => {
+					cleanup();
+					reject(new Error(`WebSocket connection error to ${this.url.href}`));
+				};
+
+				this.ws.onclose = () => {
+					this.handleDisconnect();
+				};
+
+				this.ws.onmessage = (event) => {
+					this.handleMessage(event.data as ArrayBuffer);
+				};
+			});
+
+			// Send ConnectRequest
+			const response = await this.sendConnectRequest();
+			if (response.status && response.status.code !== 0) {
+				throw new Error(
+					`Connection rejected: ${response.status.message || "Unknown error"}`,
+				);
+			}
+
+			this.state = "connected";
+		} catch (error) {
+			// Ensure cleanup on any failure
 			this.close();
-			throw new Error(
-				`Connection rejected: ${response.status.message || "Unknown error"}`,
-			);
+			throw error;
 		}
-
-		this.state = "connected";
 	}
 
 	private sendConnectRequest(): Promise<ServerResponse> {

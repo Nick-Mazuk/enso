@@ -1,10 +1,26 @@
 import { describe, expect, it } from "bun:test";
-import { type Datom, Field, Id, Value, Variable } from "../types.js";
+import {
+	type Datom,
+	Field,
+	Id,
+	type StoreResult,
+	Value,
+	Variable,
+} from "../types.js";
 import { MockStore } from "./mock-store.js";
 import { movies } from "./testdata/movies.js";
 
-const sortResult = (result: (Datom | undefined)[][], index: number) => {
-	return result.sort((a, b) => {
+/** Extracts data from a StoreResult, throws if not successful */
+const unwrap = <T>(result: StoreResult<T>): T => {
+	if (!result.success) throw new Error(result.error);
+	return result.data;
+};
+
+const sortResult = (
+	result: StoreResult<(Datom | undefined)[][]>,
+	index: number,
+) => {
+	return unwrap(result).sort((a, b) => {
 		const fieldA = a[index];
 		if (fieldA === undefined) return -1;
 		const fieldB = b[index];
@@ -119,7 +135,7 @@ describe("MockStore.query with optional patterns", () => {
 			optional: [[Variable("id"), Field("users/age"), Variable("age")]],
 		});
 
-		expect(result.length).toBe(0);
+		expect(unwrap(result).length).toBe(0);
 	});
 });
 
@@ -140,7 +156,7 @@ describe("movies example", () => {
 				[Variable("id"), Field("movie/year"), Variable("year")],
 			],
 		});
-		expect(result).toEqual([[Value(1979)]]);
+		expect(unwrap(result)).toEqual([[Value(1979)]]);
 	});
 
 	it("Who directed the Terminator?", async () => {
@@ -158,7 +174,7 @@ describe("movies example", () => {
 				],
 			],
 		});
-		expect(result).toEqual([[Value("James Cameron")]]);
+		expect(unwrap(result)).toEqual([[Value("James Cameron")]]);
 	});
 
 	it("What do I know about the entity with the id `200`?", async () => {
@@ -168,7 +184,7 @@ describe("movies example", () => {
 			find: [Variable("attribute"), Variable("value")],
 			where: [[Id("200"), Variable("attribute"), Variable("value")]],
 		});
-		expect(result).toEqual([
+		expect(unwrap(result)).toEqual([
 			[Field("movie/title"), Value("The Terminator")],
 			[Field("movie/year"), Value(1984)],
 			[Field("movie/director"), Id("100")],
@@ -200,7 +216,7 @@ describe("movies example", () => {
 				],
 			],
 		});
-		expect(result).toEqual([
+		expect(unwrap(result)).toEqual([
 			[Value("James Cameron"), Value("The Terminator")],
 			[Value("John McTiernan"), Value("Predator")],
 			[Value("Mark L. Lester"), Value("Commando")],
@@ -305,7 +321,7 @@ describe("MockStore.query with filters", () => {
 				},
 			],
 		});
-		expect(result).toEqual([[Value("James Cameron")]]);
+		expect(unwrap(result)).toEqual([[Value("James Cameron")]]);
 	});
 
 	it("should combine multiple filters (AND)", async () => {
@@ -360,8 +376,15 @@ describe("MockStore.query with filters", () => {
 
 		// This should return all living people (deathVar = undefined)
 		// AND people who died after 2000.
-		const peopleWhoDiedAfter2000 = result.filter((r) => r[1] !== undefined);
-		const sorted = sortResult(peopleWhoDiedAfter2000, 0);
+		const data = unwrap(result);
+		const peopleWhoDiedAfter2000 = data.filter((r) => r[1] !== undefined);
+		const sorted = peopleWhoDiedAfter2000.sort((a, b) => {
+			const fieldA = a[0];
+			if (fieldA === undefined) return -1;
+			const fieldB = b[0];
+			if (fieldB === undefined) return 1;
+			return String(fieldA).localeCompare(String(fieldB));
+		});
 
 		expect(sorted).toEqual([
 			[Value("Charles Napier"), Value("2011-10-05T00:00:00Z")],
@@ -369,7 +392,7 @@ describe("MockStore.query with filters", () => {
 			[Value("Richard Crenna"), Value("2003-01-17T00:00:00Z")],
 		]);
 		// Ensure we still get living people
-		expect(result.length).toBeGreaterThan(3);
+		expect(data.length).toBeGreaterThan(3);
 	});
 
 	it("should filter booleans", async () => {
@@ -396,7 +419,7 @@ describe("MockStore.query with filters", () => {
 			],
 		});
 
-		expect(result).toEqual([[Value("Nick")]]);
+		expect(unwrap(result)).toEqual([[Value("Nick")]]);
 	});
 });
 
@@ -418,7 +441,7 @@ describe("MockStore.query with whereNot", () => {
 
 		const totalPeople = movies.filter((m) => m[1] === "person/name").length;
 		const deadPeople = movies.filter((m) => m[1] === "person/death").length;
-		expect(result.length).toBe(totalPeople - deadPeople);
+		expect(unwrap(result).length).toBe(totalPeople - deadPeople);
 	});
 
 	it("should filter out results based on a specific value", async () => {
@@ -432,8 +455,9 @@ describe("MockStore.query with whereNot", () => {
 		});
 
 		const totalMovies = movies.filter((m) => m[1] === "movie/title").length;
-		expect(result.length).toBe(totalMovies - 1);
-		expect(result.some((r) => r[0] === "Alien")).toBe(false);
+		const data = unwrap(result);
+		expect(data.length).toBe(totalMovies - 1);
+		expect(data.some((r) => r[0] === "Alien")).toBe(false);
 	});
 
 	it("should interact with variable bindings from `where`", async () => {
@@ -455,7 +479,8 @@ describe("MockStore.query with whereNot", () => {
 				[Variable("otherMovie"), Field("movie/title"), Value("The Terminator")],
 			],
 		});
-		const nonJamesCameronDirectors = new Set(result.map((item) => item[0]));
+		const data = unwrap(result);
+		const nonJamesCameronDirectors = new Set(data.map((item) => item[0]));
 
 		const allDirectors = await store.query({
 			find: [directorNameVar],
@@ -464,10 +489,12 @@ describe("MockStore.query with whereNot", () => {
 				[directorIdVar, Field("person/name"), directorNameVar],
 			],
 		});
-		const allUniqueDirectors = new Set(allDirectors.map((item) => item[0]));
+		const allUniqueDirectors = new Set(
+			unwrap(allDirectors).map((item) => item[0]),
+		);
 
 		// We expect all directors *except* James Cameron
 		expect(nonJamesCameronDirectors.size).toBe(allUniqueDirectors.size - 1);
-		expect(result.some((r) => r[0] === "James Cameron")).toBe(false);
+		expect(data.some((r) => r[0] === "James Cameron")).toBe(false);
 	});
 });

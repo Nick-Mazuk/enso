@@ -49,14 +49,21 @@ export type Query<Find extends QueryVariable[]> = {
 };
 
 /**
+ * Result type for store operations.
+ */
+export type StoreResult<T> =
+	| { success: true; data: T }
+	| { success: false; error: string };
+
+/**
  * Common interface for all store implementations.
  *
  * Both MockStore (for testing) and NetworkStore implement this interface.
  */
 export interface StoreInterface {
-	add(...triples: Triple[]): Promise<void>;
+	add(...triples: Triple[]): Promise<StoreResult<void>>;
 	query<Find extends QueryVariable[]>(
 		query: Query<Find>,
-	): Promise<(Datom | undefined)[][]>;
-	deleteAllById(id: Id): Promise<void>;
+	): Promise<StoreResult<(Datom | undefined)[][]>>;
+	deleteAllById(id: Id): Promise<StoreResult<void>>;
 }
