@@ -36,3 +36,27 @@ export type Filter = {
 	/** Returns true if the datom should be included. Only called if datom exists. */
 	filter: (datom: Datom | undefined) => boolean;
 };
+
+/**
+ * Query parameters for the store.
+ */
+export type Query<Find extends QueryVariable[]> = {
+	find: Find;
+	where: QueryPattern[];
+	optional?: QueryPattern[];
+	filters?: Filter[];
+	whereNot?: QueryPattern[];
+};
+
+/**
+ * Common interface for all store implementations.
+ *
+ * Both in-memory Store and NetworkStore implement this interface.
+ */
+export interface StoreInterface {
+	add(...triples: Triple[]): Promise<void>;
+	query<Find extends QueryVariable[]>(
+		query: Query<Find>,
+	): Promise<(Datom | undefined)[][]>;
+	deleteAllById(id: Id): Promise<void>;
+}

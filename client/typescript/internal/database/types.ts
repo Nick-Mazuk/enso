@@ -25,17 +25,19 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 					: never]?: E[K] extends Field<infer V, boolean> ? V : never;
 			}
 		>,
-	) => DatabaseResult<
-		Simplify<
-			{
-				[K in keyof E as E[K] extends Field<FieldValue, false>
-					? K
-					: never]: E[K] extends Field<infer V, boolean> ? V : never;
-			} & {
-				[K in keyof E as E[K] extends Field<FieldValue, true>
-					? K
-					: never]?: E[K] extends Field<infer V, boolean> ? V : never;
-			} & GeneratedFields
+	) => Promise<
+		DatabaseResult<
+			Simplify<
+				{
+					[K in keyof E as E[K] extends Field<FieldValue, false>
+						? K
+						: never]: E[K] extends Field<infer V, boolean> ? V : never;
+				} & {
+					[K in keyof E as E[K] extends Field<FieldValue, true>
+						? K
+						: never]?: E[K] extends Field<infer V, boolean> ? V : never;
+				} & GeneratedFields
+			>
 		>
 	>;
 	query: <
@@ -101,7 +103,7 @@ export type DbEntity<E extends Record<string, Field<FieldValue, boolean>>> = {
 			>[]
 		>
 	>;
-	delete: (id: string) => DatabaseResult<void>;
+	delete: (id: string) => Promise<DatabaseResult<void>>;
 };
 
 export type CommonFilters = {
