@@ -2,6 +2,7 @@ This server is a sync engine
 
 Code style:
 
+- Derive `#[derive(Debug, PartialEq, Eq)]` on every type
 - Use explicit imports instead of wildcard imports
 - Run `cargo fmt` after Rust code changes
 - Validate all Rust code changes with `cargo test`, `cargo check`, and `cargo clippy`
