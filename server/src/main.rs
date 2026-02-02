@@ -29,6 +29,9 @@ struct AppState {
     /// Server configuration.
     #[allow(dead_code)] // Will be used for admin API key validation
     config: Arc<ServerConfig>,
+    /// Admin app database - stores AppConfig records for other apps including their JWT public keys.
+    #[allow(dead_code)] // Will be used for JWT verification
+    admin_database: Arc<std::sync::RwLock<server::storage::Database>>,
 }
 
 #[tokio::main]
@@ -64,9 +67,27 @@ async fn main() {
 
     // Create the database registry - databases are opened on-demand per app_api_key
     let registry = Arc::new(DatabaseRegistry::new(config.database_directory.clone()));
+
+    // Bootstrap the admin app database - stores AppConfig records including JWT public keys
+    let admin_database = match registry.get_or_create(&config.admin_app_api_key) {
+        Ok(db) => db,
+        Err(e) => {
+            tracing::error!("Failed to create admin app database: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(
+        "Admin app database initialized: {}.db",
+        config.admin_app_api_key
+    );
+
     let listen_port = config.listen_port;
     let config = Arc::new(config);
-    let state = AppState { registry, config };
+    let state = AppState {
+        registry,
+        config,
+        admin_database,
+    };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
