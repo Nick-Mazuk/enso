@@ -51,6 +51,9 @@ message ConnectRequest {
   // {app_api_key}.db. Valid characters: alphanumeric, hyphens, underscores.
   // Maximum length: 256 characters.
   string app_api_key = 1;
+  // Optional JWT authentication token. When provided, the server validates
+  // the token signature and claims before allowing the connection.
+  optional string auth_token = 2;
 }
 
 message ClientMessage {
