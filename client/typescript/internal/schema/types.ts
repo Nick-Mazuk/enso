@@ -32,6 +32,22 @@ export type Entity<Fields extends Record<string, Field<FieldValue, boolean>>> =
 export type EntityDefinition = Record<string, Field<FieldValue, boolean>>;
 
 /**
+ * Legacy schema definition format with a single 'entities' field.
+ * All entities are treated as shared scope for backward compatibility.
+ *
+ * Pre-condition: entities contains valid EntityDefinitions.
+ * Invariant: This format is deprecated; prefer using shared/user scopes.
+ */
+export type LegacySchemaDefinition<
+	Entities extends Record<string, EntityDefinition> = Record<
+		string,
+		EntityDefinition
+	>,
+> = {
+	entities: Entities;
+};
+
+/**
  * Input definition for creating a schema with shared and user scopes.
  *
  * Pre-condition: Entity names must be unique across both 'shared' and 'user' sections.
@@ -50,6 +66,22 @@ export type SchemaDefinition<
 	shared?: Shared;
 	user?: User;
 };
+
+/**
+ * Union type for schema input that accepts both legacy and new formats.
+ *
+ * Invariant: Either { entities: {...} } or { shared?: {...}, user?: {...} }.
+ */
+export type SchemaInput<
+	Shared extends Record<string, EntityDefinition> = Record<
+		string,
+		EntityDefinition
+	>,
+	User extends Record<string, EntityDefinition> = Record<
+		string,
+		EntityDefinition
+	>,
+> = SchemaDefinition<Shared, User> | LegacySchemaDefinition<Shared>;
 
 /**
  * Helper type to check if two record types have overlapping keys.
@@ -81,3 +113,39 @@ export type Schema<
 				readonly entities: Shared & User;
 			}
 	: never;
+
+/**
+ * Schema type for legacy format input.
+ * Converts { entities: E } to { shared: E, user: {}, entities: E }.
+ *
+ * Pre-condition: L is a LegacySchemaDefinition.
+ * Post-condition: Returns a Schema with all entities in the shared scope.
+ */
+export type LegacySchema<L extends LegacySchemaDefinition> =
+	L extends LegacySchemaDefinition<infer Entities>
+		? {
+				readonly shared: Entities;
+				readonly user: Record<string, never>;
+				readonly entities: Entities;
+			}
+		: never;
+
+/**
+ * Type guard to check if input is a legacy schema definition.
+ *
+ * Pre-condition: input is an object.
+ * Post-condition: Returns true if input has 'entities' property.
+ */
+export const isLegacySchemaDefinition = <
+	E extends Record<string, EntityDefinition>,
+>(
+	input: unknown,
+): input is LegacySchemaDefinition<E> => {
+	return (
+		typeof input === "object" &&
+		input !== null &&
+		"entities" in input &&
+		!("shared" in input) &&
+		!("user" in input)
+	);
+};

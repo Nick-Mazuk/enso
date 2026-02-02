@@ -278,4 +278,121 @@ describe("createSchema", () => {
 			expect(Object.isFrozen(schema)).toBe(true);
 		});
 	});
+
+	describe("legacy format backward compatibility", () => {
+		it("accepts legacy { entities: {...} } format", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+					},
+					posts: {
+						title: t.string({ fallback: "" }),
+					},
+				},
+			});
+			expect(Object.keys(schema.entities)).toEqual(["users", "posts"]);
+		});
+
+		it("treats legacy entities as shared scope", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+					},
+				},
+			});
+			expect(schema.shared).toEqual({
+				users: { name: expect.any(Object) },
+			});
+			expect(schema.entities).toEqual({
+				users: { name: expect.any(Object) },
+			});
+		});
+
+		it("sets user scope to empty object for legacy format", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+					},
+				},
+			});
+			expect(schema.user).toEqual({});
+		});
+
+		it("infers entity types for legacy format", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+						age: t.number({ optional: true }),
+					},
+				},
+			});
+			expectTypeOf(schema.shared).toEqualTypeOf<{
+				users: {
+					name: Field<string, false>;
+					age: Field<number, true>;
+				};
+			}>();
+			expectTypeOf(schema.entities).toEqualTypeOf<{
+				users: {
+					name: Field<string, false>;
+					age: Field<number, true>;
+				};
+			}>();
+		});
+
+		it("validates reserved fields in legacy format", () => {
+			expect(() =>
+				createSchema({
+					entities: {
+						users: {
+							id: t.string({ fallback: "" }),
+						},
+					},
+				}),
+			).toThrow("Reserved field 'id' is not allowed");
+		});
+
+		it("validates reserved fields (createTime) in legacy format", () => {
+			expect(() =>
+				createSchema({
+					entities: {
+						users: {
+							createTime: t.string({ fallback: "" }),
+						},
+					},
+				}),
+			).toThrow("Reserved field 'createTime' is not allowed");
+		});
+
+		it("returns a frozen schema for legacy format", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+					},
+				},
+			});
+			expect(Object.isFrozen(schema)).toBe(true);
+		});
+
+		it("supports ref types in legacy format", () => {
+			const schema = createSchema({
+				entities: {
+					users: {
+						name: t.string({ fallback: "" }),
+					},
+					posts: {
+						authorId: t.ref("users"),
+					},
+				},
+			});
+			expectTypeOf(schema.entities.posts.authorId).toEqualTypeOf<
+				Field<string, true>
+			>();
+		});
+	});
 });
