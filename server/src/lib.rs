@@ -20,6 +20,7 @@
 //  - Pub-sub component
 
 mod client_connection;
+pub mod config;
 mod constants;
 pub mod database_registry;
 mod e2e_tests;
@@ -33,4 +34,5 @@ mod testing;
 pub mod types;
 
 pub use client_connection::{ClientConnection, ConnectionState};
+pub use config::{ConfigError, ServerConfig};
 pub use database_registry::DatabaseRegistry;
