@@ -15,7 +15,11 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, DatabaseRegistry, config::ServerConfig, proto, types::ProtoSerializable};
+use server::storage::Database;
+use server::{
+    ClientConnection, DatabaseRegistry, auth::ConfigRegistry, config::ServerConfig, proto,
+    types::ProtoSerializable,
+};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -26,6 +30,10 @@ struct AppState {
     /// Each WebSocket connection creates its own `ClientConnection` that
     /// opens/creates the database based on the `app_api_key` in `ConnectRequest`.
     registry: Arc<DatabaseRegistry>,
+    /// Configuration registry for loading app configs (including JWT settings).
+    config_registry: Arc<ConfigRegistry>,
+    /// Admin database containing app configurations.
+    admin_database: Arc<std::sync::RwLock<Database>>,
     /// Server configuration.
     config: Arc<ServerConfig>,
     /// Admin app database - stores AppConfig records for other apps including their JWT public keys.
@@ -66,7 +74,9 @@ async fn main() {
     // Create the database registry - databases are opened on-demand per app_api_key
     let registry = Arc::new(DatabaseRegistry::new(config.database_directory.clone()));
 
-    // Bootstrap the admin app database - stores AppConfig records including JWT public keys
+    // Bootstrap the admin app database at startup.
+    // The admin app database stores AppConfig records for other apps including their JWT public keys.
+    // Path: {database_directory}/{admin_app_api_key}.db
     let admin_database = match registry.get_or_create(&config.admin_app_api_key) {
         Ok(db) => db,
         Err(e) => {
@@ -79,12 +89,16 @@ async fn main() {
         config.admin_app_api_key
     );
 
+    // Create the configuration registry for loading app configs
+    let config_registry = Arc::new(ConfigRegistry::new());
+
     let listen_port = config.listen_port;
     let config = Arc::new(config);
     let state = AppState {
         registry,
-        config,
+        config_registry,
         admin_database,
+        config,
     };
 
     let app = Router::new()
@@ -121,7 +135,11 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let _admin_database = &state.admin_database;
 
     // Create a per-connection ClientConnection that awaits ConnectRequest
-    let mut client_connection = ClientConnection::new_awaiting_connect(Arc::clone(&state.registry));
+    let mut client_connection = ClientConnection::new_awaiting_connect(
+        Arc::clone(&state.registry),
+        Arc::clone(&state.config_registry),
+        Arc::clone(&state.admin_database),
+    );
 
     // Change receiver - will be set up after ConnectRequest is processed
     let mut change_rx: Option<server::storage::FilteredChangeReceiver> = None;
