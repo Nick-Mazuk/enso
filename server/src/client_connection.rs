@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, RwLock};
 
 use crate::{
+    auth::{ConfigRegistry, ConfigRegistryError, verify_token, JwtError},
     database_registry::{ApiKeyValidationError, DatabaseRegistry, validate_api_key},
     proto,
     query::{Query, QueryEngine},
@@ -28,6 +29,8 @@ use crate::{
 ///   after successful `ConnectRequest`.
 /// - No other state transitions are valid.
 /// - Once `Connected`, the connection remains connected for its lifetime.
+/// - If `user_id` is `Some`, the connection was authenticated via JWT.
+/// - If `user_id` is `None`, the connection is anonymous (app has no JWT config).
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectionState {
     /// Waiting for the initial `ConnectRequest` message.
@@ -37,6 +40,9 @@ pub enum ConnectionState {
     Connected {
         /// The `app_api_key` used for this connection.
         app_api_key: String,
+        /// The user ID extracted from the JWT 'sub' claim.
+        /// `None` for anonymous connections (apps without JWT config).
+        user_id: Option<String>,
     },
 }
 
@@ -48,9 +54,21 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 /// # Connection Lifecycle
 ///
 /// 1. Create with `new_awaiting_connect()` - connection is in `AwaitingConnect` state
-/// 2. Client sends `ConnectRequest` with `app_api_key`
-/// 3. Server opens/creates database for that app and transitions to `Connected`
+/// 2. Client sends `ConnectRequest` with `app_api_key` and optional `auth_token`
+/// 3. Server validates auth (if app has JWT config), opens/creates database, and transitions to `Connected`
 /// 4. All subsequent messages are processed normally
+///
+/// # Authentication Flow
+///
+/// During connection:
+/// 1. Validate `app_api_key` format
+/// 2. Load app config from `ConfigRegistry`
+/// 3. If app has JWT config:
+///    - Verify `auth_token` signature and claims
+///    - Extract `user_id` from 'sub' claim
+///    - Store `user_id` in `ConnectionState::Connected`
+/// 4. If app has no JWT config:
+///    - Allow anonymous access (`user_id` = `None`)
 ///
 /// # Thread Safety
 ///
@@ -59,6 +77,19 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 ///
 /// Each connection has a unique ID that is included in change notifications,
 /// allowing subscribers to filter out their own writes.
+///
+/// Authentication configuration for the connection.
+///
+/// Bundles together the config registry and admin database that are
+/// required for JWT-based authentication. These must always be used
+/// together, which is enforced by this struct.
+pub struct AuthConfig {
+    /// Registry for loading app configurations (including JWT settings).
+    pub config_registry: Arc<ConfigRegistry>,
+    /// Admin database containing app configurations.
+    pub admin_database: Arc<RwLock<Database>>,
+}
+
 pub struct ClientConnection {
     /// Database connection. `None` until `ConnectRequest` is processed.
     database: Option<Arc<RwLock<Database>>>,
@@ -71,6 +102,9 @@ pub struct ClientConnection {
     /// Registry for looking up databases by `app_api_key`.
     /// `None` for test connections that don't use the registry.
     registry: Option<Arc<DatabaseRegistry>>,
+    /// Authentication configuration (config registry + admin database).
+    /// `None` for test connections that bypass authentication.
+    auth_config: Option<AuthConfig>,
 }
 
 impl ClientConnection {
@@ -83,14 +117,30 @@ impl ClientConnection {
     /// # Arguments
     ///
     /// * `registry` - Registry for looking up databases by `app_api_key`.
+    /// * `config_registry` - Registry for loading app configurations.
+    /// * `admin_database` - Admin database containing app configurations.
+    ///
+    /// # Pre-conditions
+    ///
+    /// - `registry` must be initialized.
+    /// - `config_registry` must be initialized.
+    /// - `admin_database` must be initialized and contain app configurations.
     #[must_use]
-    pub fn new_awaiting_connect(registry: Arc<DatabaseRegistry>) -> Self {
+    pub fn new_awaiting_connect(
+        registry: Arc<DatabaseRegistry>,
+        config_registry: Arc<ConfigRegistry>,
+        admin_database: Arc<RwLock<Database>>,
+    ) -> Self {
         Self {
             database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::AwaitingConnect,
             registry: Some(registry),
+            auth_config: Some(AuthConfig {
+                config_registry,
+                admin_database,
+            }),
         }
     }
 
@@ -98,6 +148,7 @@ impl ClientConnection {
     ///
     /// The connection starts in `Connected` state, bypassing the `ConnectRequest` flow.
     /// Use this for testing when you don't need the registry-based connection flow.
+    /// The connection is created as anonymous (no JWT authentication).
     #[must_use]
     pub fn new(database: Database) -> Self {
         Self {
@@ -106,8 +157,10 @@ impl ClientConnection {
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
                 app_api_key: "test".to_string(),
+                user_id: None,
             },
             registry: None,
+            auth_config: None,
         }
     }
 
@@ -117,6 +170,7 @@ impl ClientConnection {
     /// Use this when multiple connections need to share the same database.
     /// All connections sharing the database will receive change notifications
     /// when any connection commits a transaction.
+    /// The connection is created as anonymous (no JWT authentication).
     #[must_use]
     pub fn new_shared(database: Arc<RwLock<Database>>) -> Self {
         Self {
@@ -125,8 +179,10 @@ impl ClientConnection {
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
                 app_api_key: "test".to_string(),
+                user_id: None,
             },
             registry: None,
+            auth_config: None,
         }
     }
 
@@ -359,7 +415,17 @@ impl ClientConnection {
     /// # Post-conditions
     ///
     /// - On success: state becomes `Connected`, database is opened/created.
+    /// - If app has JWT config and token is valid: `user_id` is extracted from 'sub' claim.
+    /// - If app has no JWT config: anonymous access is allowed (`user_id` = `None`).
     /// - On failure: state remains unchanged.
+    ///
+    /// # Authentication Flow
+    ///
+    /// 1. Validate `app_api_key` format.
+    /// 2. Load app config from `ConfigRegistry`.
+    /// 3. If app has JWT config, verify `auth_token` and extract `user_id`.
+    /// 4. If app has no JWT config, allow anonymous access.
+    /// 5. Open/create the database and transition to `Connected` state.
     fn handle_connect(
         &mut self,
         request_id: Option<u32>,
@@ -373,7 +439,7 @@ impl ClientConnection {
             )];
         }
 
-        // Validate app_api_key
+        // Validate app_api_key format
         let app_api_key = &req.app_api_key;
         if let Err(e) = validate_api_key(app_api_key) {
             let message = match e {
@@ -385,6 +451,19 @@ impl ClientConnection {
             };
             return vec![create_error_response(request_id, message)];
         }
+
+        // Authenticate the connection based on app config
+        let user_id = match self.authenticate_connection(app_api_key, req.auth_token.as_deref()) {
+            Ok(user_id) => user_id,
+            Err(auth_error) => {
+                tracing::warn!(
+                    "Authentication failed for app '{}': {}",
+                    app_api_key,
+                    auth_error
+                );
+                return vec![create_error_response(request_id, &auth_error)];
+            }
+        };
 
         // Get or create the database
         let Some(registry) = &self.registry else {
@@ -410,15 +489,118 @@ impl ClientConnection {
         self.database = Some(database);
         self.state = ConnectionState::Connected {
             app_api_key: app_api_key.to_string(),
+            user_id: user_id.clone(),
         };
 
-        tracing::info!(
-            "Connection {} established for app '{}'",
-            self.connection_id,
-            app_api_key
-        );
+        if let Some(ref uid) = user_id {
+            tracing::info!(
+                "Connection {} established for app '{}' with user '{}'",
+                self.connection_id,
+                app_api_key,
+                uid
+            );
+        } else {
+            tracing::info!(
+                "Connection {} established for app '{}' (anonymous)",
+                self.connection_id,
+                app_api_key
+            );
+        }
 
         vec![create_ok_response(request_id)]
+    }
+
+    /// Authenticate the connection based on the app's configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `app_api_key` - The API key identifying the application.
+    /// * `auth_token` - Optional JWT token provided by the client.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(user_id))` - If app has JWT config and token is valid.
+    /// * `Ok(None)` - If app has no JWT config (anonymous access allowed).
+    /// * `Err(message)` - If authentication fails.
+    ///
+    /// # Pre-conditions
+    ///
+    /// - `app_api_key` must be valid (already validated by caller).
+    ///
+    /// # Post-conditions
+    ///
+    /// - Returns `user_id` from JWT 'sub' claim if authenticated.
+    /// - Returns error message if authentication is required but fails.
+    fn authenticate_connection(
+        &self,
+        app_api_key: &str,
+        auth_token: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        // If no auth config is set, skip authentication (test mode)
+        let Some(auth_config) = &self.auth_config else {
+            return Ok(None);
+        };
+
+        let config_registry = &auth_config.config_registry;
+        let admin_db = &auth_config.admin_database;
+
+        // Load app config from the registry
+        let jwt_config = match config_registry.get_jwt_config(app_api_key, admin_db) {
+            Ok(config) => config,
+            Err(ConfigRegistryError::AppNotFound(_)) => {
+                // App not found in admin database - allow anonymous access
+                // This is the case for apps that haven't been configured yet
+                tracing::debug!(
+                    "App '{}' not found in config registry, allowing anonymous access",
+                    app_api_key
+                );
+                return Ok(None);
+            }
+            Err(e) => {
+                tracing::error!("Failed to load config for app '{}': {}", app_api_key, e);
+                return Err(format!("Failed to load app configuration: {e}"));
+            }
+        };
+
+        // If app has no JWT config, allow anonymous access
+        let Some(jwt_config) = jwt_config else {
+            tracing::debug!(
+                "App '{}' has no JWT config, allowing anonymous access",
+                app_api_key
+            );
+            return Ok(None);
+        };
+
+        // App has JWT config - token is required
+        let Some(token) = auth_token else {
+            return Err("auth_token is required for this application".to_string());
+        };
+
+        if token.is_empty() {
+            return Err("auth_token must not be empty".to_string());
+        }
+
+        // Verify the token and extract user_id from 'sub' claim
+        match verify_token(token, &jwt_config) {
+            Ok(user_id) => {
+                tracing::debug!(
+                    "JWT verified for app '{}', user_id: '{}'",
+                    app_api_key,
+                    user_id
+                );
+                Ok(Some(user_id))
+            }
+            Err(e) => {
+                let message = match e {
+                    JwtError::InvalidSignature => "Invalid token signature",
+                    JwtError::TokenExpired => "Token has expired",
+                    JwtError::MalformedToken => "Malformed token",
+                    JwtError::MissingSubClaim => "Token missing 'sub' claim",
+                    JwtError::InvalidKey(_) => "Server configuration error",
+                };
+                Err(message.to_string())
+            }
+        }
     }
 
     #[allow(clippy::too_many_lines)]
