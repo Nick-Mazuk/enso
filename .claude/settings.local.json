@@ -20,7 +20,8 @@
       "Bash(bun check:*)",
       "Bash(bun lint:fix:*)",
       "Bash(bun test:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
