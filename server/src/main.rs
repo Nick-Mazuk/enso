@@ -3,7 +3,6 @@
 // Test code is allowed to use unwrap() for convenience.
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::{
@@ -16,7 +15,7 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, DatabaseRegistry, proto, types::ProtoSerializable};
+use server::{ClientConnection, DatabaseRegistry, ServerConfig, proto, types::ProtoSerializable};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -39,23 +38,30 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // Load configuration from environment variables
+    let config = match ServerConfig::from_env() {
+        Ok(config) => config,
+        Err(e) => {
+            tracing::error!("Failed to load configuration: {e}");
+            std::process::exit(1);
+        }
+    };
+
     // Create the data directory for databases
-    let database_directory = PathBuf::from("./data");
-    if let Err(e) = std::fs::create_dir_all(&database_directory) {
+    if let Err(e) = std::fs::create_dir_all(&config.database_directory) {
         tracing::error!("Failed to create data directory: {e}");
         std::process::exit(1);
     }
 
     // Create the database registry - databases are opened on-demand per app_api_key
-    let registry = Arc::new(DatabaseRegistry::new(database_directory));
+    let registry = Arc::new(DatabaseRegistry::new(config.database_directory.clone()));
     let state = AppState { registry };
 
     let app = Router::new()
         .route("/ws", any(ws_handler))
         .with_state(state);
 
-    // Connect to the websocket on ws://127.0.0.1:3000/ws
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.listen_port));
     tracing::info!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr)
