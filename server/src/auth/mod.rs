@@ -12,7 +12,9 @@
 //! - All configured API keys are non-empty.
 
 pub mod app_config;
+pub mod config_registry;
 pub mod jwt;
 
 pub use app_config::{AppConfig, JwtConfig, JwtConfigError};
+pub use config_registry::{ConfigRegistry, ConfigRegistryError};
 pub use jwt::{JwtError, verify_token};
