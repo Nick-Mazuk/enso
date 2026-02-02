@@ -20,6 +20,7 @@
 //  - Pub-sub component
 
 mod client_connection;
+pub mod config;
 mod constants;
 pub mod database_registry;
 mod e2e_tests;
