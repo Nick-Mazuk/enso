@@ -1,13 +1,14 @@
 import { Connection } from "./internal/connection/index.js";
 import { createApiKey, createServerUrl } from "./internal/connection/types.js";
+import type { JwtProvider } from "./internal/connection/types.js";
 import { createDatabase } from "./internal/database/index.js";
 import type { Database } from "./internal/database/types.js";
 import type { Field, FieldValue, Schema } from "./internal/schema/types.js";
 import { NetworkStore } from "./internal/store/network-store.js";
 import type { StoreInterface } from "./internal/store/types.js";
 
-export type { ApiKey, ServerUrl } from "./internal/connection/types.js";
-export { createApiKey, createServerUrl } from "./internal/connection/types.js";
+export type { ApiKey, Jwt, JwtProvider, ServerUrl } from "./internal/connection/types.js";
+export { createApiKey, createJwt, createServerUrl } from "./internal/connection/types.js";
 export { createSchema } from "./internal/schema/create.js";
 export { t } from "./internal/schema/t.js";
 
@@ -17,6 +18,17 @@ type ClientOptions<
 	schema: S;
 	serverUrl: string;
 	apiKey: string;
+	/**
+	 * A static JWT token for authentication.
+	 * If provided, this token will be sent with the ConnectRequest.
+	 */
+	jwt?: string;
+	/**
+	 * A function that provides JWT tokens dynamically.
+	 * Called when connecting, allowing for token refresh.
+	 * If both jwt and jwtProvider are provided, jwt takes precedence.
+	 */
+	jwtProvider?: JwtProvider;
 };
 
 /**
@@ -25,10 +37,13 @@ type ClientOptions<
  * Pre-conditions:
  * - serverUrl must be a valid WebSocket URL (ws:// or wss://)
  * - apiKey must be a valid API key
+ * - If jwt is provided, it must be a valid JWT string
+ * - If jwtProvider is provided, it must return a valid JWT string
  *
  * Post-conditions:
  * - Returns a connected client ready for operations
  * - Client is connected to server via WebSocket
+ * - If jwt or jwtProvider was provided, the token was sent in ConnectRequest
  *
  * @param opts - Client configuration options
  * @returns A promise that resolves to the connected client
@@ -41,7 +56,10 @@ export const createClient = async <
 ): Promise<Client<S>> => {
 	const serverUrl = createServerUrl(opts.serverUrl);
 	const apiKey = createApiKey(opts.apiKey);
-	const connection = new Connection(serverUrl, apiKey);
+	const connection = new Connection(serverUrl, apiKey, {
+		jwt: opts.jwt,
+		jwtProvider: opts.jwtProvider,
+	});
 	await connection.connect();
 	return new Client(opts.schema, connection);
 };
