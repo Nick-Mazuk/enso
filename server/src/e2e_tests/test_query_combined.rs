@@ -1,11 +1,11 @@
-//! Test combined query features (find, where, optional, where_not together).
+//! Test combined query features (find, where, optional, `where_not` together).
 
 use crate::e2e_tests::helpers::{
     TestClient, get_string_at, is_ok, is_undefined_at, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
-/// Test combining where, optional, and where_not patterns.
+/// Test combining where, optional, and `where_not` patterns.
 ///
 /// Setup:
 /// - User 1: name="Alice", dept="Engineering"
@@ -16,6 +16,7 @@ use crate::proto;
 /// Query: Active users with optional dept, excluding inactive
 /// Expected: 3 rows (Alice, Bob, Charlie - excluding Dave)
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_combined_features() {
     let mut client = TestClient::new();
 
@@ -182,7 +183,7 @@ fn test_query_combined_features() {
                 assert!(!is_undefined_at(&query_response, i, 1));
                 assert_eq!(get_string_at(&query_response, i, 1), Some("Engineering"));
             }
-            Some("Bob") | Some("Charlie") => {
+            Some("Bob" | "Charlie") => {
                 assert!(is_undefined_at(&query_response, i, 1));
             }
             _ => panic!("Unexpected name: {name:?}"),
@@ -190,8 +191,9 @@ fn test_query_combined_features() {
     }
 }
 
-/// Test where_not with multiple patterns (all must not match).
+/// Test `where_not` with multiple patterns (all must not match).
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_combined_multiple_where_not() {
     let mut client = TestClient::new();
 
@@ -320,8 +322,9 @@ fn test_query_combined_multiple_where_not() {
     assert_eq!(get_string_at(&query_response, 0, 0), Some("Charlie"));
 }
 
-/// Test multiple where patterns with optional and where_not.
+/// Test multiple where patterns with optional and `where_not`.
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_combined_multiple_where() {
     let mut client = TestClient::new();
 

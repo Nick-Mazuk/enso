@@ -1,11 +1,11 @@
-//! Test where_not patterns (anti-join semantics).
+//! Test `where_not` patterns (anti-join semantics).
 
 use crate::e2e_tests::helpers::{
     TestClient, get_string_at, is_ok, new_attribute_id, new_entity_id, new_hlc,
 };
 use crate::proto;
 
-/// Test where_not to exclude entities that have a specific attribute.
+/// Test `where_not` to exclude entities that have a specific attribute.
 ///
 /// Setup:
 /// - Entity 1: name="Alice", active=true
@@ -125,7 +125,7 @@ fn test_query_where_not_excludes_attribute() {
     assert_eq!(get_string_at(&query_response, 0, 0), Some("Charlie"));
 }
 
-/// Test where_not to exclude entities with a specific value.
+/// Test `where_not` to exclude entities with a specific value.
 ///
 /// Setup:
 /// - Entity 1: name="Alice", active=true
@@ -135,6 +135,7 @@ fn test_query_where_not_excludes_attribute() {
 /// Query: find entities where active is NOT true
 /// Expected: 2 rows (Bob and Charlie)
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_where_not_excludes_value() {
     let mut client = TestClient::new();
 
@@ -249,7 +250,7 @@ fn test_query_where_not_excludes_value() {
     assert!(!names.contains(&"Alice"));
 }
 
-/// Test where_not with no matches (all rows pass through).
+/// Test `where_not` with no matches (all rows pass through).
 #[test]
 fn test_query_where_not_no_exclusions() {
     let mut client = TestClient::new();
@@ -332,7 +333,7 @@ fn test_query_where_not_no_exclusions() {
     assert_eq!(query_response.rows.len(), 2);
 }
 
-/// Test where_not excludes all rows.
+/// Test `where_not` excludes all rows.
 #[test]
 fn test_query_where_not_excludes_all() {
     let mut client = TestClient::new();

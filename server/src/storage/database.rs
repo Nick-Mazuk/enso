@@ -1944,7 +1944,7 @@ mod tests {
 
         // Read via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let record = snapshot
                 .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
                 .expect("get");
@@ -1975,7 +1975,7 @@ mod tests {
         }
 
         // Create a snapshot that sees txn_id = 1
-        let mut snapshot = db.begin_readonly();
+        let snapshot = db.begin_readonly();
         let snapshot_txn = snapshot.snapshot_txn();
         assert_eq!(snapshot_txn, 1);
 
@@ -2004,7 +2004,7 @@ mod tests {
 
         // New snapshot sees updated data
         let txn_id = {
-            let mut snapshot2 = db.begin_readonly();
+            let snapshot2 = db.begin_readonly();
             assert_eq!(snapshot2.snapshot_txn(), 2);
             let record = snapshot2
                 .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
@@ -2043,7 +2043,7 @@ mod tests {
 
         // Current snapshot (at txn=2) should not see the deleted record
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             assert_eq!(snapshot.snapshot_txn(), 2);
             let record = snapshot
                 .get(&EntityId([1u8; 16]), &AttributeId([1u8; 16]))
@@ -2078,7 +2078,7 @@ mod tests {
 
         // Scan via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let records = snapshot.scan_entity(&entity).expect("scan");
             assert_eq!(records.len(), 5);
             snapshot.close()
@@ -2109,7 +2109,7 @@ mod tests {
 
         // Count via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let count = snapshot.count().expect("count");
             assert_eq!(count, 10);
             snapshot.close()
@@ -2130,7 +2130,7 @@ mod tests {
 
         // New snapshot should see only 5 records
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let count = snapshot.count().expect("count");
             assert_eq!(count, 5);
             snapshot.close()
@@ -2197,7 +2197,7 @@ mod tests {
 
         // Collect all via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let records = snapshot.collect_all().expect("collect_all");
             assert_eq!(records.len(), 5);
             snapshot.close()
@@ -2246,7 +2246,7 @@ mod tests {
 
         // Verify only 5 records remain
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let count = snapshot.count().expect("count");
             assert_eq!(count, 5);
             snapshot.close()
@@ -2485,7 +2485,7 @@ mod tests {
 
         // Query entities with attr2 via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let entities = snapshot.get_entities_with_attribute(&attr2).expect("query");
             assert_eq!(entities.len(), 2);
             assert!(entities.contains(&EntityId([1u8; 16])));
@@ -2532,7 +2532,7 @@ mod tests {
 
         // Query attributes for entity2 via snapshot
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let attributes = snapshot.get_attributes_for_entity(&entity2).expect("query");
             assert_eq!(attributes.len(), 1);
             assert!(attributes.contains(&attr1));
@@ -2580,7 +2580,7 @@ mod tests {
 
         // Current snapshot should see only attr2
         let current_txn = {
-            let mut snapshot = db.begin_readonly();
+            let snapshot = db.begin_readonly();
             let attributes = snapshot.get_attributes_for_entity(&entity).expect("query");
             assert_eq!(attributes.len(), 1);
             assert!(attributes.contains(&attr2));
@@ -2677,12 +2677,7 @@ mod tests {
                         let record = snapshot
                             .get(&EntityId(entity), &AttributeId([1u8; 16]))
                             .expect("get");
-                        assert!(
-                            record.is_some(),
-                            "thread {} missing record {}",
-                            thread_id,
-                            i
-                        );
+                        assert!(record.is_some(), "thread {thread_id} missing record {i}");
                         assert_eq!(record.unwrap().value, TripleValue::Number(f64::from(i)));
                     }
 

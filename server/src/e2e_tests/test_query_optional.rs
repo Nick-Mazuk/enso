@@ -16,6 +16,7 @@ use crate::proto;
 /// Query: find all names with optional age
 /// Expected: 3 rows, Bob's age should be undefined
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_optional_some_missing() {
     let mut client = TestClient::new();
 
@@ -280,6 +281,7 @@ fn test_query_optional_no_base_results() {
 
 /// Test multiple optional patterns.
 #[test]
+#[allow(clippy::too_many_lines)]
 fn test_query_multiple_optional_patterns() {
     let mut client = TestClient::new();
 

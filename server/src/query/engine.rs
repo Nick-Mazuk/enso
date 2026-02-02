@@ -428,11 +428,11 @@ mod tests {
     #[test]
     fn test_simple_query() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find all entity names
             let query = Query::new()
@@ -454,11 +454,11 @@ mod tests {
     #[test]
     fn test_query_with_concrete_entity() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find name for user1
             let query = Query::new().find("name").where_pattern(Pattern::new(
@@ -480,11 +480,11 @@ mod tests {
     #[test]
     fn test_query_with_multiple_patterns() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find entities with both name and age
             let query = Query::new()
@@ -512,11 +512,11 @@ mod tests {
     #[test]
     fn test_optional_pattern() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find all entities with name, optionally with age
             let query = Query::new()
@@ -552,11 +552,11 @@ mod tests {
     #[test]
     fn test_where_not_pattern() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find entities that don't have an age
             let query = Query::new()
@@ -586,11 +586,11 @@ mod tests {
     #[test]
     fn test_filter() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find entities with age > 26
             let query = Query::new()
@@ -619,11 +619,11 @@ mod tests {
     #[test]
     fn test_value_match() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find entity with name "Bob"
             let query = Query::new().find("e").where_pattern(Pattern::new(
@@ -645,11 +645,11 @@ mod tests {
     #[test]
     fn test_empty_result() {
         let (_dir, path, pool) = create_test_db_with_data();
-        let (mut db, _) = Database::open(&path, pool).expect("open db");
+        let (db, _) = Database::open(&path, pool).expect("open db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Find entity with name "Nobody"
             let query = Query::new().find("e").where_pattern(Pattern::new(
@@ -671,11 +671,11 @@ mod tests {
         let path = dir.path().join("test.db");
         let pool = test_pool();
 
-        let mut db = Database::create(&path, pool).expect("create db");
+        let db = Database::create(&path, pool).expect("create db");
 
         let txn_id = {
-            let mut snapshot = db.begin_readonly();
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let snapshot = db.begin_readonly();
+            let engine = QueryEngine::new(&snapshot);
 
             // Query should return empty results
             let query = Query::new()
@@ -718,11 +718,11 @@ mod tests {
         }
 
         // Create a snapshot at txn_id = 1
-        let mut snapshot = db.begin_readonly();
+        let snapshot = db.begin_readonly();
 
         // Verify the initial data is visible
         {
-            let mut engine = QueryEngine::new(&mut snapshot);
+            let engine = QueryEngine::new(&snapshot);
             let query = Query::new().find("name").where_pattern(Pattern::new(
                 PatternElement::var("e"),
                 PatternElement::field("name"),
