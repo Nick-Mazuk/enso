@@ -1,5 +1,6 @@
 # Working files
 ralph
+.ralph
 
 # dependencies (bun install)
 node_modules
@@ -59,3 +60,4 @@ node_modules/
 # Task files
 # tasks.json
 # tasks/
+.ralph/
