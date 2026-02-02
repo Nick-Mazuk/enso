@@ -32,7 +32,8 @@ import {
 	ConnectRequestSchema,
 	ServerMessageSchema,
 } from "../../proto/protocol_pb.js";
-import type { ApiKey, ServerUrl } from "./types.js";
+import type { ApiKey, Jwt, JwtOptions, ServerUrl } from "./types.js";
+import { resolveJwt } from "./types.js";
 
 /** Default timeout for requests in milliseconds */
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -59,10 +60,13 @@ export type SubscriptionHandler = (update: SubscriptionUpdate) => void;
  * Invariants:
  * - Only one connection attempt at a time
  * - Pending requests are resolved or rejected before disconnect
+ * - If jwtOptions is provided, JWT is resolved at connect time
  */
 export class Connection {
 	private readonly url: ServerUrl;
 	private readonly apiKey: ApiKey;
+	private readonly jwtOptions: JwtOptions;
+	private resolvedJwt: Jwt | undefined = undefined;
 	private ws: WebSocket | null = null;
 	private state: ConnectionState = "disconnected";
 	private nextRequestId: number = 1;
@@ -75,10 +79,15 @@ export class Connection {
 	 *
 	 * Pre-conditions: url and apiKey are validated branded types
 	 * Post-conditions: Connection instance is created but not connected
+	 *
+	 * @param url - The WebSocket server URL
+	 * @param apiKey - The application API key
+	 * @param jwtOptions - Optional JWT authentication options
 	 */
-	constructor(url: ServerUrl, apiKey: ApiKey) {
+	constructor(url: ServerUrl, apiKey: ApiKey, jwtOptions: JwtOptions = {}) {
 		this.url = url;
 		this.apiKey = apiKey;
+		this.jwtOptions = jwtOptions;
 	}
 
 	/**
@@ -110,6 +119,9 @@ export class Connection {
 		this.state = "connecting";
 
 		try {
+			// Resolve JWT before establishing connection
+			this.resolvedJwt = await resolveJwt(this.jwtOptions);
+
 			await new Promise<void>((resolve, reject) => {
 				let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -176,6 +188,7 @@ export class Connection {
 	private sendConnectRequest(): Promise<ServerResponse> {
 		const connectRequest = create(ConnectRequestSchema, {
 			appApiKey: this.apiKey,
+			authToken: this.resolvedJwt,
 		});
 
 		const message = create(ClientMessageSchema, {
