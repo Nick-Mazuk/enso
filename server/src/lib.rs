@@ -2,6 +2,9 @@
 // Forbid unwrap() in production code to prevent panics from corrupt data.
 // Test code is allowed to use unwrap() for convenience.
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
+
+pub mod auth;
+
 // Life of a request:
 // 1. Protobuf comes in
 // 2. Convert / validate proto into internal request format
