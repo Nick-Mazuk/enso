@@ -6,25 +6,59 @@
 //! 3. Operations work after successful connect
 //! 4. Errors are returned for invalid states
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
+use crate::auth::ConfigRegistry;
 use crate::client_connection::ClientConnection;
 use crate::database_registry::DatabaseRegistry;
 use crate::e2e_tests::helpers::{new_attribute_id, new_entity_id, new_hlc};
 use crate::proto;
+use crate::storage::Database;
+
+/// Test fixture containing all resources needed for connection tests.
+struct TestFixture {
+    /// Temporary directory for database files.
+    #[allow(dead_code)]
+    dir: tempfile::TempDir,
+    /// Database registry.
+    registry: Arc<DatabaseRegistry>,
+    /// Configuration registry.
+    config_registry: Arc<ConfigRegistry>,
+    /// Admin database.
+    admin_database: Arc<RwLock<Database>>,
+}
 
 /// Create a test registry with a temporary directory.
-fn create_test_registry() -> (tempfile::TempDir, Arc<DatabaseRegistry>) {
+fn create_test_registry() -> TestFixture {
     let dir = tempfile::tempdir().expect("create temp dir");
     let registry = Arc::new(DatabaseRegistry::new(dir.path().to_path_buf()));
-    (dir, registry)
+    let config_registry = Arc::new(ConfigRegistry::new());
+    // Create an admin database for testing (apps not found will allow anonymous access)
+    let admin_database = registry
+        .get_or_create("_admin")
+        .expect("create admin database");
+    TestFixture {
+        dir,
+        registry,
+        config_registry,
+        admin_database,
+    }
+}
+
+/// Create a client connection from test fixture.
+fn create_test_connection(fixture: &TestFixture) -> ClientConnection {
+    ClientConnection::new_awaiting_connect(
+        Arc::clone(&fixture.registry),
+        Arc::clone(&fixture.config_registry),
+        Arc::clone(&fixture.admin_database),
+    )
 }
 
 /// Test that `ConnectRequest` succeeds and transitions state.
 #[test]
 fn test_connect_request_succeeds() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     assert!(!conn.is_connected());
 
@@ -33,6 +67,7 @@ fn test_connect_request_succeeds() {
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: "test_app".to_string(),
+                auth_token: None,
             },
         )),
     });
@@ -54,8 +89,8 @@ fn test_connect_request_succeeds() {
 /// Test that operations before `ConnectRequest` fail with `FailedPrecondition`.
 #[test]
 fn test_operation_before_connect_fails() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     // Try to send a query before connecting
     let response = conn.handle_message(proto::ClientMessage {
@@ -93,8 +128,8 @@ fn test_operation_before_connect_fails() {
 /// Test that update before `ConnectRequest` fails with `FailedPrecondition`.
 #[test]
 fn test_update_before_connect_fails() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     let entity_id = new_entity_id(1);
     let attribute_id = new_attribute_id(1);
@@ -130,8 +165,8 @@ fn test_update_before_connect_fails() {
 /// Test that sending `ConnectRequest` twice fails.
 #[test]
 fn test_double_connect_fails() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     // First connect succeeds
     let _ = conn.handle_message(proto::ClientMessage {
@@ -139,6 +174,7 @@ fn test_double_connect_fails() {
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: "test_app".to_string(),
+                auth_token: None,
             },
         )),
     });
@@ -151,6 +187,7 @@ fn test_double_connect_fails() {
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: "other_app".to_string(),
+                auth_token: None,
             },
         )),
     });
@@ -176,14 +213,15 @@ fn test_double_connect_fails() {
 /// Test that empty `app_api_key` fails with `InvalidArgument`.
 #[test]
 fn test_empty_api_key_fails() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     let response = conn.handle_message(proto::ClientMessage {
         request_id: Some(1),
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: String::new(),
+                auth_token: None,
             },
         )),
     });
@@ -206,8 +244,8 @@ fn test_empty_api_key_fails() {
 /// Test that invalid characters in `api_key` fail.
 #[test]
 fn test_invalid_api_key_characters_fail() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     // Path traversal attempt
     let response = conn.handle_message(proto::ClientMessage {
@@ -215,6 +253,7 @@ fn test_invalid_api_key_characters_fail() {
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: "../evil/path".to_string(),
+                auth_token: None,
             },
         )),
     });
@@ -242,8 +281,8 @@ fn test_invalid_api_key_characters_fail() {
 /// Test that operations work after successful connect.
 #[test]
 fn test_operations_after_connect_work() {
-    let (_dir, registry) = create_test_registry();
-    let mut conn = ClientConnection::new_awaiting_connect(registry);
+    let fixture = create_test_registry();
+    let mut conn = create_test_connection(&fixture);
 
     // Connect
     let _ = conn.handle_message(proto::ClientMessage {
@@ -251,6 +290,7 @@ fn test_operations_after_connect_work() {
         payload: Some(proto::client_message::Payload::Connect(
             proto::ConnectRequest {
                 app_api_key: "test_app".to_string(),
+                auth_token: None,
             },
         )),
     });
@@ -292,20 +332,20 @@ fn test_operations_after_connect_work() {
 /// Test that different `api_keys` create different databases.
 #[test]
 fn test_different_api_keys_create_different_databases() {
-    let dir = tempfile::tempdir().expect("create temp dir");
-    let registry = Arc::new(DatabaseRegistry::new(dir.path().to_path_buf()));
+    let fixture = create_test_registry();
 
     let entity_id = new_entity_id(1);
     let attribute_id = new_attribute_id(1);
 
     // First connection to app1
     {
-        let mut conn1 = ClientConnection::new_awaiting_connect(Arc::clone(&registry));
+        let mut conn1 = create_test_connection(&fixture);
         let _ = conn1.handle_message(proto::ClientMessage {
             request_id: Some(1),
             payload: Some(proto::client_message::Payload::Connect(
                 proto::ConnectRequest {
                     app_api_key: "app1".to_string(),
+                    auth_token: None,
                 },
             )),
         });
@@ -332,12 +372,13 @@ fn test_different_api_keys_create_different_databases() {
 
     // Second connection to app2 should not see app1's data
     {
-        let mut conn2 = ClientConnection::new_awaiting_connect(Arc::clone(&registry));
+        let mut conn2 = create_test_connection(&fixture);
         let _ = conn2.handle_message(proto::ClientMessage {
             request_id: Some(1),
             payload: Some(proto::client_message::Payload::Connect(
                 proto::ConnectRequest {
                     app_api_key: "app2".to_string(),
+                    auth_token: None,
                 },
             )),
         });
@@ -375,27 +416,27 @@ fn test_different_api_keys_create_different_databases() {
     }
 
     // Verify both database files exist
-    assert!(dir.path().join("app1.db").exists());
-    assert!(dir.path().join("app2.db").exists());
+    assert!(fixture.dir.path().join("app1.db").exists());
+    assert!(fixture.dir.path().join("app2.db").exists());
 }
 
 /// Test that same `api_key` shares the database across connections.
 #[test]
 fn test_same_api_key_shares_database() {
-    let dir = tempfile::tempdir().expect("create temp dir");
-    let registry = Arc::new(DatabaseRegistry::new(dir.path().to_path_buf()));
+    let fixture = create_test_registry();
 
     let entity_id = new_entity_id(1);
     let attribute_id = new_attribute_id(1);
 
     // First connection inserts data
     {
-        let mut conn1 = ClientConnection::new_awaiting_connect(Arc::clone(&registry));
+        let mut conn1 = create_test_connection(&fixture);
         let _ = conn1.handle_message(proto::ClientMessage {
             request_id: Some(1),
             payload: Some(proto::client_message::Payload::Connect(
                 proto::ConnectRequest {
                     app_api_key: "shared_app".to_string(),
+                    auth_token: None,
                 },
             )),
         });
@@ -421,12 +462,13 @@ fn test_same_api_key_shares_database() {
 
     // Second connection with same api_key should see the data
     {
-        let mut conn2 = ClientConnection::new_awaiting_connect(Arc::clone(&registry));
+        let mut conn2 = create_test_connection(&fixture);
         let _ = conn2.handle_message(proto::ClientMessage {
             request_id: Some(1),
             payload: Some(proto::client_message::Payload::Connect(
                 proto::ConnectRequest {
                     app_api_key: "shared_app".to_string(),
+                    auth_token: None,
                 },
             )),
         });
@@ -479,5 +521,5 @@ fn test_same_api_key_shares_database() {
     }
 
     // Only one database file should exist
-    assert!(dir.path().join("shared_app.db").exists());
+    assert!(fixture.dir.path().join("shared_app.db").exists());
 }
