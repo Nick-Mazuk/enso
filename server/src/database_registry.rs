@@ -4,6 +4,12 @@
 //! Multiple connections with the same `app_api_key` share a single `Database` instance,
 //! enabling subscription broadcasting across connections.
 //!
+//! # Database Types
+//!
+//! - **Shared databases**: One per app, stored at `{app_api_key}.db`
+//! - **User databases**: One per user per app, stored at `{app_api_key}/{user_id_hash}.db`
+//!   where `user_id_hash` is the hex-encoded SHA-256 hash of the user ID
+//!
 //! # Thread Safety
 //!
 //! The registry uses `RwLock` instead of `Mutex` to allow concurrent database access:
@@ -12,13 +18,15 @@
 //!
 //! # Invariants
 //!
-//! - Each `app_api_key` maps to exactly one `Database` instance
+//! - Each database key maps to exactly one `Database` instance
 //! - Database instances are never removed once created (for the lifetime of the registry)
 //! - All `app_api_key` values are validated before use
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+
+use sha2::{Digest, Sha256};
 
 use crate::storage::buffer_pool::{BufferPool, DEFAULT_POOL_CAPACITY};
 use crate::storage::gc::{GcConfig, spawn_gc_task};
@@ -147,6 +155,154 @@ impl DatabaseRegistry {
 
         Ok(db_arc)
     }
+
+    /// Get or create a shared database for the given `app_api_key`.
+    ///
+    /// Shared databases are stored at `{base_directory}/{app_api_key}.db` and are
+    /// accessible by all users of the application.
+    ///
+    /// # Pre-conditions
+    ///
+    /// - `app_api_key` must be valid (non-empty, valid characters, reasonable length)
+    ///   Use `validate_api_key` to check before calling.
+    ///
+    /// # Post-conditions
+    ///
+    /// - Returns a shared reference to the database
+    /// - Database is created if it doesn't exist
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The registry lock is poisoned
+    /// - The database cannot be opened or created
+    pub fn get_shared_database(
+        &self,
+        app_api_key: &str,
+    ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+        self.get_or_create(app_api_key)
+    }
+
+    /// Get or create a user-specific database for the given `app_api_key` and `user_id`.
+    ///
+    /// User databases are stored at `{base_directory}/{app_api_key}/{user_id_hash}.db`
+    /// where `user_id_hash` is the hex-encoded SHA-256 hash of the `user_id`.
+    /// This ensures filesystem-safe paths regardless of the user ID format.
+    ///
+    /// # Pre-conditions
+    ///
+    /// - `app_api_key` must be valid (non-empty, valid characters, reasonable length)
+    ///   Use `validate_api_key` to check before calling.
+    /// - `user_id` must not be empty.
+    ///
+    /// # Post-conditions
+    ///
+    /// - Returns a reference to the user's database
+    /// - Database is created if it doesn't exist
+    /// - The user database directory is created if needed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The registry lock is poisoned
+    /// - The user database directory cannot be created
+    /// - The database cannot be opened or created
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    #[allow(clippy::significant_drop_tightening)] // False positive - we need the lock held during insert
+    pub fn get_user_database(
+        &self,
+        app_api_key: &str,
+        user_id: &str,
+    ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+        assert!(!user_id.is_empty(), "user_id must not be empty");
+
+        // Hash the user_id with SHA-256 to get a filesystem-safe path
+        let user_id_hash = hash_user_id(user_id);
+        let db_key = format!("{app_api_key}/{user_id_hash}");
+
+        // Fast path: check if database already exists (read lock only)
+        {
+            let databases = self
+                .databases
+                .read()
+                .map_err(|_| DatabaseError::LockPoisoned)?;
+            if let Some(db) = databases.get(&db_key) {
+                return Ok(Arc::clone(db));
+            }
+        }
+
+        // Slow path: need to create the database (write lock)
+        let mut databases = self
+            .databases
+            .write()
+            .map_err(|_| DatabaseError::LockPoisoned)?;
+
+        // Double-check: another thread may have created it while we waited for the write lock
+        if let Some(db) = databases.get(&db_key) {
+            return Ok(Arc::clone(db));
+        }
+
+        // Ensure the user database directory exists
+        let user_db_directory = self.base_directory.join(app_api_key);
+        std::fs::create_dir_all(&user_db_directory).map_err(DatabaseError::Io)?;
+
+        // Create the database
+        let db_path = user_db_directory.join(format!("{user_id_hash}.db"));
+        let (database, recovery_result) =
+            Database::open_or_create(&db_path, Arc::clone(&self.buffer_pool))?;
+
+        if let Some(result) = recovery_result {
+            tracing::info!(
+                "Database recovery for user '{}' in app '{}': {} records scanned, {} transactions replayed, {} discarded",
+                user_id_hash,
+                app_api_key,
+                result.records_scanned,
+                result.transactions_replayed,
+                result.transactions_discarded
+            );
+        }
+
+        // Get the GC notify handle before wrapping in RwLock
+        let gc_notify = database.gc_notify();
+
+        let db_arc = Arc::new(RwLock::new(database));
+        databases.insert(db_key, Arc::clone(&db_arc));
+
+        // Spawn background GC task with weak reference to prevent cycles
+        // The task will exit cleanly when the database is dropped
+        // Only spawn if we're inside a tokio runtime (may not be in some test contexts)
+        if tokio::runtime::Handle::try_current().is_ok() {
+            let weak_db = Arc::downgrade(&db_arc);
+            let _gc_handle = spawn_gc_task(weak_db, gc_notify, GcConfig::default());
+        }
+
+        tracing::info!(
+            "Opened user database for app '{}', user hash '{}'",
+            app_api_key,
+            user_id_hash
+        );
+
+        Ok(db_arc)
+    }
+}
+
+/// Hash a user ID using SHA-256 and return the hex-encoded result.
+///
+/// # Pre-conditions
+///
+/// - `user_id` should not be empty (though this function will still hash it).
+///
+/// # Post-conditions
+///
+/// - Returns a 64-character lowercase hex string (SHA-256 produces 32 bytes = 64 hex chars).
+/// - The same `user_id` always produces the same hash.
+/// - Result is filesystem-safe (only alphanumeric characters).
+fn hash_user_id(user_id: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(user_id.as_bytes());
+    let result = hasher.finalize();
+    // Convert to lowercase hex string
+    result.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Error returned when validating an `app_api_key`.
@@ -267,5 +423,161 @@ mod tests {
             validate_api_key("app\\name"),
             Err(ApiKeyValidationError::InvalidCharacters)
         );
+    }
+
+    #[test]
+    fn test_hash_user_id_produces_64_char_hex() {
+        let hash = hash_user_id("test-user");
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_hash_user_id_is_deterministic() {
+        let hash1 = hash_user_id("user123");
+        let hash2 = hash_user_id("user123");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_user_id_different_inputs_produce_different_hashes() {
+        let hash1 = hash_user_id("user1");
+        let hash2 = hash_user_id("user2");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_user_id_known_value() {
+        // SHA-256 of "test" is known
+        let hash = hash_user_id("test");
+        assert_eq!(
+            hash,
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+        );
+    }
+
+    #[test]
+    fn test_hash_user_id_handles_special_characters() {
+        // Should work with any UTF-8 string including special chars
+        let hash = hash_user_id("user@example.com");
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_get_shared_database_creates_database() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let result = registry.get_shared_database("test-app");
+        assert!(result.is_ok());
+
+        // Database file should exist
+        let db_path = temp_dir.path().join("test-app.db");
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_get_shared_database_returns_same_instance() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let db1 = registry.get_shared_database("test-app").expect("First call");
+        let db2 = registry
+            .get_shared_database("test-app")
+            .expect("Second call");
+
+        // Both should point to the same Arc
+        assert!(Arc::ptr_eq(&db1, &db2));
+    }
+
+    #[test]
+    fn test_get_user_database_creates_database_and_directory() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let result = registry.get_user_database("test-app", "user123");
+        assert!(result.is_ok());
+
+        // User database directory should exist
+        let user_dir = temp_dir.path().join("test-app");
+        assert!(user_dir.exists());
+        assert!(user_dir.is_dir());
+
+        // Database file should exist with hashed name
+        let user_hash = hash_user_id("user123");
+        let db_path = user_dir.join(format!("{user_hash}.db"));
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_get_user_database_returns_same_instance() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let db1 = registry
+            .get_user_database("test-app", "user123")
+            .expect("First call");
+        let db2 = registry
+            .get_user_database("test-app", "user123")
+            .expect("Second call");
+
+        // Both should point to the same Arc
+        assert!(Arc::ptr_eq(&db1, &db2));
+    }
+
+    #[test]
+    fn test_get_user_database_different_users_get_different_databases() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let db1 = registry
+            .get_user_database("test-app", "user1")
+            .expect("User 1");
+        let db2 = registry
+            .get_user_database("test-app", "user2")
+            .expect("User 2");
+
+        // Different users should have different databases
+        assert!(!Arc::ptr_eq(&db1, &db2));
+    }
+
+    #[test]
+    fn test_get_user_database_different_apps_get_different_databases() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let db1 = registry
+            .get_user_database("app1", "user123")
+            .expect("App 1");
+        let db2 = registry
+            .get_user_database("app2", "user123")
+            .expect("App 2");
+
+        // Different apps should have different databases even for the same user
+        assert!(!Arc::ptr_eq(&db1, &db2));
+    }
+
+    #[test]
+    fn test_shared_and_user_databases_are_different() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let shared_db = registry.get_shared_database("test-app").expect("Shared");
+        let user_db = registry
+            .get_user_database("test-app", "user123")
+            .expect("User");
+
+        // Shared and user databases should be different
+        assert!(!Arc::ptr_eq(&shared_db, &user_db));
+    }
+
+    #[test]
+    #[should_panic(expected = "user_id must not be empty")]
+    fn test_get_user_database_panics_on_empty_user_id() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let registry = DatabaseRegistry::new(temp_dir.path().to_path_buf());
+
+        let _ = registry.get_user_database("test-app", "");
     }
 }
