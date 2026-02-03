@@ -88,9 +88,8 @@ impl JwtConfig {
     pub fn new_rs256(public_key: String) -> Result<Self, JwtConfigError> {
         // Validate that the public key can be parsed as an RSA public key.
         // DecodingKey::from_rsa_pem validates the PEM format and RSA structure.
-        DecodingKey::from_rsa_pem(public_key.as_bytes()).map_err(|e| {
-            JwtConfigError::InvalidRs256PublicKey(e.to_string())
-        })?;
+        DecodingKey::from_rsa_pem(public_key.as_bytes())
+            .map_err(|e| JwtConfigError::InvalidRs256PublicKey(e.to_string()))?;
 
         Ok(Self::Rs256 { public_key })
     }
@@ -221,6 +220,24 @@ a3aCXj5dawIDAQAB
         } else {
             panic!("Expected Rs256 config");
         }
+    }
+
+    #[test]
+    fn test_new_rs256_validates_pem_key() {
+        let invalid_key = "not-a-valid-pem-key";
+        let result = JwtConfig::new_rs256(invalid_key.to_string());
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, JwtConfigError::InvalidRs256PublicKey(_)));
+    }
+
+    #[test]
+    fn test_new_rs256_rejects_truncated_pem() {
+        let truncated_key = "-----BEGIN PUBLIC KEY-----\nMIIBIjAN...\n-----END PUBLIC KEY-----";
+        let result = JwtConfig::new_rs256(truncated_key.to_string());
+
+        assert!(result.is_err());
     }
 
     #[test]
