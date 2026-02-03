@@ -147,6 +147,100 @@ impl DatabaseRegistry {
 
         Ok(db_arc)
     }
+
+    /// Get or create a user-specific database for the given app and user.
+    ///
+    /// User databases store per-user data and are isolated from other users.
+    /// The database is stored at `{base_directory}/{app_api_key}/users/{user_id}.db`.
+    ///
+    /// # Arguments
+    ///
+    /// * `app_api_key` - The API key identifying the application.
+    /// * `user_id` - The user ID (from JWT 'sub' claim).
+    ///
+    /// # Pre-conditions
+    ///
+    /// - `app_api_key` must be valid (non-empty, valid characters, reasonable length).
+    /// - `user_id` must be valid (non-empty, valid characters for filesystem).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The registry lock is poisoned
+    /// - The database cannot be opened or created
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    #[allow(clippy::significant_drop_tightening)] // False positive - we need the lock held during insert
+    pub fn get_user_database(
+        &self,
+        app_api_key: &str,
+        user_id: &str,
+    ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+        // Create a compound key for the user database
+        let compound_key = format!("{app_api_key}:user:{user_id}");
+
+        // Fast path: check if database already exists (read lock only)
+        {
+            let databases = self
+                .databases
+                .read()
+                .map_err(|_| DatabaseError::LockPoisoned)?;
+            if let Some(db) = databases.get(&compound_key) {
+                return Ok(Arc::clone(db));
+            }
+        }
+
+        // Slow path: need to create the database (write lock)
+        let mut databases = self
+            .databases
+            .write()
+            .map_err(|_| DatabaseError::LockPoisoned)?;
+
+        // Double-check: another thread may have created it while we waited for the write lock
+        if let Some(db) = databases.get(&compound_key) {
+            return Ok(Arc::clone(db));
+        }
+
+        // Create the database in a user-specific subdirectory
+        // Path: {base_directory}/{app_api_key}/users/{user_id}.db
+        let user_db_dir = self.base_directory.join(app_api_key).join("users");
+        std::fs::create_dir_all(&user_db_dir).map_err(|e| DatabaseError::Io(e.to_string()))?;
+
+        let db_path = user_db_dir.join(format!("{user_id}.db"));
+        let (database, recovery_result) =
+            Database::open_or_create(&db_path, Arc::clone(&self.buffer_pool))?;
+
+        if let Some(result) = recovery_result {
+            tracing::info!(
+                "User database recovery for '{}' user '{}': {} records scanned, {} transactions replayed, {} discarded",
+                app_api_key,
+                user_id,
+                result.records_scanned,
+                result.transactions_replayed,
+                result.transactions_discarded
+            );
+        }
+
+        // Get the GC notify handle before wrapping in RwLock
+        let gc_notify = database.gc_notify();
+
+        let db_arc = Arc::new(RwLock::new(database));
+        databases.insert(compound_key, Arc::clone(&db_arc));
+
+        // Spawn background GC task with weak reference to prevent cycles
+        // Only spawn if we're inside a tokio runtime (may not be in some test contexts)
+        if tokio::runtime::Handle::try_current().is_ok() {
+            let weak_db = Arc::downgrade(&db_arc);
+            let _gc_handle = spawn_gc_task(weak_db, gc_notify, GcConfig::default());
+        }
+
+        tracing::info!(
+            "Opened user database for app '{}' user '{}'",
+            app_api_key,
+            user_id
+        );
+
+        Ok(db_arc)
+    }
 }
 
 /// Error returned when validating an `app_api_key`.
