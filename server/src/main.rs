@@ -65,11 +65,18 @@ async fn main() {
         config.listen_port
     );
 
-    // Create the data directory for databases
+    // Create the data directory for databases.
+    // Pre-condition: config.database_directory is a valid path.
+    // Post-condition: The directory exists and is accessible.
     if let Err(e) = std::fs::create_dir_all(&config.database_directory) {
         tracing::error!("Failed to create data directory: {e}");
         std::process::exit(1);
     }
+    // Paired assertion: verify the directory was actually created and is a directory.
+    assert!(
+        config.database_directory.is_dir(),
+        "database_directory must exist and be a directory after create_dir_all"
+    );
 
     // Create the database registry - databases are opened on-demand per app_api_key
     let registry = Arc::new(DatabaseRegistry::new(config.database_directory.clone()));

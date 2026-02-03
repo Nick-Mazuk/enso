@@ -1,10 +1,13 @@
 import { type ReservedField, reservedFields } from "./reserved-fields.js";
-import type {
-	EntityDefinition,
-	Field,
-	FieldValue,
-	Schema,
-	SchemaDefinition,
+import {
+	type EntityDefinition,
+	type Field,
+	type FieldValue,
+	type LegacySchema,
+	type LegacySchemaDefinition,
+	type Schema,
+	type SchemaDefinition,
+	isLegacySchemaDefinition,
 } from "./types.js";
 
 /**
@@ -64,23 +67,49 @@ const validateUniqueEntityNames = (
 
 /**
  * Creates a validated and frozen schema from a schema definition.
+ * Supports both legacy { entities: {...} } format and new { shared: {...}, user: {...} } format.
  *
- * Pre-condition: definition contains valid EntityDefinitions in shared and/or user.
+ * Pre-condition: definition contains valid EntityDefinitions.
  * Pre-condition: No field names are reserved.
- * Pre-condition: Entity names are unique across shared and user scopes.
+ * Pre-condition: Entity names are unique across shared and user scopes (for new format).
  * Post-condition: Returns a frozen Schema with shared, user, and flattened entities.
  *
- * @param definition - The schema definition with optional shared and user sections.
+ * @param definition - The schema definition (legacy or new format).
  * @returns A frozen Schema object with readonly shared, user, and entities properties.
  * @throws Error if reserved fields are used or entity names are duplicated.
  */
 // TODO: update the type definition to disallow reserved fields
-export const createSchema = <
+export function createSchema<
+	Entities extends Record<string, Record<string, Field<FieldValue, boolean>>>,
+>(definition: LegacySchemaDefinition<Entities>): LegacySchema<LegacySchemaDefinition<Entities>>;
+export function createSchema<
+	Shared extends Record<string, Record<string, Field<FieldValue, boolean>>>,
+	User extends Record<string, Record<string, Field<FieldValue, boolean>>>,
+>(definition: SchemaDefinition<Shared, User>): Schema<SchemaDefinition<Shared, User>>;
+export function createSchema<
 	Shared extends Record<string, Record<string, Field<FieldValue, boolean>>>,
 	User extends Record<string, Record<string, Field<FieldValue, boolean>>>,
 >(
-	definition: SchemaDefinition<Shared, User>,
-): Schema<SchemaDefinition<Shared, User>> => {
+	definition: SchemaDefinition<Shared, User> | LegacySchemaDefinition<Shared>,
+): Schema<SchemaDefinition<Shared, User>> | LegacySchema<LegacySchemaDefinition<Shared>> {
+	// Handle legacy { entities: {...} } format by treating all entities as shared
+	if (isLegacySchemaDefinition<Shared>(definition)) {
+		const entities = definition.entities;
+
+		// Validate reserved fields in entities
+		validateScope(entities);
+
+		// Create schema with all entities in shared scope
+		const schema = {
+			shared: entities,
+			user: {} as Record<string, never>,
+			entities,
+		} as LegacySchema<LegacySchemaDefinition<Shared>>;
+
+		return Object.freeze(schema);
+	}
+
+	// Handle new { shared: {...}, user: {...} } format
 	const shared = (definition.shared ?? {}) as Shared;
 	const user = (definition.user ?? {}) as User;
 
@@ -99,4 +128,4 @@ export const createSchema = <
 	} as Schema<SchemaDefinition<Shared, User>>;
 
 	return Object.freeze(schema);
-};
+}

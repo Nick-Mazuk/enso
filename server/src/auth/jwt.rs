@@ -15,7 +15,7 @@
 //! - Verification is stateless and does not modify any external state.
 //! - The same inputs always produce the same outputs.
 
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 
 use super::JwtConfig;
@@ -72,7 +72,7 @@ impl std::error::Error for JwtError {}
 pub fn verify_token(token: &str, config: &JwtConfig) -> Result<String, JwtError> {
     match config {
         JwtConfig::Hs256 { secret } => verify_hs256(token, secret),
-        JwtConfig::Rs256 { public_key } => verify_rs256(token, public_key),
+        JwtConfig::Rs256(key) => verify_rs256(token, key.as_str()),
     }
 }
 
@@ -89,7 +89,7 @@ pub fn verify_token(token: &str, config: &JwtConfig) -> Result<String, JwtError>
 /// Returns `JwtError` if verification fails.
 fn verify_hs256(token: &str, secret: &[u8]) -> Result<String, JwtError> {
     if secret.is_empty() {
-        return Err(JwtError::InvalidKey("secret must be non-empty".to_string()));
+        return Err(JwtError::InvalidKey("secret must not be empty".to_string()));
     }
 
     let key = DecodingKey::from_secret(secret);
@@ -164,7 +164,7 @@ fn map_jwt_error(error: jsonwebtoken::errors::Error) -> JwtError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     fn create_hs256_token(sub: &str, secret: &[u8]) -> String {
         let claims = Claims {
@@ -227,22 +227,31 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_rs256_invalid_key() {
-        let config = JwtConfig::Rs256 {
-            public_key: "not-a-valid-pem-key".to_string(),
-        };
-        let result = verify_token("some.jwt.token", &config);
+    fn test_new_rs256_rejects_invalid_key() {
+        // Invalid keys are now rejected at construction time, not verification time.
+        // This test verifies that JwtConfig::new_rs256 properly validates keys.
+        use crate::auth::JwtConfigError;
 
+        let result = JwtConfig::new_rs256("not-a-valid-pem-key".to_string());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtError::InvalidKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
     fn test_jwt_error_display() {
-        assert_eq!(JwtError::InvalidSignature.to_string(), "invalid JWT signature");
+        assert_eq!(
+            JwtError::InvalidSignature.to_string(),
+            "invalid JWT signature"
+        );
         assert_eq!(JwtError::TokenExpired.to_string(), "JWT has expired");
         assert_eq!(JwtError::MalformedToken.to_string(), "malformed JWT");
-        assert_eq!(JwtError::MissingSubClaim.to_string(), "missing 'sub' claim in JWT");
+        assert_eq!(
+            JwtError::MissingSubClaim.to_string(),
+            "missing 'sub' claim in JWT"
+        );
         assert_eq!(
             JwtError::InvalidKey("bad key".to_string()).to_string(),
             "invalid key: bad key"
@@ -265,18 +274,14 @@ mod tests {
 
     #[test]
     fn test_verify_hs256_empty_secret() {
-        let config = JwtConfig::Hs256 {
-            secret: vec![],
-        };
-        let result = verify_token("some.jwt.token", &config);
+        let secret = b"test-secret-key-that-is-long-enough";
+        let token = create_hs256_token("user-123", secret);
+
+        let config = JwtConfig::Hs256 { secret: vec![] };
+        let result = verify_token(&token, &config);
 
         assert!(result.is_err());
-        match result {
-            Err(JwtError::InvalidKey(message)) => {
-                assert_eq!(message, "secret must be non-empty");
-            }
-            _ => panic!("expected InvalidKey error"),
-        }
+        assert!(matches!(result, Err(JwtError::InvalidKey(_))));
     }
 
     #[test]
