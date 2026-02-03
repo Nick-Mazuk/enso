@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    auth::{ConfigRegistry, ConfigRegistryError, verify_token, JwtError},
+    auth::{ConfigRegistry, ConfigRegistryError, JwtError, verify_token},
     database_registry::{ApiKeyValidationError, DatabaseRegistry, validate_api_key},
     proto,
     query::{Query, QueryEngine},
@@ -70,6 +70,16 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 /// 4. If app has no JWT config:
 ///    - Allow anonymous access (`user_id` = `None`)
 ///
+/// # Database Access
+///
+/// Connections can access two types of databases:
+/// - **Shared database**: One per app, accessible by all users. Stored at `{app_api_key}.db`.
+/// - **User database**: One per user per app, only accessible by that user.
+///   Stored at `{app_api_key}/{user_id_hash}.db`.
+///
+/// For anonymous connections (no JWT auth), only the shared database is available.
+/// For authenticated connections, both shared and user databases are available.
+///
 /// # Thread Safety
 ///
 /// Uses `RwLock<Database>` to allow concurrent read operations.
@@ -93,9 +103,21 @@ pub struct AuthConfig {
     pub admin_database: Arc<RwLock<Database>>,
 }
 
+/// - `config_registry` and `admin_database` are always both `Some` or both `None`.
+/// - When `Some`, they must remain valid for the lifetime of the connection.
+/// - `user_database` is `Some` only if the connection is authenticated (has a `user_id`).
+/// - `shared_database` is `Some` when the connection is in `Connected` state.
 pub struct ClientConnection {
-    /// Database connection. `None` until `ConnectRequest` is processed.
+    /// Primary database for this connection. Points to the shared database.
+    /// `None` until `ConnectRequest` is processed.
+    /// This field is kept for backwards compatibility with existing code.
     database: Option<Arc<RwLock<Database>>>,
+    /// Shared database accessible by all users of the app.
+    /// `None` until `ConnectRequest` is processed.
+    shared_database: Option<Arc<RwLock<Database>>>,
+    /// User-specific database, only accessible by the authenticated user.
+    /// `None` for anonymous connections or until `ConnectRequest` is processed.
+    user_database: Option<Arc<RwLock<Database>>>,
     /// Unique identifier for this connection.
     connection_id: ConnectionId,
     /// Per-connection subscription tracking.
@@ -136,6 +158,8 @@ impl ClientConnection {
     ) -> Self {
         Self {
             database: None,
+            shared_database: None,
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::AwaitingConnect,
@@ -152,10 +176,15 @@ impl ClientConnection {
     /// The connection starts in `Connected` state, bypassing the `ConnectRequest` flow.
     /// Use this for testing when you don't need the registry-based connection flow.
     /// The connection is created as anonymous (no JWT authentication).
+    /// The database is set as both the primary database and shared database.
     #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
     pub fn new(database: Database) -> Self {
+        let db_arc = Arc::new(RwLock::new(database));
         Self {
-            database: Some(Arc::new(RwLock::new(database))),
+            database: Some(Arc::clone(&db_arc)),
+            shared_database: Some(db_arc),
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
@@ -174,10 +203,14 @@ impl ClientConnection {
     /// All connections sharing the database will receive change notifications
     /// when any connection commits a transaction.
     /// The connection is created as anonymous (no JWT authentication).
+    /// The database is set as both the primary database and shared database.
     #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
     pub fn new_shared(database: Arc<RwLock<Database>>) -> Self {
         Self {
-            database: Some(database),
+            database: Some(Arc::clone(&database)),
+            shared_database: Some(database),
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
@@ -203,16 +236,41 @@ impl ClientConnection {
         matches!(self.state, ConnectionState::Connected { .. })
     }
 
-    /// Get a clone of the shared database reference.
+    /// Get a clone of the primary database reference.
     ///
     /// Returns `None` if the connection is not yet established.
     ///
     /// This can be used to create additional `ClientConnection` instances
-    /// that share the same database.
+    /// that share the same database. For backwards compatibility, this
+    /// returns the shared database.
     #[must_use]
     #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
     pub fn shared_database(&self) -> Option<Arc<RwLock<Database>>> {
         self.database.as_ref().map(Arc::clone)
+    }
+
+    /// Get a clone of the shared database reference.
+    ///
+    /// Returns `None` if the connection is not yet established.
+    ///
+    /// The shared database is accessible by all users of the application.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    pub fn get_shared_database(&self) -> Option<Arc<RwLock<Database>>> {
+        self.shared_database.as_ref().map(Arc::clone)
+    }
+
+    /// Get a clone of the user-specific database reference.
+    ///
+    /// Returns `None` if:
+    /// - The connection is not yet established
+    /// - The connection is anonymous (no authenticated user)
+    ///
+    /// The user database is only accessible by the authenticated user.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    pub fn get_user_database(&self) -> Option<Arc<RwLock<Database>>> {
+        self.user_database.as_ref().map(Arc::clone)
     }
 
     /// Subscribe to change notifications from the database.
@@ -468,7 +526,7 @@ impl ClientConnection {
             }
         };
 
-        // Get or create the database
+        // Get or create the databases
         let Some(registry) = &self.registry else {
             // This shouldn't happen in production, but handle gracefully
             return vec![create_error_response(
@@ -477,19 +535,51 @@ impl ClientConnection {
             )];
         };
 
-        let database = match registry.get_or_create(app_api_key) {
+        // Open the shared database (always available)
+        let shared_database = match registry.get_shared_database(app_api_key) {
             Ok(db) => db,
             Err(e) => {
-                tracing::error!("Failed to open database for '{}': {}", app_api_key, e);
+                tracing::error!(
+                    "Failed to open shared database for '{}': {}",
+                    app_api_key,
+                    e
+                );
                 return vec![create_internal_error_response(
                     request_id,
-                    &format!("Failed to open database: {e}"),
+                    &format!("Failed to open shared database: {e}"),
                 )];
             }
         };
 
+        // Open the user database if authenticated
+        let user_database = if let Some(ref uid) = user_id {
+            match registry.get_user_database(app_api_key, uid) {
+                Ok(db) => Some(db),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to open user database for '{}' user '{}': {}",
+                        app_api_key,
+                        uid,
+                        e
+                    );
+                    return vec![create_internal_error_response(
+                        request_id,
+                        &format!("Failed to open user database: {e}"),
+                    )];
+                }
+            }
+        } else {
+            None
+        };
+
         // Transition state
-        self.database = Some(database);
+        // The primary `database` field points to shared database for backwards compatibility
+        #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+        {
+            self.database = Some(Arc::clone(&shared_database));
+        }
+        self.shared_database = Some(shared_database);
+        self.user_database = user_database;
         self.state = ConnectionState::Connected {
             app_api_key: app_api_key.to_string(),
             user_id: user_id.clone(),
