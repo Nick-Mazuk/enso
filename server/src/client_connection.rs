@@ -94,8 +94,12 @@ pub struct AuthConfig {
 }
 
 pub struct ClientConnection {
-    /// Database connection. `None` until `ConnectRequest` is processed.
-    database: Option<Arc<RwLock<Database>>>,
+    /// Shared database connection. Accessible by all users of the app.
+    /// `None` until `ConnectRequest` is processed.
+    shared_database: Option<Arc<RwLock<Database>>>,
+    /// User-specific database connection. Only accessible by the authenticated user.
+    /// `None` if the connection is anonymous or not yet established.
+    user_database: Option<Arc<RwLock<Database>>>,
     /// Unique identifier for this connection.
     connection_id: ConnectionId,
     /// Per-connection subscription tracking.
@@ -135,7 +139,8 @@ impl ClientConnection {
         admin_database: Arc<RwLock<Database>>,
     ) -> Self {
         Self {
-            database: None,
+            shared_database: None,
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::AwaitingConnect,
@@ -152,10 +157,12 @@ impl ClientConnection {
     /// The connection starts in `Connected` state, bypassing the `ConnectRequest` flow.
     /// Use this for testing when you don't need the registry-based connection flow.
     /// The connection is created as anonymous (no JWT authentication).
+    /// The provided database is used as the shared database; user database is `None`.
     #[must_use]
     pub fn new(database: Database) -> Self {
         Self {
-            database: Some(Arc::new(RwLock::new(database))),
+            shared_database: Some(Arc::new(RwLock::new(database))),
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
@@ -174,10 +181,12 @@ impl ClientConnection {
     /// All connections sharing the database will receive change notifications
     /// when any connection commits a transaction.
     /// The connection is created as anonymous (no JWT authentication).
+    /// The provided database is used as the shared database; user database is `None`.
     #[must_use]
     pub fn new_shared(database: Arc<RwLock<Database>>) -> Self {
         Self {
-            database: Some(database),
+            shared_database: Some(database),
+            user_database: None,
             connection_id: NEXT_CONNECTION_ID.fetch_add(1, AtomicOrdering::Relaxed),
             subscriptions: ClientSubscriptions::new(),
             state: ConnectionState::Connected {
@@ -212,10 +221,21 @@ impl ClientConnection {
     #[must_use]
     #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
     pub fn shared_database(&self) -> Option<Arc<RwLock<Database>>> {
-        self.database.as_ref().map(Arc::clone)
+        self.shared_database.as_ref().map(Arc::clone)
     }
 
-    /// Subscribe to change notifications from the database.
+    /// Get a clone of the user database reference.
+    ///
+    /// Returns `None` if the connection is anonymous or not yet established.
+    ///
+    /// User databases are per-user and only accessible by authenticated users.
+    #[must_use]
+    #[allow(clippy::disallowed_methods)] // Arc::clone is safe and expected
+    pub fn user_database(&self) -> Option<Arc<RwLock<Database>>> {
+        self.user_database.as_ref().map(Arc::clone)
+    }
+
+    /// Subscribe to change notifications from the shared database.
     ///
     /// Returns a filtered receiver that will receive change notifications
     /// from other connections only. Notifications from this connection's
@@ -227,12 +247,15 @@ impl ClientConnection {
     pub fn subscribe_to_changes(
         &self,
     ) -> Result<crate::storage::FilteredChangeReceiver, DatabaseError> {
-        let db_arc = self.database.as_ref().ok_or(DatabaseError::NotConnected)?;
+        let db_arc = self
+            .shared_database
+            .as_ref()
+            .ok_or(DatabaseError::NotConnected)?;
         let db = db_arc.read().map_err(|_| DatabaseError::LockPoisoned)?;
         Ok(db.subscribe_to_changes(self.connection_id))
     }
 
-    /// Get changes since a given HLC timestamp.
+    /// Get changes since a given HLC timestamp from the shared database.
     ///
     /// This is used for subscription backfill when a client subscribes with a `since_hlc`.
     ///
@@ -241,7 +264,10 @@ impl ClientConnection {
     /// Returns an error if the connection is not established, the database lock is poisoned,
     /// or if reading changes fails.
     pub fn get_changes_since(&self, since: HlcTimestamp) -> Result<Vec<LogRecord>, DatabaseError> {
-        let db_arc = self.database.as_ref().ok_or(DatabaseError::NotConnected)?;
+        let db_arc = self
+            .shared_database
+            .as_ref()
+            .ok_or(DatabaseError::NotConnected)?;
         let mut db = db_arc.write().map_err(|_| DatabaseError::LockPoisoned)?;
         db.changes_since(since)
     }
@@ -468,7 +494,7 @@ impl ClientConnection {
             }
         };
 
-        // Get or create the database
+        // Get or create the databases
         let Some(registry) = &self.registry else {
             // This shouldn't happen in production, but handle gracefully
             return vec![create_error_response(
@@ -477,10 +503,11 @@ impl ClientConnection {
             )];
         };
 
-        let database = match registry.get_or_create(app_api_key) {
+        // Open the shared database (available for all connections)
+        let shared_database = match registry.get_shared_database(app_api_key) {
             Ok(db) => db,
             Err(e) => {
-                tracing::error!("Failed to open database for '{}': {}", app_api_key, e);
+                tracing::error!("Failed to open shared database for '{}': {}", app_api_key, e);
                 return vec![create_internal_error_response(
                     request_id,
                     &format!("Failed to open database: {e}"),
@@ -488,8 +515,30 @@ impl ClientConnection {
             }
         };
 
+        // Open the user database if the connection is authenticated
+        let user_database = if let Some(ref uid) = user_id {
+            match registry.get_user_database(app_api_key, uid) {
+                Ok(db) => Some(db),
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to open user database for '{}' user '{}': {}",
+                        app_api_key,
+                        uid,
+                        e
+                    );
+                    return vec![create_internal_error_response(
+                        request_id,
+                        &format!("Failed to open user database: {e}"),
+                    )];
+                }
+            }
+        } else {
+            None
+        };
+
         // Transition state
-        self.database = Some(database);
+        self.shared_database = Some(shared_database);
+        self.user_database = user_database;
         self.state = ConnectionState::Connected {
             app_api_key: app_api_key.to_string(),
             user_id: user_id.clone(),
@@ -619,8 +668,8 @@ impl ClientConnection {
             };
         }
 
-        // Get the database - should always be Some since we checked is_connected()
-        let Some(db_arc) = &self.database else {
+        // Get the shared database - should always be Some since we checked is_connected()
+        let Some(db_arc) = &self.shared_database else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
@@ -769,8 +818,8 @@ impl ClientConnection {
     }
 
     fn query(&self, request: &proto::QueryRequest) -> proto::ServerResponse {
-        // Get the database - should always be Some since we checked is_connected()
-        let Some(db_arc) = &self.database else {
+        // Get the shared database - should always be Some since we checked is_connected()
+        let Some(db_arc) = &self.shared_database else {
             return proto::ServerResponse {
                 status: Some(proto::google::rpc::Status {
                     code: proto::google::rpc::Code::Internal.into(),
@@ -918,7 +967,7 @@ mod tests {
 
         // Verify the triple was inserted by reading it back
 
-        let mut db = client_conn.database.as_ref().unwrap().write().unwrap();
+        let mut db = client_conn.shared_database.as_ref().unwrap().write().unwrap();
         let mut txn = db.begin(0).expect("begin txn"); // 0 = test connection ID
         let entity_arr: [u8; 16] = entity_id.try_into().unwrap();
         let attr_arr: [u8; 16] = attribute_id.try_into().unwrap();
