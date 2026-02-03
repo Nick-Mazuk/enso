@@ -188,7 +188,7 @@ impl ConfigRegistry {
         admin_db: &RwLock<Database>,
     ) -> Result<Option<JwtConfig>, ConfigRegistryError> {
         let config = self.get_config(app_api_key, admin_db)?;
-        Ok(config.jwt_config)
+        Ok(config.jwt_config().cloned())
     }
 
     /// Invalidate the cached configuration for the given API key.
@@ -256,9 +256,14 @@ impl ConfigRegistry {
         // Parse the configuration from triples
         let jwt_config = self.parse_jwt_config(app_api_key, &records)?;
 
-        Ok(AppConfig {
-            app_api_key: app_api_key.to_string(),
-            jwt_config,
+        // AppConfig::new validates that app_api_key is non-empty.
+        // We've already validated that app_api_key corresponds to a found entity,
+        // so this should never fail. However, we map the error for completeness.
+        AppConfig::new(app_api_key.to_string(), jwt_config).map_err(|e| {
+            ConfigRegistryError::InvalidConfig {
+                app_api_key: app_api_key.to_string(),
+                reason: e.to_string(),
+            }
         })
     }
 
@@ -381,10 +386,7 @@ mod tests {
             let mut cache = registry.cache.write().expect("cache writable");
             cache.insert(
                 "test-app".to_string(),
-                AppConfig {
-                    app_api_key: "test-app".to_string(),
-                    jwt_config: None,
-                },
+                AppConfig::new("test-app".to_string(), None).expect("valid config"),
             );
         }
 
@@ -413,17 +415,11 @@ mod tests {
             let mut cache = registry.cache.write().expect("cache writable");
             cache.insert(
                 "app1".to_string(),
-                AppConfig {
-                    app_api_key: "app1".to_string(),
-                    jwt_config: None,
-                },
+                AppConfig::new("app1".to_string(), None).expect("valid config"),
             );
             cache.insert(
                 "app2".to_string(),
-                AppConfig {
-                    app_api_key: "app2".to_string(),
-                    jwt_config: None,
-                },
+                AppConfig::new("app2".to_string(), None).expect("valid config"),
             );
         }
 

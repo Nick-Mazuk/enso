@@ -127,6 +127,16 @@ impl JwtConfig {
 /// Configuration for an application's authentication settings.
 ///
 /// Each application has an API key and optionally supports JWT authentication.
+/// Instances can only be created through the [`AppConfig::new`] constructor.
+///
+/// # Pre-conditions
+/// - `app_api_key` must be a non-empty string when calling [`AppConfig::new`].
+///
+/// # Post-conditions
+/// - `AppConfig` instances are immutable once created.
+///
+/// # Invariants
+/// - `app_api_key` is never empty.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     /// API key used to authenticate requests from this application.
@@ -135,29 +145,58 @@ pub struct AppConfig {
     jwt_config: Option<JwtConfig>,
 }
 
-impl AppConfig {
-    /// Create a new application configuration.
-    ///
-    /// # Pre-conditions
-    /// - `app_api_key` must be a valid, non-empty string.
-    ///
-    /// # Post-conditions
-    /// - Returns a valid `AppConfig` instance.
-    #[must_use]
-    pub fn new(app_api_key: String, jwt_config: Option<JwtConfig>) -> Self {
-        Self {
-            app_api_key,
-            jwt_config,
+/// Error returned when creating an `AppConfig` fails.
+#[derive(Debug)]
+pub enum AppConfigError {
+    /// The app API key is empty.
+    EmptyApiKey,
+}
+
+impl std::fmt::Display for AppConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyApiKey => write!(f, "app API key must not be empty"),
         }
     }
+}
 
-    /// Returns the API key for this application.
+impl std::error::Error for AppConfigError {}
+
+impl AppConfig {
+    /// Creates a new `AppConfig`.
+    ///
+    /// # Arguments
+    /// * `app_api_key` - The API key for authenticating requests from this application.
+    /// * `jwt_config` - Optional JWT configuration for token-based authentication.
+    ///
+    /// # Returns
+    /// A new `AppConfig` instance on success.
+    ///
+    /// # Errors
+    /// Returns `AppConfigError::EmptyApiKey` if `app_api_key` is empty.
+    ///
+    /// # Pre-conditions
+    /// - `app_api_key` must be a non-empty string.
+    ///
+    /// # Post-conditions
+    /// - The returned `AppConfig` has a non-empty `app_api_key`.
+    pub fn new(app_api_key: String, jwt_config: Option<JwtConfig>) -> Result<Self, AppConfigError> {
+        if app_api_key.is_empty() {
+            return Err(AppConfigError::EmptyApiKey);
+        }
+        Ok(Self {
+            app_api_key,
+            jwt_config,
+        })
+    }
+
+    /// Returns the application's API key.
     #[must_use]
     pub fn app_api_key(&self) -> &str {
         &self.app_api_key
     }
 
-    /// Returns the JWT configuration for this application, if any.
+    /// Returns the JWT configuration, if any.
     #[must_use]
     pub fn jwt_config(&self) -> Option<&JwtConfig> {
         self.jwt_config.as_ref()
@@ -180,10 +219,32 @@ a3aCXj5dawIDAQAB
 
     #[test]
     fn test_app_config_creation() {
+<<<<<<< HEAD
         let config = AppConfig::new("test-api-key".to_string(), None);
 
         assert_eq!(config.app_api_key(), "test-api-key");
         assert!(config.jwt_config().is_none());
+=======
+        let config = AppConfig::new("test-api-key".to_string(), None).expect("valid config");
+
+        assert_eq!(config.app_api_key(), "test-api-key");
+        assert!(config.jwt_config().is_none());
+    }
+
+    #[test]
+    fn test_app_config_rejects_empty_api_key() {
+        let result = AppConfig::new(String::new(), None);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, AppConfigError::EmptyApiKey));
+    }
+
+    #[test]
+    fn test_app_config_error_display() {
+        let err = AppConfigError::EmptyApiKey;
+        assert_eq!(err.to_string(), "app API key must not be empty");
+>>>>>>> a804e37 (fix: also write a constructor function for the AppConfi)
     }
 
     #[test]
@@ -251,8 +312,18 @@ a3aCXj5dawIDAQAB
 
     #[test]
     fn test_app_config_with_hs256() {
+<<<<<<< HEAD
         let jwt_config = JwtConfig::new_hs256(b"my-secret-key".to_vec()).expect("valid secret");
         let config = AppConfig::new("test-api-key".to_string(), Some(jwt_config));
+=======
+        let config = AppConfig::new(
+            "test-api-key".to_string(),
+            Some(JwtConfig::Hs256 {
+                secret: b"my-secret-key".to_vec(),
+            }),
+        )
+        .expect("valid config");
+>>>>>>> a804e37 (fix: also write a constructor function for the AppConfi)
 
         assert_eq!(config.app_api_key(), "test-api-key");
         assert!(config.jwt_config().is_some());
@@ -267,13 +338,19 @@ a3aCXj5dawIDAQAB
     #[test]
     fn test_app_config_with_rs256() {
         let jwt_config =
+<<<<<<< HEAD
             JwtConfig::new_rs256(VALID_RS256_PUBLIC_KEY.to_string()).expect("valid key");
         let config = AppConfig::new("test-api-key".to_string(), Some(jwt_config));
+=======
+            JwtConfig::new_rs256(TEST_RSA_PUBLIC_KEY.to_string()).expect("valid RSA public key");
+        let config =
+            AppConfig::new("test-api-key".to_string(), Some(jwt_config)).expect("valid config");
+>>>>>>> a804e37 (fix: also write a constructor function for the AppConfi)
 
         assert_eq!(config.app_api_key(), "test-api-key");
         assert!(config.jwt_config().is_some());
 
-        if let Some(jwt_config) = &config.jwt_config {
+        if let Some(jwt_config) = config.jwt_config() {
             let stored_key = jwt_config
                 .rs256_public_key()
                 .expect("Expected RS256 config");
@@ -317,8 +394,18 @@ a3aCXj5dawIDAQAB
 
     #[test]
     fn test_app_config_clone() {
+<<<<<<< HEAD
         let jwt_config = JwtConfig::new_hs256(b"secret".to_vec()).expect("valid secret");
         let original = AppConfig::new("key".to_string(), Some(jwt_config));
+=======
+        let original = AppConfig::new(
+            "key".to_string(),
+            Some(JwtConfig::Hs256 {
+                secret: b"secret".to_vec(),
+            }),
+        )
+        .expect("valid config");
+>>>>>>> a804e37 (fix: also write a constructor function for the AppConfi)
         let cloned = original.clone();
 
         assert_eq!(original.app_api_key(), cloned.app_api_key());
