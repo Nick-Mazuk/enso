@@ -72,7 +72,7 @@ impl std::error::Error for JwtError {}
 pub fn verify_token(token: &str, config: &JwtConfig) -> Result<String, JwtError> {
     match config {
         JwtConfig::Hs256 { secret } => verify_hs256(token, secret),
-        JwtConfig::Rs256 { public_key } => verify_rs256(token, public_key),
+        JwtConfig::Rs256(key) => verify_rs256(token, key.as_str()),
     }
 }
 
@@ -227,14 +227,14 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_rs256_invalid_key() {
-        let config = JwtConfig::Rs256 {
-            public_key: "not-a-valid-pem-key".to_string(),
-        };
-        let result = verify_token("some.jwt.token", &config);
+    fn test_new_rs256_rejects_invalid_key() {
+        // Invalid keys are now rejected at construction time, not verification time.
+        // This test verifies that JwtConfig::new_rs256 properly validates keys.
+        use crate::auth::JwtConfigError;
 
+        let result = JwtConfig::new_rs256("not-a-valid-pem-key".to_string());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtError::InvalidKey(_))));
+        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
     }
 
     #[test]
