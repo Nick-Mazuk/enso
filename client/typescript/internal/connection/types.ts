@@ -75,3 +75,90 @@ export function createApiKey(apiKey: string): ApiKey {
 
 	return apiKey as ApiKey;
 }
+
+/**
+ * Branded type for validated JWT tokens.
+ *
+ * Invariants:
+ * - Non-empty string
+ * - Contains exactly two dots (header.payload.signature format)
+ */
+export type Jwt = Tagged<string, "Jwt">;
+
+/** Regex for basic JWT structure validation (three base64url-encoded parts separated by dots) */
+const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
+
+/**
+ * Creates a validated Jwt from a string.
+ *
+ * Pre-conditions: jwt is a non-empty string in valid JWT format
+ * Post-conditions: Returns a validated Jwt
+ *
+ * @param jwt - The JWT string
+ * @throws Error if JWT format is invalid
+ */
+export function createJwt(jwt: string): Jwt {
+	assert(jwt.length > 0, "JWT must not be empty");
+	assert(
+		JWT_PATTERN.test(jwt),
+		"JWT must be in valid format (header.payload.signature)",
+	);
+
+	return jwt as Jwt;
+}
+
+/**
+ * Function type for providing JWT tokens dynamically.
+ *
+ * This allows tokens to be fetched or refreshed on demand, supporting
+ * scenarios like token refresh before expiration.
+ *
+ * Invariants:
+ * - Function returns a valid JWT string or Promise resolving to one
+ */
+export type JwtProvider = () => string | Promise<string>;
+
+/**
+ * Options for JWT-based authentication on connections.
+ *
+ * Invariants:
+ * - If jwt is provided, it must be a valid JWT string
+ * - If jwtProvider is provided, it must be a function returning a JWT
+ * - At most one of jwt or jwtProvider should be used (jwt takes precedence)
+ */
+export interface JwtOptions {
+	/**
+	 * A static JWT token for authentication.
+	 * If provided, this token will be used for all requests.
+	 */
+	jwt?: string;
+
+	/**
+	 * A function that provides JWT tokens dynamically.
+	 * Called when a token is needed, allowing for token refresh.
+	 * If both jwt and jwtProvider are provided, jwt takes precedence.
+	 */
+	jwtProvider?: JwtProvider;
+}
+
+/**
+ * Resolves a JWT from JwtOptions, supporting both static and dynamic tokens.
+ *
+ * Pre-conditions: options contains either jwt, jwtProvider, or neither
+ * Post-conditions: Returns a validated Jwt or undefined if no auth configured
+ *
+ * @param options - The JWT options to resolve
+ * @returns A validated Jwt, or undefined if no JWT is configured
+ */
+export async function resolveJwt(options: JwtOptions): Promise<Jwt | undefined> {
+	if (options.jwt !== undefined) {
+		return createJwt(options.jwt);
+	}
+
+	if (options.jwtProvider !== undefined) {
+		const token = await options.jwtProvider();
+		return createJwt(token);
+	}
+
+	return undefined;
+}
