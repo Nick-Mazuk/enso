@@ -7,6 +7,7 @@ version.workspace = true
 axum.workspace = true
 crc32fast.workspace = true
 futures.workspace = true
+jsonwebtoken.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 rand.workspace = true

@@ -13,4 +13,4 @@
 
 pub mod app_config;
 
-pub use app_config::{AppConfig, JwtConfig};
+pub use app_config::{AppConfig, JwtConfig, JwtConfigError};
