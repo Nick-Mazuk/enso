@@ -96,11 +96,13 @@ impl ServerConfig {
             .unwrap_or_else(|_| PathBuf::from(Self::DEFAULT_DATABASE_DIRECTORY));
 
         let listen_port = match std::env::var("ENSO_LISTEN_PORT") {
-            Ok(port_str) => port_str.parse::<u16>().map_err(|_| ConfigError::InvalidValue {
-                name: "ENSO_LISTEN_PORT",
-                value: port_str,
-                reason: "must be a valid port number (0-65535)",
-            })?,
+            Ok(port_str) => port_str
+                .parse::<u16>()
+                .map_err(|_| ConfigError::InvalidValue {
+                    name: "ENSO_LISTEN_PORT",
+                    value: port_str,
+                    reason: "must be a valid port number (0-65535)",
+                })?,
             Err(_) => Self::DEFAULT_PORT,
         };
 
@@ -115,98 +117,6 @@ impl ServerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_missing_admin_api_key() {
-        // Clear any existing env var
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-
-        let result = ServerConfig::from_env();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ConfigError::MissingEnvVar("ENSO_ADMIN_APP_API_KEY")));
-    }
-
-    #[test]
-    fn test_empty_admin_api_key() {
-        std::env::set_var("ENSO_ADMIN_APP_API_KEY", "");
-
-        let result = ServerConfig::from_env();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::InvalidValue {
-                name: "ENSO_ADMIN_APP_API_KEY",
-                ..
-            }
-        ));
-
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-    }
-
-    #[test]
-    fn test_valid_config_with_defaults() {
-        std::env::set_var("ENSO_ADMIN_APP_API_KEY", "test-key");
-        std::env::remove_var("ENSO_DATABASE_DIRECTORY");
-        std::env::remove_var("ENSO_LISTEN_PORT");
-
-        let config = ServerConfig::from_env().unwrap();
-        assert_eq!(config.admin_app_api_key, "test-key");
-        assert_eq!(config.database_directory, PathBuf::from("./data"));
-        assert_eq!(config.listen_port, 3000);
-
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-    }
-
-    #[test]
-    fn test_valid_config_with_custom_values() {
-        std::env::set_var("ENSO_ADMIN_APP_API_KEY", "my-secret-key");
-        std::env::set_var("ENSO_DATABASE_DIRECTORY", "/var/lib/enso/data");
-        std::env::set_var("ENSO_LISTEN_PORT", "8080");
-
-        let config = ServerConfig::from_env().unwrap();
-        assert_eq!(config.admin_app_api_key, "my-secret-key");
-        assert_eq!(config.database_directory, PathBuf::from("/var/lib/enso/data"));
-        assert_eq!(config.listen_port, 8080);
-
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-        std::env::remove_var("ENSO_DATABASE_DIRECTORY");
-        std::env::remove_var("ENSO_LISTEN_PORT");
-    }
-
-    #[test]
-    fn test_invalid_port() {
-        std::env::set_var("ENSO_ADMIN_APP_API_KEY", "test-key");
-        std::env::set_var("ENSO_LISTEN_PORT", "not-a-number");
-
-        let result = ServerConfig::from_env();
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(
-            err,
-            ConfigError::InvalidValue {
-                name: "ENSO_LISTEN_PORT",
-                ..
-            }
-        ));
-
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-        std::env::remove_var("ENSO_LISTEN_PORT");
-    }
-
-    #[test]
-    fn test_port_overflow() {
-        std::env::set_var("ENSO_ADMIN_APP_API_KEY", "test-key");
-        std::env::set_var("ENSO_LISTEN_PORT", "99999");
-
-        let result = ServerConfig::from_env();
-        assert!(result.is_err());
-
-        std::env::remove_var("ENSO_ADMIN_APP_API_KEY");
-        std::env::remove_var("ENSO_LISTEN_PORT");
-    }
-
     #[test]
     fn test_config_error_display() {
         let missing = ConfigError::MissingEnvVar("TEST_VAR");

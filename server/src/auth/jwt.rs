@@ -15,7 +15,7 @@
 //! - Verification is stateless and does not modify any external state.
 //! - The same inputs always produce the same outputs.
 
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 
 use super::JwtConfig;
@@ -164,7 +164,7 @@ fn map_jwt_error(error: jsonwebtoken::errors::Error) -> JwtError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     fn create_hs256_token(sub: &str, secret: &[u8]) -> String {
         let claims = Claims {
@@ -239,10 +239,16 @@ mod tests {
 
     #[test]
     fn test_jwt_error_display() {
-        assert_eq!(JwtError::InvalidSignature.to_string(), "invalid JWT signature");
+        assert_eq!(
+            JwtError::InvalidSignature.to_string(),
+            "invalid JWT signature"
+        );
         assert_eq!(JwtError::TokenExpired.to_string(), "JWT has expired");
         assert_eq!(JwtError::MalformedToken.to_string(), "malformed JWT");
-        assert_eq!(JwtError::MissingSubClaim.to_string(), "missing 'sub' claim in JWT");
+        assert_eq!(
+            JwtError::MissingSubClaim.to_string(),
+            "missing 'sub' claim in JWT"
+        );
         assert_eq!(
             JwtError::InvalidKey("bad key".to_string()).to_string(),
             "invalid key: bad key"
@@ -265,9 +271,7 @@ mod tests {
 
     #[test]
     fn test_verify_hs256_empty_secret() {
-        let config = JwtConfig::Hs256 {
-            secret: vec![],
-        };
+        let config = JwtConfig::Hs256 { secret: vec![] };
         let result = verify_token("some.jwt.token", &config);
 
         assert!(result.is_err());
