@@ -20,7 +20,7 @@ use std::path::PathBuf;
 /// - `ENSO_ADMIN_APP_API_KEY`: Required. The API key for admin app access.
 /// - `ENSO_DATABASE_DIRECTORY`: Optional. Path to the database directory. Defaults to "./data".
 /// - `ENSO_LISTEN_PORT`: Optional. Port to listen on. Defaults to 3000.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ServerConfig {
     /// API key for admin app access.
     pub admin_app_api_key: String,
@@ -91,9 +91,10 @@ impl ServerConfig {
             });
         }
 
-        let database_directory = std::env::var("ENSO_DATABASE_DIRECTORY")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(Self::DEFAULT_DATABASE_DIRECTORY));
+        let database_directory = std::env::var("ENSO_DATABASE_DIRECTORY").map_or_else(
+            |_| PathBuf::from(Self::DEFAULT_DATABASE_DIRECTORY),
+            PathBuf::from,
+        );
 
         let listen_port = match std::env::var("ENSO_LISTEN_PORT") {
             Ok(port_str) => port_str

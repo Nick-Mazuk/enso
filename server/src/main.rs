@@ -3,6 +3,7 @@
 // Test code is allowed to use unwrap() for convenience.
 #![cfg_attr(not(test), deny(clippy::unwrap_used))]
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::{
@@ -15,7 +16,9 @@ use axum::{
     routing::any,
 };
 use prost::Message as ProstMessage;
-use server::{ClientConnection, DatabaseRegistry, config::ServerConfig, proto, types::ProtoSerializable};
+use server::{
+    ClientConnection, DatabaseRegistry, config::ServerConfig, proto, types::ProtoSerializable,
+};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -62,10 +65,20 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Create the database registry - databases are opened on-demand per app_api_key
-    let registry = Arc::new(DatabaseRegistry::new(config.database_directory.clone()));
+    // Extract fields before consuming config
     let listen_port = config.listen_port;
-    let config = Arc::new(config);
+    let admin_app_api_key = config.admin_app_api_key;
+
+    // Create the database registry - databases are opened on-demand per app_api_key
+    // Registry takes ownership of the database directory path
+    let registry = Arc::new(DatabaseRegistry::new(config.database_directory));
+
+    // Create config for AppState (currently unused but reserved for admin API key validation)
+    let config = Arc::new(ServerConfig {
+        admin_app_api_key,
+        database_directory: PathBuf::new(),
+        listen_port,
+    });
     let state = AppState { registry, config };
 
     let app = Router::new()

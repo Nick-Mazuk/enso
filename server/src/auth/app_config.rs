@@ -39,7 +39,7 @@ impl std::error::Error for JwtConfigError {}
 /// JWT signing/verification configuration.
 ///
 /// Supports both symmetric (HS256) and asymmetric (RS256) algorithms.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum JwtConfig {
     /// HMAC-SHA256 symmetric signing.
     ///
@@ -88,9 +88,8 @@ impl JwtConfig {
     pub fn new_rs256(public_key: String) -> Result<Self, JwtConfigError> {
         // Validate that the public key can be parsed as an RSA public key.
         // DecodingKey::from_rsa_pem validates the PEM format and RSA structure.
-        DecodingKey::from_rsa_pem(public_key.as_bytes()).map_err(|e| {
-            JwtConfigError::InvalidRs256PublicKey(e.to_string())
-        })?;
+        DecodingKey::from_rsa_pem(public_key.as_bytes())
+            .map_err(|e| JwtConfigError::InvalidRs256PublicKey(e.to_string()))?;
 
         Ok(Self::Rs256 { public_key })
     }
@@ -99,7 +98,7 @@ impl JwtConfig {
 /// Configuration for an application's authentication settings.
 ///
 /// Each application has an API key and optionally supports JWT authentication.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AppConfig {
     /// API key used to authenticate requests from this application.
     app_api_key: String,
@@ -116,7 +115,7 @@ impl AppConfig {
     /// # Post-conditions
     /// - Returns a valid `AppConfig` instance.
     #[must_use]
-    pub fn new(app_api_key: String, jwt_config: Option<JwtConfig>) -> Self {
+    pub const fn new(app_api_key: String, jwt_config: Option<JwtConfig>) -> Self {
         Self {
             app_api_key,
             jwt_config,
@@ -131,7 +130,7 @@ impl AppConfig {
 
     /// Returns the JWT configuration for this application, if any.
     #[must_use]
-    pub fn jwt_config(&self) -> Option<&JwtConfig> {
+    pub const fn jwt_config(&self) -> Option<&JwtConfig> {
         self.jwt_config.as_ref()
     }
 }
@@ -141,13 +140,14 @@ mod tests {
     use super::*;
 
     // Valid RSA-2048 public key for testing (generated for test purposes only)
-    const VALID_RS256_PUBLIC_KEY: &str = r"-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7
-Wazz7gZvaP/H7F1V3dJQKl2qFwXjT3b9rj8veqAqgLpKmqxPXrV7leXMIRyYDj9nvN2w5hxPzF9K
-jXVZ2B2ZmEx2/bKiPcj+lnL9aZDl/7TPxDHpvnVp3Q8xZdLGZ9lP6sXcVl6d8X+6J8wHHJ5KnN2F
-0Vrp/bJD5fMv8KcdB4yg9gx4mTsLMZVqGhOKLVf3s3hsjhJKKlC0wcDhO0yW6Dv5VsOiVy5e3Q+8
-M7L5R7bOJzHlLcB7h7cfksFMRv/bH2qGy7V7ra91c8K6vH8s5b8VRn/0c8mKewfYqfRqnxL7d2M3
-a3aCXj5dawIDAQAB
+    const VALID_RS256_PUBLIC_KEY: &str = "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApCd4AMqEgZPIU0Pn2Yuq
+EDZYN4qA11SgGyouAAlURJZas+VOjvvqN4F+IzZJzYfUdtG6ReYeZ72Z7hroqHwj
+3vxqKUXOPrxEOQqTd1nRWmdh8AKtwCmLWG16NyRvSKp1fAvxtVavMqw82wQ3C0DH
+BGdK8q9zoMeG+JvB+ZKK3FPyBeVQ1I8oezJUT8CVPsPmJq20Y8qU70jnSM27VMLl
+hUextgZHxQc4IERiVHXjVlLGDveqIyIpUU1sZMK2p6fRVQmOlMDH06C7nAwfCGjP
+/k48dLAJRuo38DYKW/bJgFnYF+rozggODnLs3FtoWS3g76yb4XYi5fHOjW4TCwmn
+WQIDAQAB
 -----END PUBLIC KEY-----";
 
     #[test]
@@ -193,7 +193,10 @@ a3aCXj5dawIDAQAB
     fn test_new_rs256_invalid_pem() {
         let result = JwtConfig::new_rs256("not a valid pem key".to_string());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
@@ -202,14 +205,20 @@ a3aCXj5dawIDAQAB
             "-----BEGIN PUBLIC KEY-----\nMIIBIjAN...\n-----END PUBLIC KEY-----".to_string(),
         );
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
     fn test_new_rs256_empty_key() {
         let result = JwtConfig::new_rs256(String::new());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
@@ -241,29 +250,6 @@ a3aCXj5dawIDAQAB
         } else {
             panic!("Expected Rs256 config");
         }
-    }
-
-    #[test]
-    fn test_jwt_config_clone() {
-        let hs256 = JwtConfig::new_hs256(b"secret".to_vec()).expect("valid secret");
-        let cloned = hs256.clone();
-
-        if let (JwtConfig::Hs256 { secret: s1 }, JwtConfig::Hs256 { secret: s2 }) = (&hs256, &cloned)
-        {
-            assert_eq!(s1, s2);
-        } else {
-            panic!("Clone should preserve variant");
-        }
-    }
-
-    #[test]
-    fn test_app_config_clone() {
-        let jwt_config = JwtConfig::new_hs256(b"secret".to_vec()).expect("valid secret");
-        let original = AppConfig::new("key".to_string(), Some(jwt_config));
-        let cloned = original.clone();
-
-        assert_eq!(original.app_api_key(), cloned.app_api_key());
-        assert!(cloned.jwt_config().is_some());
     }
 
     #[test]

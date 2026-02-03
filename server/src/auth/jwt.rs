@@ -93,7 +93,9 @@ fn verify_hs256(token: &str, secret: &[u8]) -> Result<String, JwtError> {
     }
 
     let key = DecodingKey::from_secret(secret);
-    let validation = Validation::new(Algorithm::HS256);
+    let mut validation = Validation::new(Algorithm::HS256);
+    // Make exp claim optional - tokens without expiration are valid.
+    validation.required_spec_claims.remove("exp");
 
     decode_and_extract_sub(token, &key, &validation)
 }
@@ -112,7 +114,9 @@ fn verify_hs256(token: &str, secret: &[u8]) -> Result<String, JwtError> {
 fn verify_rs256(token: &str, public_key: &str) -> Result<String, JwtError> {
     let key = DecodingKey::from_rsa_pem(public_key.as_bytes())
         .map_err(|e| JwtError::InvalidKey(e.to_string()))?;
-    let validation = Validation::new(Algorithm::RS256);
+    let mut validation = Validation::new(Algorithm::RS256);
+    // Make exp claim optional - tokens without expiration are valid.
+    validation.required_spec_claims.remove("exp");
 
     decode_and_extract_sub(token, &key, &validation)
 }
@@ -134,7 +138,7 @@ fn decode_and_extract_sub(
     key: &DecodingKey,
     validation: &Validation,
 ) -> Result<String, JwtError> {
-    let token_data = decode::<Claims>(token, key, validation).map_err(map_jwt_error)?;
+    let token_data = decode::<Claims>(token, key, validation).map_err(|e| map_jwt_error(&e))?;
 
     let user_id = token_data.claims.sub;
     if user_id.is_empty() {
@@ -144,18 +148,13 @@ fn decode_and_extract_sub(
     Ok(user_id)
 }
 
-/// Maps jsonwebtoken errors to our JwtError type.
-fn map_jwt_error(error: jsonwebtoken::errors::Error) -> JwtError {
+/// Maps jsonwebtoken errors to our `JwtError` type.
+fn map_jwt_error(error: &jsonwebtoken::errors::Error) -> JwtError {
     use jsonwebtoken::errors::ErrorKind;
 
     match error.kind() {
         ErrorKind::InvalidSignature => JwtError::InvalidSignature,
         ErrorKind::ExpiredSignature => JwtError::TokenExpired,
-        ErrorKind::InvalidToken
-        | ErrorKind::InvalidAlgorithm
-        | ErrorKind::Base64(_)
-        | ErrorKind::Json(_)
-        | ErrorKind::Utf8(_) => JwtError::MalformedToken,
         ErrorKind::MissingRequiredClaim(_) => JwtError::MissingSubClaim,
         _ => JwtError::MalformedToken,
     }
