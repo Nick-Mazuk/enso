@@ -330,9 +330,14 @@ impl ConfigRegistry {
                         reason: "RS256 algorithm requires jwt_public_key".to_string(),
                     })?;
 
-                Ok(Some(JwtConfig::Rs256 {
-                    public_key: public_key.to_string(),
-                }))
+                let jwt_config = JwtConfig::new_rs256(public_key.to_string()).map_err(|e| {
+                    ConfigRegistryError::InvalidConfig {
+                        app_api_key: app_api_key.to_string(),
+                        reason: e.to_string(),
+                    }
+                })?;
+
+                Ok(Some(jwt_config))
             }
             other => Err(ConfigRegistryError::InvalidConfig {
                 app_api_key: app_api_key.to_string(),
