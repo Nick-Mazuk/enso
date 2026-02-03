@@ -36,6 +36,24 @@ impl std::fmt::Display for JwtConfigError {
 
 impl std::error::Error for JwtConfigError {}
 
+/// A validated RS256 public key.
+///
+/// This type guarantees that the contained string is a valid PEM-encoded RSA public key.
+/// It can only be constructed through `JwtConfig::new_rs256()` which validates the key.
+///
+/// # Invariants
+/// - The contained string is always a valid PEM-encoded RSA public key.
+#[derive(Debug, Clone)]
+pub struct Rs256PublicKey(String);
+
+impl Rs256PublicKey {
+    /// Returns the PEM-encoded public key as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// JWT signing/verification configuration.
 ///
 /// Supports both symmetric (HS256) and asymmetric (RS256) algorithms.
@@ -51,10 +69,8 @@ pub enum JwtConfig {
     /// RSA-SHA256 asymmetric signing.
     ///
     /// Uses an RSA public key for verification only.
-    Rs256 {
-        /// PEM-encoded RSA public key.
-        public_key: String,
-    },
+    /// The public key is wrapped in `Rs256PublicKey` to ensure it has been validated.
+    Rs256(Rs256PublicKey),
 }
 
 impl JwtConfig {
@@ -91,7 +107,20 @@ impl JwtConfig {
         DecodingKey::from_rsa_pem(public_key.as_bytes())
             .map_err(|e| JwtConfigError::InvalidRs256PublicKey(e.to_string()))?;
 
-        Ok(Self::Rs256 { public_key })
+        Ok(Self::Rs256(Rs256PublicKey(public_key)))
+    }
+
+    /// Returns the public key for RS256 configurations.
+    ///
+    /// # Returns
+    /// `Some(&str)` containing the PEM-encoded public key if this is an RS256 config,
+    /// `None` otherwise.
+    #[must_use]
+    pub fn rs256_public_key(&self) -> Option<&str> {
+        match self {
+            Self::Rs256(key) => Some(key.as_str()),
+            Self::Hs256 { .. } => None,
+        }
     }
 }
 
@@ -166,7 +195,10 @@ a3aCXj5dawIDAQAB
     fn test_new_rs256_invalid_pem() {
         let result = JwtConfig::new_rs256("not a valid pem key".to_string());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
@@ -175,14 +207,20 @@ a3aCXj5dawIDAQAB
             "-----BEGIN PUBLIC KEY-----\nMIIBIjAN...\n-----END PUBLIC KEY-----".to_string(),
         );
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
     fn test_new_rs256_empty_key() {
         let result = JwtConfig::new_rs256(String::new());
         assert!(result.is_err());
-        assert!(matches!(result, Err(JwtConfigError::InvalidRs256PublicKey(_))));
+        assert!(matches!(
+            result,
+            Err(JwtConfigError::InvalidRs256PublicKey(_))
+        ));
     }
 
     #[test]
@@ -215,10 +253,13 @@ a3aCXj5dawIDAQAB
         assert_eq!(config.app_api_key, "test-api-key");
         assert!(config.jwt_config.is_some());
 
-        if let Some(JwtConfig::Rs256 { public_key }) = &config.jwt_config {
-            assert_eq!(public_key, VALID_RS256_PUBLIC_KEY);
+        if let Some(jwt_config) = &config.jwt_config {
+            let stored_key = jwt_config
+                .rs256_public_key()
+                .expect("Expected RS256 config");
+            assert_eq!(stored_key, TEST_RSA_PUBLIC_KEY);
         } else {
-            panic!("Expected Rs256 config");
+            panic!("Expected jwt_config to be Some");
         }
     }
 
@@ -245,7 +286,8 @@ a3aCXj5dawIDAQAB
         let hs256 = JwtConfig::new_hs256(b"secret".to_vec()).expect("valid secret");
         let cloned = hs256.clone();
 
-        if let (JwtConfig::Hs256 { secret: s1 }, JwtConfig::Hs256 { secret: s2 }) = (&hs256, &cloned)
+        if let (JwtConfig::Hs256 { secret: s1 }, JwtConfig::Hs256 { secret: s2 }) =
+            (&hs256, &cloned)
         {
             assert_eq!(s1, s2);
         } else {
